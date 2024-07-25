@@ -1,0 +1,2 @@
+# nixos
+my os okay?
