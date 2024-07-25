@@ -172,7 +172,7 @@
     neofetch
     git
     npm
-    make
+    gnumake
     gh
     libnotify
     alejandra
