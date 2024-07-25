@@ -171,8 +171,8 @@
     bottom
     neofetch
     git
-    npm
-    gnumake
+    pkgs.nodejs_20
+    pkgs.gnumake
     gh
     libnotify
     alejandra
