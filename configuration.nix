@@ -168,7 +168,7 @@
     neofetch
     git
     npm
-
+    oh-my-posh
     gh
     libnotify
     alejandra
