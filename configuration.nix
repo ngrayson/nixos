@@ -172,7 +172,7 @@
     neofetch
     git
     pkgs.nodejs_20
-    pkgs.gnumake
+    pkgs.cbonsai
     gh
     libnotify
     alejandra
