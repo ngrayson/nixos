@@ -172,7 +172,7 @@
     neofetch
     git
     npm
-    oh-my-posh
+    make
     gh
     libnotify
     alejandra
