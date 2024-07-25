@@ -169,6 +169,7 @@
     git
     npm
 
+    gh
     libnotify
     alejandra
     micro
