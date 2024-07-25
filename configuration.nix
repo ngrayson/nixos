@@ -181,7 +181,7 @@
     # pkgs.dunst
     # swww
     # alacritty
-    # rofi-wayland
+    rofi-wayland
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
