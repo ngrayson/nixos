@@ -179,11 +179,11 @@
 
     i3-gaps
     ## hyprland packages
-    # wev
-    # pkgs.waybar
-    # pkgs.dunst
-    # swww
-    # alacritty
+    wev
+    pkgs.waybar
+    pkgs.dunst
+    swww
+    alacritty
     rofi-wayland
   ];
 
