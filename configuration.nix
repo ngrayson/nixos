@@ -176,6 +176,7 @@
     libnotify
     alejandra
     micro
+    python3
 
     i3-gaps
     ## hyprland packages
