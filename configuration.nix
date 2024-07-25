@@ -125,7 +125,6 @@
         "thefuck"
         "history"
         "node"
-        "rust"
         "deno"
       ];
     };
