@@ -45,7 +45,6 @@
   #  Enable the KDE Plasma Desktop Environment.
   services.desktopManager.plasma6.enable = true;
 
-  # Configure keymap in X11
   services.xserver = {
     layout = "us";
     xkbVariant = "";
@@ -55,14 +54,13 @@
       xterm.enable = false;
       plasma6.enable = true;
     };
+    windowManager.i3.enable = true;
 
     displayManager = {
       #  sddm.enable = false;
       # defaultSession = "none+i3";
       # defaultSession = "plasma";
     };
-
-    #windowManager.i3.enable = true;
   };
 
   # Enable CUPS to print documents.
@@ -181,12 +179,12 @@
 
     # trying to get i3 to work
     pkgs.libsForQt5.kconfig
-    i3-gaps
+    #i3-gaps
 
+    i3
     pkgs.picom
     feh
     dmenu
-    wmctrl
 
     ## hyprland packages
     wev
