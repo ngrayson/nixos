@@ -185,6 +185,7 @@
     kitty
     pkgs.waybar
     pkgs.dunst
+    pkgs.networkmanager
     pkgs.networkmanagerapplet
     swww
     alacritty
