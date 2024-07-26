@@ -118,7 +118,7 @@
     };
     oh-my-zsh = {
       enable = true;
-      theme = "robbyrussell";
+      theme = "jonathan";
       plugins = [
         "git"
         "npm"
@@ -177,6 +177,7 @@
     alejandra
     micro
     python3
+    oh-my-posh
 
     i3-gaps
     ## hyprland packages
