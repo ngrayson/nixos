@@ -189,6 +189,10 @@
     rofi-wayland
   ];
 
+  fonts.packages = with pkgs; [
+    (nerdfonts.override {fonts = ["FiraCode" "DroidSansMono" "Iosevka"];})
+  ];
+
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;
