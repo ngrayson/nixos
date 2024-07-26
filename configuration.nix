@@ -179,7 +179,8 @@
 
     pkgs.swayfx
 
-    # trying to et i3 to work
+    # trying to get i3 to work
+    pkgs.libsForQt5.kconfig
     i3-gaps
 
     pkgs.picom
