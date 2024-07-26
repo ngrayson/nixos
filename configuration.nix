@@ -177,7 +177,7 @@
 
     # trying to get i3 to work
     pkgs.libsForQt5.kconfig
-    #i3-gaps
+    i3-gaps
 
     i3
     pkgs.picom
