@@ -59,8 +59,8 @@
 
     displayManager = {
       #   sddm.enable = true;
-      defaultSession = "none+i3";
-      # defaultSession = "plasma";
+      # defaultSession = "none+i3";
+      defaultSession = "plasma";
     };
 
     windowManager.i3.enable = true;
