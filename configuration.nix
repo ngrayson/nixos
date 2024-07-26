@@ -57,10 +57,10 @@
       plasma6.enable = true;
     };
 
-    displayManager = {
-      sddm.enable = true;
-      defaultSession = "plasma";
-    };
+    # displayManager = {
+    #   sddm.enable = true;
+    #   defaultSession = "plasma";
+    # };
 
     windowManager.i3.enable = true;
   };
