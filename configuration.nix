@@ -178,6 +178,8 @@
     python3
     oh-my-posh
 
+    rofi-wayland
+
     pkgs.swayfx
 
     i3-gaps
@@ -195,7 +197,6 @@
     #pkgs.networkmanagerapplet
     #swww
     #alacritty
-    #rofi-wayland
     #brightnessctl
   ];
 
