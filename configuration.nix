@@ -176,23 +176,23 @@
     alejandra
     micro
     python3
-    oh-my-posh
-
-    rofi-wayland
 
     pkgs.swayfx
 
+    # trying to et i3 to work
     i3-gaps
+
+    pkgs.picom
     feh
     dmenu
     wmctrl
-    pkgs.picom
 
     ## hyprland packages
     wev
     #kitty
+    # rofi-waylan
+    # pkgs.dunst
     #pkgs.waybar
-    #pkgs.dunst
     #pkgs.networkmanager
     #pkgs.networkmanagerapplet
     #swww
