@@ -62,7 +62,7 @@
       defaultSession = "plasma";
     };
 
-    # windowManager.i3.enable = true;
+    windowManager.i3.enable = true;
   };
 
   # Enable CUPS to print documents.
@@ -179,17 +179,21 @@
     oh-my-posh
 
     i3-gaps
+    feh
+    dmenu
+    wmctrl
+
     ## hyprland packages
     wev
-    kitty
-    pkgs.waybar
-    pkgs.dunst
-    pkgs.networkmanager
-    pkgs.networkmanagerapplet
-    swww
-    alacritty
-    rofi-wayland
-    brightnessctl
+    #kitty
+    #pkgs.waybar
+    #pkgs.dunst
+    #pkgs.networkmanager
+    #pkgs.networkmanagerapplet
+    #swww
+    #alacritty
+    #rofi-wayland
+    #brightnessctl
   ];
 
   fonts.packages = with pkgs; [
