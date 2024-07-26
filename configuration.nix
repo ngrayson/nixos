@@ -42,7 +42,6 @@
     LC_TELEPHONE = "en_US.UTF-8";
     LC_TIME = "en_US.UTF-8";
   };
-
   #  Enable the KDE Plasma Desktop Environment.
   services.desktopManager.plasma6.enable = true;
 
@@ -63,7 +62,7 @@
       defaultSession = "plasma";
     };
 
-    windowManager.i3.enable = true;
+    #windowManager.i3.enable = true;
   };
 
   # Enable CUPS to print documents.
