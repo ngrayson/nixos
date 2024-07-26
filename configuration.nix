@@ -182,6 +182,7 @@
     feh
     dmenu
     wmctrl
+    pkgs.picom
 
     ## hyprland packages
     wev
