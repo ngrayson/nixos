@@ -178,6 +178,8 @@
     python3
     oh-my-posh
 
+    pkgs.swayfx
+
     i3-gaps
     feh
     dmenu
