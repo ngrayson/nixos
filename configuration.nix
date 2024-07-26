@@ -137,9 +137,9 @@
   environment = {
     shells = [pkgs.zsh];
     variables = {
-      # EDITOR = "micro";
-      # SYSTEMD_EDITOR = "micro";
-      # VISUAL = "code";
+      EDITOR = "micro";
+      SYSTEMD_EDITOR = "micro";
+      VISUAL = "micro";
     };
   };
 
