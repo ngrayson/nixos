@@ -143,12 +143,12 @@
   };
 
   # enable hyprland
-  # programs.hyprland={
-  #   enable = true;
-  #   xwayland.enable = true;
-  # };
-  # xdg.portal.enable = true;
-  # xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+  programs.hyprland = {
+    enable = true;
+    xwayland.enable = true;
+  };
+  xdg.portal.enable = true;
+  xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
 
   hardware = {
     # Opengl
@@ -182,6 +182,7 @@
     i3-gaps
     ## hyprland packages
     wev
+    kitty
     pkgs.waybar
     pkgs.dunst
     swww
