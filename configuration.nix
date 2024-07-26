@@ -189,6 +189,7 @@
     swww
     alacritty
     rofi-wayland
+    brightnessctl
   ];
 
   fonts.packages = with pkgs; [
