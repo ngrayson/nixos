@@ -185,6 +185,7 @@
     kitty
     pkgs.waybar
     pkgs.dunst
+    pkgs.networkmanagerapplet
     swww
     alacritty
     rofi-wayland
