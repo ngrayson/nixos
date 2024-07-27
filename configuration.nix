@@ -180,7 +180,6 @@
     python3
     # icons
     pkgs.beauty-line-icon-theme
-    pkgs.swayfx
 
     # trying to get i3 to work
     pkgs.libsForQt5.kconfig
@@ -191,9 +190,10 @@
     feh
     dmenu
 
-    grim # screenshot
-    slurp # screenshot
-    wl-clipboard # wl-copy and wl-paste
+    # pkgs.swayfx
+    # grim # screenshot
+    # slurp # screenshot
+    # wl-clipboard # wl-copy and wl-paste
 
     ## hyprland packages
     wev
