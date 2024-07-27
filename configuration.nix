@@ -52,9 +52,10 @@
       xterm.enable = false;
       plasma6.enable = true;
     };
-    # windowManager.i3.enable = true;  programs.hyprland = {
-    #  enable = true;
-    #  xwayland.enable = true;
+    # windowManager.i3.enable = true;
+    displayManager = {
+      defaultSession = "plasma";
+    };
   };
 
   xdg.portal.enable = true;
