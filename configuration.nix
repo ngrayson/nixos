@@ -58,12 +58,12 @@
     };
   };
 
-  xdg.portal.enable = true;
-  xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
+  # xdg.portal.enable = true;
+  # xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
   hardware = {
     # Opengl
-    opengl.enable = true;
-    nvidia.modesetting.enable = true;
+    # opengl.enable = true;
+    # nvidia.modesetting.enable = true;
   };
 
   # Enable CUPS to print documents.
