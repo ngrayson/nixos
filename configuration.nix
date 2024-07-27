@@ -94,7 +94,7 @@
     isNormalUser = true;
     shell = pkgs.zsh;
     description = "nick grayson";
-    extraGroups = ["networkmanager" "wheel"];
+    extraGroups = ["networkmanager" "wheel" "video"];
     packages = with pkgs; [
       kdePackages.kate
       #  thunderbird
@@ -143,6 +143,12 @@
     #  enable = true;
     #  xwayland.enable = true;
   };
+  # enable sway
+  programs.sway = {
+    enable = true;
+    wrapperFeatures.gtk = true;
+  };
+
   xdg.portal.enable = true;
   xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
   hardware = {
@@ -172,7 +178,8 @@
     alejandra
     micro
     python3
-
+    # icons
+    pkgs.beauty-line-icon-theme
     pkgs.swayfx
 
     # trying to get i3 to work
@@ -184,6 +191,10 @@
     feh
     dmenu
 
+    grim # screenshot
+    slurp # screenshot
+    wl-clipboard # wl-copy and wl-paste
+
     ## hyprland packages
     wev
     #kitty
@@ -194,8 +205,10 @@
     #pkgs.networkmanagerapplet
     #swww
     #alacritty
-    #brightnessctl
+    brightnessctl
   ];
+
+  services.gnome.gnome-keyring.enable = true;
 
   fonts.packages = with pkgs; [
     (nerdfonts.override {fonts = ["FiraCode" "DroidSansMono" "Iosevka"];})
