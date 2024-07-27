@@ -52,13 +52,17 @@
       xterm.enable = false;
       plasma6.enable = true;
     };
-    windowManager.i3.enable = true;
+    # windowManager.i3.enable = true;  programs.hyprland = {
+    #  enable = true;
+    #  xwayland.enable = true;
+  };
 
-    displayManager = {
-      #  sddm.enable = false;
-      # defaultSession = "none+i3";
-      # defaultSession = "plasma";
-    };
+  xdg.portal.enable = true;
+  xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
+  hardware = {
+    # Opengl
+    opengl.enable = true;
+    nvidia.modesetting.enable = true;
   };
 
   # Enable CUPS to print documents.
@@ -138,23 +142,24 @@
   };
 
   # enable hyprland
-  programs.hyprland = {
-    #  enable = true;
-    #  xwayland.enable = true;
-  };
-  # enable sway
-  programs.sway = {
-    enable = true;
-    wrapperFeatures.gtk = true;
-  };
+  #   programs.hyprland = {
+  #     #  enable = true;
+  #     #  xwayland.enable = true;
+  #   };
+  #
+  #   xdg.portal.enable = true;
+  #   xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
+  #   hardware = {
+  #     # Opengl
+  #     opengl.enable = true;
+  #     nvidia.modesetting.enable = true;
+  #   };
 
-  xdg.portal.enable = true;
-  xdg.portal.extraPortals = [pkgs.xdg-desktop-portal-gtk];
-  hardware = {
-    # Opengl
-    opengl.enable = true;
-    nvidia.modesetting.enable = true;
-  };
+  # enable sway
+  # programs.sway = {
+  #   enable = true;
+  #   wrapperFeatures.gtk = true;
+  # };
 
   nixpkgs.config.allowUnfree = true;
 
@@ -164,8 +169,8 @@
     #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
     #  wget
     vscode
-    # discord
-    # obsidian
+    discord
+    obsidian
     bitwarden-desktop
     bottom
     neofetch
@@ -181,13 +186,13 @@
     pkgs.beauty-line-icon-theme
 
     # trying to get i3 to work
-    pkgs.libsForQt5.kconfig
-    i3-gaps
-
-    i3
-    pkgs.picom #anti-aliasing
-    feh
-    dmenu
+    #     pkgs.libsForQt5.kconfig
+    #     i3-gaps
+    #
+    #     i3
+    #     pkgs.picom #anti-aliasing
+    #     feh
+    #     dmenu
 
     # pkgs.swayfx
     # grim # screenshot
