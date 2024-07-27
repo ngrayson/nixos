@@ -118,14 +118,13 @@
       plugins = [
         "git"
         "npm"
-        "thefuck"
         "history"
         "node"
         "deno"
       ];
     };
   };
-
+  programs.thefuck.enable = true;
   # Install firefox.
   programs.firefox.enable = true;
 
