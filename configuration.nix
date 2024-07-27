@@ -180,7 +180,7 @@
     i3-gaps
 
     i3
-    pkgs.picom
+    pkgs.picom #anti-aliasing
     feh
     dmenu
 
