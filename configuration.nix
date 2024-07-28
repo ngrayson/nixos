@@ -186,11 +186,14 @@
     libnotify
     alejandra
     micro
+
+    # for pond
     gnumake
+    gcc
     sqlite
     # python
     python3
-    pkgs.poetry
+
     # icons
     pkgs.beauty-line-icon-theme
 
