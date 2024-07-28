@@ -187,6 +187,7 @@
     alejandra
     micro
     gnumake
+    sqlite
     # python
     python3
     pkgs.poetry
