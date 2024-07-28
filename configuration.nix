@@ -186,7 +186,7 @@
     libnotify
     alejandra
     micro
-    tty-clock
+    peaclock
 
     # for pond
     gnumake
