@@ -186,7 +186,10 @@
     libnotify
     alejandra
     micro
+    gnumake
+    # python
     python3
+    pkgs.poetry
     # icons
     pkgs.beauty-line-icon-theme
 
