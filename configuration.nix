@@ -172,7 +172,7 @@
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-    #  wget
+    wget
     vscode
     discord
     obsidian
@@ -194,6 +194,8 @@
     sqlite
     # python
     python3
+    # temp
+    pacman
 
     # icons
     pkgs.beauty-line-icon-theme
