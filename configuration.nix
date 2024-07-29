@@ -194,6 +194,8 @@
     gnumake
     gcc
     sqlite
+    pkgs.tmux
+
     # python
     python3
     # temp
