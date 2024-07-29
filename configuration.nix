@@ -188,7 +188,7 @@
     micro
     peaclock
 
-    youtube-tui
+    pkgs.youtube-tui
     youtube-music
 
     # for pond
