@@ -188,9 +188,6 @@
     micro
     peaclock
 
-    pkgs.youtube-tui
-    youtube-music
-
     # for pond
     gnumake
     gcc
