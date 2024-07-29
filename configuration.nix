@@ -195,7 +195,6 @@
     # python
     python3
     # temp
-    pacman
 
     # icons
     pkgs.beauty-line-icon-theme
