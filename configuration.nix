@@ -190,6 +190,9 @@
     micro
     peaclock
 
+    # for slippi
+    appimage-run
+
     # for pond
     gnumake
     gcc
