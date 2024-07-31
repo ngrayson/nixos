@@ -202,12 +202,12 @@
     # python
     python3
     # temp
+    pkgs.libsForQt5.kconfig
 
     # icons
     pkgs.beauty-line-icon-theme
 
     # trying to get i3 to work
-    #     pkgs.libsForQt5.kconfig
     #     i3-gaps
     #
     #     i3
