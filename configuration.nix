@@ -116,8 +116,8 @@
   programs.zsh = {
     enable = true;
     autosuggestions.enable = true;
-    zsh-autoenv.enable = true;
     syntaxHighlighting.enable = true;
+    zsh-autoenv.enable = true;
     shellAliases = {
       ll = "ls -l";
     };
@@ -179,16 +179,19 @@
     discord
     obsidian
     bitwarden-desktop
-    bottom
-    neofetch
     git
     pkgs.nodejs_20
-    pkgs.cbonsai
     gh
     libnotify
     alejandra
+
+    # cli
+    bottom
+    pkgs.cbonsai
+    neofetch
     micro
     peaclock
+    fzf
 
     # for slippi
     appimage-run
