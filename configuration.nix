@@ -130,6 +130,7 @@
         "history"
         "node"
         "deno"
+        "fzf"
       ];
     };
   };
@@ -192,6 +193,7 @@
     micro
     peaclock
     pkgs.fzf-zsh
+    pkgs.fzf
 
     # for slippi
     appimage-run
