@@ -191,7 +191,7 @@
     neofetch
     micro
     peaclock
-    fzf
+    pkgs.fzf-zsh
 
     # for slippi
     appimage-run
