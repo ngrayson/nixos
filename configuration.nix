@@ -192,7 +192,6 @@
     neofetch
     micro
     peaclock
-    pkgs.fzf-zsh
     pkgs.fzf
 
     # for slippi
