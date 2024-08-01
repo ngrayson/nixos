@@ -130,7 +130,7 @@
         "history"
         "node"
         "deno"
-        "fzf"
+        # "fzf"
       ];
     };
   };
