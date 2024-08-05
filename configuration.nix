@@ -131,7 +131,6 @@
         "node"
         "deno"
         "fzf"
-        "fzf-tmux"
       ];
     };
   };
