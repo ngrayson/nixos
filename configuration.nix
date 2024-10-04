@@ -79,6 +79,10 @@
   # Enable polkit
   security.polkit.enable = true;
 
+  # Download more RAM
+  zramSwap.enable = true;
+  zramSwap.memoryPercent = 25; # 25% of RAM
+
   # Enable sound with pipewire.
   hardware.pulseaudio.enable = false;
   security.rtkit.enable = true;
