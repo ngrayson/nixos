@@ -7,7 +7,7 @@
   ...
 }: {
   imports = [
-    # Include the results of the hardware scan. Should include Swap Size
+    # Include the results of the hardware scan. Should include Swap Size..
     ./hardware-configuration.nix
   ];
 
