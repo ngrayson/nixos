@@ -248,7 +248,7 @@
     # gamer hours
     steam
 
-    #libre office
+    #libreoffice
     libreoffice
   ];
 
