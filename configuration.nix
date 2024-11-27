@@ -7,7 +7,7 @@
   ...
 }: {
   imports = [
-    #<nixos-hardware/microsoft/surface/common> #https://github.com/NixOS/nixos-hardware/tree/master
+    # <nixos-hardware/microsoft/surface/common> #https://github.com/NixOS/nixos-hardware/tree/master
     # Include the results of the hardware scan. Should include Swap Size..
     ./hardware-configuration.nix
   ];
@@ -247,6 +247,9 @@
     brightnessctl
     # gamer hours
     steam
+
+    #libre office
+    libreoffice
   ];
 
   # services.gnome.gnome-keyring.enable = true;
