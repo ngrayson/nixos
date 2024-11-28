@@ -49,14 +49,14 @@
     xkbVariant = "";
     enable = true;
 
-    desktopManager = {
-      xterm.enable = false;
-      plasma6.enable = true;
-    };
-    # windowManager.i3.enable = true;
-    displayManager = {
-      defaultSession = "plasma";
-    };
+    #    desktopManager = {
+    #      xterm.enable = false;
+    #      plasma6.enable = true;
+    #    };
+    #    # windowManager.i3.enable = true;
+    #    displayManager = {
+    #      defaultSession = "plasma";
+    #    };
   };
 
   services.displayManager.sddm.enable = true;
