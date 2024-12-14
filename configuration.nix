@@ -198,7 +198,7 @@
     alejandra
 
     openvpn
-    rqbit
+    pkgs.xd
 
     # cli
     bottom
