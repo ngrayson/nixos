@@ -197,6 +197,9 @@
     libnotify
     alejandra
 
+    openvpn
+    rqbit
+
     # cli
     bottom
     pkgs.cbonsai
