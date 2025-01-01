@@ -210,6 +210,7 @@
 
     # for slippi
     appimage-run
+    pkgs.fuse
 
     # for pond
     gnumake
