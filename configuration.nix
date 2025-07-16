@@ -201,6 +201,7 @@
     pkgs.xd
 
     # cli
+    nix-search-cli
     bottom
     pkgs.cbonsai
     neofetch
