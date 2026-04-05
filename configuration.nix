@@ -142,6 +142,7 @@
     fzf
     libnotify
     appimage-run
+    topgrade
 
     # nix tools
     nix-search-cli
