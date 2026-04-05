@@ -103,7 +103,7 @@
     ohMyZsh = {
       enable = true;
       plugins = ["git"];
-      theme = "rubbyrussell";
+      theme = "jonathan";
     };
     shellAliases = {
       ns = "nix-search";
