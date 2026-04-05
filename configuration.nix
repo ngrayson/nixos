@@ -181,6 +181,7 @@
     micro
     gh
     git
+    chezmoi
     btop
     bottom
     powertop
