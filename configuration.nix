@@ -159,7 +159,8 @@
     ohMyZsh = {
       enable = true;
       plugins = ["git" "history" "fzf" "node"];
-      theme = "jonathan";
+      # Matches prior chezmoi ZSH_THEME; change in one place here, not ~/.zshrc
+      theme = "clean";
     };
     shellAliases = {
       ns = "nix-search";
