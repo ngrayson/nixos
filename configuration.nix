@@ -142,6 +142,44 @@
   # Install firefox.
   programs.firefox.enable = true;
 
+  # Git — system-wide /etc/gitconfig (replaces chezmoi ~/.gitconfig; see ~/.local/share/chezmoi/.chezmoiignore).
+  programs.git = {
+    enable = true;
+    config = [
+      {
+        user = {
+          name = "wiz";
+          # Replace with your real address (was chezmoi `email`); same value is fine if you update chezmoi data for other hosts.
+          email = "nick@wizardtower.org";
+        };
+        core = {
+          editor = "micro";
+          autocrlf = "input";
+        };
+        init.defaultBranch = "main";
+        pull.rebase = false;
+        push.default = "simple";
+        alias = {
+          st = "status";
+          co = "checkout";
+          br = "branch";
+          ci = "commit";
+          unstage = "reset HEAD --";
+          last = "log -1 HEAD";
+          visual = "!gitk";
+        };
+        credential."https://github.com".helper = [
+          ""
+          "!${pkgs.gh}/bin/gh auth git-credential"
+        ];
+        credential."https://gist.github.com".helper = [
+          ""
+          "!${pkgs.gh}/bin/gh auth git-credential"
+        ];
+      }
+    ];
+  };
+
   # Steam
   programs.steam = {
     enable = true;
@@ -181,7 +219,6 @@
     wget
     micro
     gh
-    git
     chezmoi
     btop
     bottom
@@ -226,7 +263,6 @@
     steam
 
     # dev
-    pkgs.vscode
     pkgs.nodejs_20
     python3
     godot
