@@ -54,6 +54,8 @@
     kscreenlocker.fprintAuth = true;
   };
 
+  security.polkit.enable = true;
+
   services.power-profiles-daemon.enable = true;
   services.fwupd.enable = true;
   powerManagement.enable = true;
@@ -105,8 +107,23 @@
     #media-session.enable = true;
   };
 
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.xserver.libinput.enable = true;
+  # Touchpad / pointing devices (explicit; matches checklist / Framework ergonomics).
+  services.libinput.enable = true;
+
+  # FrootVPN — Stunnel client: TLS to :443, OpenVPN sees 127.0.0.1:1194 (see localhost.ovpn).
+  # CA PEM: extracted FrootVPN CA (same as in localhost.ovpn). Server TLS cert uses CN=server.
+  # Change region: set connect to the hostname in another region’s *.conf (port stays 443).
+  services.stunnel = {
+    enable = true;
+    clients.frootvpn = {
+      accept = "127.0.0.1:1194";
+      connect = "ca-west.frootvpn.com:443";
+      # Installed readable by stunnel (runs as nobody); not under $HOME.
+      CAFile = "/etc/frootvpn/stunnel-ca.pem";
+      OCSPaia = false;
+      verifyHostname = "server";
+    };
+  };
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.wiz = {
@@ -146,6 +163,7 @@
     };
     shellAliases = {
       ns = "nix-search";
+      vpn = "sudo vortix";
     };
   };
 
@@ -183,6 +201,11 @@
 
     # core tools
     openvpn
+    # Vortix (https://github.com/Harry-kp/vortix) — TUI for OpenVPN/WireGuard; install UI: nix profile install github:Harry-kp/vortix
+    curl
+    wireguard-tools
+    iptables
+    iproute2
     pkgs.xd
 
     # apps
@@ -195,7 +218,6 @@
     glow
     chafa
     astroterm
-    pkgs.impala
 
     # games
     pkgs.fuse # for slippi
@@ -218,6 +240,7 @@
 
   environment = {
     shells = [pkgs.zsh];
+    etc."frootvpn/stunnel-ca.pem".source = ./frootvpn-stunnel-ca.pem;
     # sessionVariables: Plasma / graphical apps; store paths: reliable when PATH is thin.
     variables = {
       EDITOR = "${pkgs.micro}/bin/micro";
