@@ -100,9 +100,12 @@
   # zshell
   programs.zsh = {
     enable = true;
+    autosuggestions.enable = true;
+    syntaxHighlighting.enable = true;
+    zsh-autoenv.enable = true;
     ohMyZsh = {
       enable = true;
-      plugins = ["git"];
+      plugins = ["git" "history" "fzf" "node"];
       theme = "jonathan";
     };
     shellAliases = {
