@@ -136,6 +136,7 @@
     gh
     git
     btop
+    bottom
     fastfetch
     kitty
     alejandra
