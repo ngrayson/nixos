@@ -91,11 +91,6 @@
     ];
   };
 
-  environment.variables = {
-    EDITOR = "micro";
-    VISUAL = "micro";
-  };
-
   # enable nix-command for nix seach
   nix.settings.experimental-features = ["nix-command" "flakes"];
 
@@ -145,6 +140,11 @@
     cursor-cli
     code-cursor
   ];
+
+  environment.variables = {
+    EDITOR = "micro";
+    VISUAL = "micro";
+  };
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
