@@ -133,6 +133,7 @@
     libreoffice
     glow
     alejandra
+    fzf
 
     nix-search-cli
 
