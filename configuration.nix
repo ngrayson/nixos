@@ -139,6 +139,11 @@
 
     cursor-cli
     code-cursor
+
+    # for gtk theme
+    sassc
+    gnome-themes-extra
+    gtk-engine-murrine
   ];
 
   environment.variables = {
