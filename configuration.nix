@@ -166,8 +166,9 @@
     chafa
     astroterm
 
-    # slippi
-    pkgs.fuse
+    # games
+    pkgs.fuse # for slippi
+    steam
 
     # dev
     pkgs.nodejs_20
