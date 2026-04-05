@@ -175,6 +175,9 @@
     python3
     godot
 
+    # ricing
+    libsForQt5.qtstyleplugin-kvantum
+
     # for gtk theme
     sassc
     gnome-themes-extra
