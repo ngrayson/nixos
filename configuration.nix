@@ -40,6 +40,20 @@
 
   # Framework hardware support
   services.fprintd.enable = true;
+  # If `fprintd-list-devices` shows nothing after rebuild, try Goodix TOD (common on Framework):
+  # services.fprintd.tod.enable = true;
+  # services.fprintd.tod.driver = pkgs.libfprint-2-tod1-goodix;
+
+  # Fingerprint auth: SDDM, TTY login, sudo, polkit, Plasma screen lock — enroll after switch.
+  # Keep your password working until enrollment succeeds (see NixOS wiki Fingerprint scanner).
+  security.pam.services = {
+    sddm.fprintAuth = true;
+    login.fprintAuth = true;
+    sudo.fprintAuth = true;
+    polkit-1.fprintAuth = true;
+    kscreenlocker.fprintAuth = true;
+  };
+
   services.power-profiles-daemon.enable = true;
   services.fwupd.enable = true;
   powerManagement.enable = true;
@@ -159,7 +173,6 @@
     # core tools
     openvpn
     pkgs.xd
-    iwd
 
     # apps
     libreoffice
@@ -171,7 +184,6 @@
     glow
     chafa
     astroterm
-    pkgs.impala
 
     # games
     pkgs.fuse # for slippi
