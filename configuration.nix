@@ -226,6 +226,7 @@
     steam
 
     # dev
+    pkgs.vscode
     pkgs.nodejs_20
     python3
     godot
