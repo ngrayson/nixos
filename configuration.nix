@@ -100,6 +100,11 @@
   # zshell
   programs.zsh = {
     enable = true;
+    ohMyZsh = {
+      enable = true;
+      plugins = ["git"];
+      theme = "rubbyrussell";
+    };
     shellAliases = {
       ns = "nix-search";
     };
@@ -125,7 +130,6 @@
     libreoffice
     glow
     alejandra
-    pkgs.oh-my-zsh
 
     nix-search-cli
 
