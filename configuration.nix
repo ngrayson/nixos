@@ -159,6 +159,7 @@
     # core tools
     openvpn
     pkgs.xd
+    iwd
 
     # apps
     libreoffice
