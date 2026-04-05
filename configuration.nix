@@ -125,6 +125,7 @@
     libreoffice
     glow
     alejandra
+    pkgs.oh-my-zsh
 
     nix-search-cli
 
