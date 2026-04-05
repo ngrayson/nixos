@@ -144,6 +144,7 @@
     libnotify
     appimage-run
     topgrade
+    powertop
 
     # nix tools
     nix-search-cli
@@ -188,10 +189,16 @@
 
   environment = {
     shells = [pkgs.zsh];
+    # sessionVariables: Plasma / graphical apps; store paths: reliable when PATH is thin.
     variables = {
-      EDITOR = "micro";
-      SYSTEMD_EDITOR = "micro";
-      VISUAL = "micro";
+      EDITOR = "${pkgs.micro}/bin/micro";
+      SYSTEMD_EDITOR = "${pkgs.micro}/bin/micro";
+      VISUAL = "${pkgs.micro}/bin/micro";
+    };
+    sessionVariables = {
+      EDITOR = "${pkgs.micro}/bin/micro";
+      SYSTEMD_EDITOR = "${pkgs.micro}/bin/micro";
+      VISUAL = "${pkgs.micro}/bin/micro";
     };
   };
 
