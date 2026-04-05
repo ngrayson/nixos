@@ -144,6 +144,7 @@
     sassc
     gnome-themes-extra
     gtk-engine-murrine
+    tokyonight-gtk-theme
   ];
 
   environment.variables = {
