@@ -91,6 +91,11 @@
     ];
   };
 
+  environment.variables = {
+    EDITOR = "micro";
+    VISUAL = "micro";
+  };
+
   # enable nix-command for nix seach
   nix.settings.experimental-features = ["nix-command" "flakes"];
 
