@@ -64,7 +64,7 @@
     Login = {
       HandleLidSwitch = "suspend";
       HandleLidSwitchExternalPower = "suspend";
-      HandleLidSwitchDocked = "suspend";
+      HandleLidSwitchDocked = "ignore";
     };
   };
 
