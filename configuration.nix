@@ -97,6 +97,14 @@
   # Install firefox.
   programs.firefox.enable = true;
 
+  # Steam
+  programs.steam = {
+    enable = true;
+    remotePlay.openFirewall = true;
+    dedicatedServer.openFirewall = true;
+    localNetworkGameTransfers.openFirewall = true;
+  };
+
   # zshell
   programs.zsh = {
     enable = true;
@@ -130,15 +138,40 @@
     btop
     fastfetch
     kitty
-    libreoffice
-    glow
     alejandra
     fzf
+    libnotify
+    appimage-run
 
+    # nix tools
     nix-search-cli
 
+    # ai
     cursor-cli
     code-cursor
+
+    # core tools
+    openvpn
+    pkgs.xd
+
+    # apps
+    libreoffice
+    discord
+    obsidian
+    bitwarden-desktop
+
+    # tui
+    glow
+    chafa
+    astroterm
+
+    # slippi
+    pkgs.fuse
+
+    # dev
+    pkgs.nodejs_20
+    python3
+    godot
 
     # for gtk theme
     sassc
@@ -147,9 +180,13 @@
     tokyonight-gtk-theme
   ];
 
-  environment.variables = {
-    EDITOR = "micro";
-    VISUAL = "micro";
+  environment = {
+    shells = [pkgs.zsh];
+    variables = {
+      EDITOR = "micro";
+      SYSTEMD_EDITOR = "micro";
+      VISUAL = "micro";
+    };
   };
 
   # Some programs need SUID wrappers, can be configured further or are
