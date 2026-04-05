@@ -195,6 +195,7 @@
     glow
     chafa
     astroterm
+    pkgs.impala
 
     # games
     pkgs.fuse # for slippi
