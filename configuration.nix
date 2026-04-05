@@ -44,6 +44,10 @@
   services.fwupd.enable = true;
   powerManagement.enable = true;
 
+  # Bluetooth (BlueZ) — pairing via Plasma **Settings → Bluetooth**; audio via PipeWire below.
+  hardware.bluetooth.enable = true;
+  hardware.bluetooth.powerOnBoot = true;
+
   # Enable the X11 windowing system.
   # You can disable this if you're only using the Wayland session.
   services.xserver.enable = true;
@@ -144,7 +148,6 @@
     libnotify
     appimage-run
     topgrade
-    powertop
 
     # nix tools
     nix-search-cli
@@ -167,6 +170,7 @@
     glow
     chafa
     astroterm
+    impala
 
     # games
     pkgs.fuse # for slippi
