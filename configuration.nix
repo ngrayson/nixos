@@ -58,6 +58,16 @@
   services.fwupd.enable = true;
   powerManagement.enable = true;
 
+  # Suspend / lid — explicit logind (Plasma + PPD: do not enable TLP; it fights power-profiles-daemon).
+  # Investigation: projects/nixos-framework-setup/02-functional-improvements.md § Low-power suspend
+  services.logind.settings = {
+    Login = {
+      HandleLidSwitch = "suspend";
+      HandleLidSwitchExternalPower = "suspend";
+      HandleLidSwitchDocked = "suspend";
+    };
+  };
+
   # Bluetooth (BlueZ) — pairing via Plasma **Settings → Bluetooth**; audio via PipeWire below.
   hardware.bluetooth.enable = true;
   hardware.bluetooth.powerOnBoot = true;
@@ -155,6 +165,7 @@
     git
     btop
     bottom
+    powertop
     fastfetch
     kitty
     alejandra
