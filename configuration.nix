@@ -294,9 +294,9 @@
     python3
     godot
 
-    # ricing
+    # ricing — Kvantum Qt style (Qt5 + Qt6; Plasma 6 needs Qt6)
     libsForQt5.qtstyleplugin-kvantum
-    kdePackages.kdeplasma-addons
+    qt6Packages.qtstyleplugin-kvantum
 
     # for gtk theme
     sassc
