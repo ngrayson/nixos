@@ -150,7 +150,7 @@
         user = {
           name = "wiz";
           # Replace with your real address (was chezmoi `email`); same value is fine if you update chezmoi data for other hosts.
-          email = "nick@wizardtower.org";
+          email = "windows@example.com";
         };
         core = {
           editor = "micro";
@@ -203,6 +203,24 @@
     shellAliases = {
       ns = "nix-search";
       vpn = "sudo vortix";
+      # Complex or one-off aliases: adjust here deliberately (not bulk copy-paste).
+      "agent-new" = "cd ~/Stellarium && cursor-agent";
+      agent = "cd ~/Stellarium && cursor-agent --resume";
+      sagent = "cd ~/Stellarium && sudo cursor-agent --resume";
+      clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
+      fetch = "fastfetch";
+      gimp = "~/Apps/GIMP &";
+      keyboard-flash = "sudo sleep 1; cd ~/pocket-reform/pocket-reform-keyboard-fw/pocket-hid; ./build.sh;echo \"flashing in 10s\";sleep 7; echo \"flashing in 3s\"; sleep 4;sudo picotool load build/pocket-hid.uf2 -f";
+      kitty = "kitty 2>/dev/null";
+      l = "ls -CF";
+      la = "ls -A";
+      ll = "ls -ll";
+      moon = "curl \"wttr.in/moon?Fun\"";
+      notes = "obsidian";
+      obsidian = "~/Apps/Obsidian &";
+      stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
+      weather = "curl \"wttr.in/kirkland?FunQ2\"";
+      wifi = "impala";
     };
   };
 
@@ -257,6 +275,7 @@
     glow
     chafa
     astroterm
+    newsboat
 
     # games
     pkgs.fuse # for slippi
@@ -290,6 +309,11 @@
       EDITOR = "${pkgs.micro}/bin/micro";
       SYSTEMD_EDITOR = "${pkgs.micro}/bin/micro";
       VISUAL = "${pkgs.micro}/bin/micro";
+      # Default terminal for scripts / tmux helpers that respect $TERMINAL
+      TERMINAL = "${pkgs.kitty}/bin/kitty";
+      # Git defaults to /etc/gitconfig; some shells/environments see /etc without that symlink.
+      # Point at the generation-linked file so `git config --system` and `git config --list` match programs.git.
+      GIT_CONFIG_SYSTEM = "/run/current-system/etc/gitconfig";
     };
   };
 
