@@ -299,6 +299,7 @@
     qt6Packages.qtstyleplugin-kvantum
 
     # for gtk theme
+    kdePackages.kcolorchooser
     sassc
     gnome-themes-extra
     gtk-engine-murrine
