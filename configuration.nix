@@ -203,11 +203,13 @@
     shellAliases = {
       ns = "nix-search";
       vpn = "sudo vortix";
+      # Merged from chezmoi dot_bash_aliases + dot_zshrc (see projects/nixos-framework-setup/08-dotfiles-migration-plan.md).
       # Complex or one-off aliases: adjust here deliberately (not bulk copy-paste).
-      "agent-new" = "cd ~/Stellarium && cursor-agent";
-      agent = "cd ~/Stellarium && cursor-agent --resume";
-      sagent = "cd ~/Stellarium && sudo cursor-agent --resume";
+      "agent-new" = "cd ~/Agent && cursor-agent";
+      agent = "cd ~/Agent && cursor-agent --resume";
+      chezpush = "~/bin/chezpush.sh";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
+      config = "code ~/.local/share/chezmoi; chezmoi apply";
       fetch = "fastfetch";
       gimp = "~/Apps/GIMP &";
       keyboard-flash = "sudo sleep 1; cd ~/pocket-reform/pocket-reform-keyboard-fw/pocket-hid; ./build.sh;echo \"flashing in 10s\";sleep 7; echo \"flashing in 3s\"; sleep 4;sudo picotool load build/pocket-hid.uf2 -f";
@@ -218,9 +220,15 @@
       moon = "curl \"wttr.in/moon?Fun\"";
       notes = "obsidian";
       obsidian = "~/Apps/Obsidian &";
+      ohmyzshconfig = "micro ~/.config/nixos/configuration.nix";
+      sagent = "cd ~/Agent && sudo cursor-agent --resume";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
+      termconfig = "chezmoi edit ~/.config/kitty/kitty.conf && chezmoi apply";
       weather = "curl \"wttr.in/kirkland?FunQ2\"";
-      wifi = "impala";
+      "wifi-connect" = "nmcli device wifi connect";
+      "wifi-connection" = "nmcli connection show";
+      "wifi-list" = "nmcli device wifi list";
+      zshconfig = "chezmoi edit ~/.zshrc && chezmoi apply";
     };
   };
 
@@ -288,6 +296,7 @@
 
     # ricing
     libsForQt5.qtstyleplugin-kvantum
+    kdePackages.kdeplasma-addons
 
     # for gtk theme
     sassc
