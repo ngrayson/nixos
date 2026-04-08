@@ -262,7 +262,7 @@
 
     # ai
     cursor-cli
-    code-cursor
+    # code-cursor
 
     # core tools
     openvpn
