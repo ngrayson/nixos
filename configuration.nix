@@ -205,8 +205,8 @@
       vpn = "sudo vortix";
       # Merged from chezmoi dot_bash_aliases + dot_zshrc (see projects/nixos-framework-setup/08-dotfiles-migration-plan.md).
       # Complex or one-off aliases: adjust here deliberately (not bulk copy-paste).
-      "agent-new" = "cd ~/Agent && cursor-agent";
-      agent = "cd ~/Agent && cursor-agent --resume";
+      "agent-new" = "cd ~/Stellarium && cursor-agent";
+      agent = "cd ~/Stellarium && cursor-agent --resume";
       chezpush = "~/bin/chezpush.sh";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
       config = "code ~/.local/share/chezmoi; chezmoi apply";
