@@ -256,6 +256,7 @@
     libnotify
     appimage-run
     topgrade
+    kdePackages.kcolorchooser
 
     # nix tools
     nix-search-cli
