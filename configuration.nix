@@ -287,8 +287,6 @@
 
     # bitwarden
     bitwarden-desktop
-    pkgs.rbw
-    pkgs.pinentry-qt
 
     # tui
     glow
