@@ -282,10 +282,13 @@
     libreoffice
     discord
     obsidian
-    bitwarden-desktop
-    pkgs.rbw
     pkgs.spotify-qt
     pkgs.librespot
+
+    # bitwarden
+    bitwarden-desktop
+    pkgs.rbw
+    pkgs.pinentry-qt
 
     # tui
     glow
