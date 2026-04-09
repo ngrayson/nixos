@@ -285,6 +285,7 @@
     obsidian
     bitwarden-desktop
     pkgs.spotify-qt
+    pkgs.librespot
 
     # tui
     glow
