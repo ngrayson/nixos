@@ -262,7 +262,7 @@
     appimage-run
     topgrade
     kdePackages.kcolorchooser
-
+    pkgs.albert
     # nix tools
     nix-search-cli
 
