@@ -237,6 +237,13 @@
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    # Add libs only if something still fails after rebuild (see below)
+    # stdenv.cc.cc.lib
+    # zlib
+  ];
+
   programs.appimage = {
     enable = true;
     binfmt = true;
