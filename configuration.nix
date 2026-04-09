@@ -265,10 +265,6 @@
     # nix tools
     nix-search-cli
 
-    # ai
-    cursor-cli
-    # code-cursor
-
     # core tools
     openvpn
     # Vortix (https://github.com/Harry-kp/vortix) — TUI for OpenVPN/WireGuard; install UI: nix profile install github:Harry-kp/vortix
