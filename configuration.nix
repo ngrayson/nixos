@@ -221,7 +221,6 @@
       notes = "obsidian";
       obsidian = "~/Apps/Obsidian &";
       ohmyzshconfig = "micro ~/.config/nixos/configuration.nix";
-      sagent = "cd ~/Stellarium && sudo cursor-agent --resume";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
       termconfig = "chezmoi edit ~/.config/kitty/kitty.conf && chezmoi apply";
       weather = "curl \"wttr.in/kirkland?FunQ2\"";
@@ -284,6 +283,7 @@
     discord
     obsidian
     bitwarden-desktop
+    pkgs.rbw
     pkgs.spotify-qt
     pkgs.librespot
 
