@@ -102,12 +102,12 @@
     # If you want to use JACK applications, uncomment this
     #jack.enable = true;
 
-	wireplumber.extraConfig.no-ucm = {
-		"monitor.alsa.properties" = {
-			"alsa.use-ucm" = false;
-		};
-	};
-	
+    # wireplumber.extraConfig.no-ucm = {
+    # 	"monitor.alsa.properties" = {
+    # 		"alsa.use-ucm" = false;
+    # 	};
+    # };
+
     # use the example session manager (no others are packaged yet so this is enabled by default,
     # no need to redefine it in your config for now)
     #media-session.enable = true;
