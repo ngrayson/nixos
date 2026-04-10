@@ -304,6 +304,7 @@
     newsboat
     pkgs.tmux
     pkgs.tmuxifier
+    tree
 
     # games
     pkgs.fuse # for slippi
