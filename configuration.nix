@@ -302,6 +302,8 @@
     chafa
     astroterm
     newsboat
+    pkgs.tmux
+    pkgs.tmuxifier
 
     # games
     pkgs.fuse # for slippi
