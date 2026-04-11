@@ -242,7 +242,6 @@
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
-  nixpkgs.config.allowUnsupportedSystem = true;
 
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
@@ -294,7 +293,6 @@
     obsidian
     pkgs.spotify-qt
     pkgs.librespot
-    pkgs.notion-app
 
     # bitwarden
     bitwarden-desktop
