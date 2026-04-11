@@ -293,6 +293,7 @@
     obsidian
     pkgs.spotify-qt
     pkgs.librespot
+    pkgs.notion-app-enhanced
 
     # bitwarden
     bitwarden-desktop
