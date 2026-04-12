@@ -293,6 +293,7 @@
     obsidian
     pkgs.spotify-qt
     pkgs.librespot
+    pkgs.ungoogled-chromium
 
     # bitwarden
     bitwarden-desktop
