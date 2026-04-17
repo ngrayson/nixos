@@ -73,10 +73,10 @@ in {
   # services.fprintd.tod.enable = true;
   # services.fprintd.tod.driver = pkgs.libfprint-2-tod1-goodix;
 
-  # Fingerprint auth: SDDM, TTY login, sudo, polkit, Plasma screen lock — enroll after switch.
+  # Fingerprint auth: not SDDM (password at cold login avoids long fprintd timeout before password).
+  # TTY login, sudo, polkit, Plasma lock screen still use the reader — enroll after switch.
   # Keep your password working until enrollment succeeds (see NixOS wiki Fingerprint scanner).
   security.pam.services = {
-    sddm.fprintAuth = true;
     login.fprintAuth = true;
     sudo.fprintAuth = true;
     polkit-1.fprintAuth = true;
