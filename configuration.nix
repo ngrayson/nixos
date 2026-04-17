@@ -5,7 +5,25 @@
   config,
   pkgs,
   ...
-}: {
+}: let
+  # Plymouth: single TTF via FreeType — Nerd Fonts much smaller than Iosevka (~13 MiB → ~2.4 MiB).
+  # Heavy Data NF: smallest; fc-validate OK. Alternative: 3270 NFM Regular (~2.6 MiB, IBM terminal).
+  #   plymouthNerdFontPkg = pkgs.nerd-fonts._3270;
+  #   plymouthNerdFontRelPath = "share/fonts/truetype/NerdFonts/3270/3270NerdFontMono-Regular.ttf";
+  plymouthNerdFontPkg = pkgs.nerd-fonts.heavy-data;
+  plymouthNerdFontRelPath = "share/fonts/truetype/NerdFonts/HeavyData/HeavyDataNerdFont-Regular.ttf";
+  plymouthNerdFontSrc = "${plymouthNerdFontPkg}/${plymouthNerdFontRelPath}";
+  plymouthValidatedNerdFont =
+    pkgs.runCommand "plymouth-nerd-font-validated" {
+      nativeBuildInputs = [pkgs.fontconfig];
+    } ''
+      fc-validate "${plymouthNerdFontSrc}" || {
+        echo "fc-validate failed: Plymouth font is not a valid fontconfig outline font"
+        exit 1
+      }
+      install -Dm444 "${plymouthNerdFontSrc}" "$out/font.ttf"
+    '';
+in {
   imports = [
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
@@ -21,21 +39,18 @@
   # AMD P-State active power management
   boot.kernelParams = ["amd_pstate=active"];
 
-  # Graphical boot splash (bgrt: stable default; good LUKS prompt support vs many third-party themes)
+  # Graphical boot splash — Black HUD (adi1090x); Nerd Font face (see plymouthNerdFont* in let)
   boot.plymouth.enable = true;
-  boot.plymouth.theme = "bgrt";
+  boot.plymouth.theme = "black_hud";
+  boot.plymouth.themePackages = [
+    (pkgs.adi1090x-plymouth-themes.override {selected_themes = ["black_hud"];})
+  ];
+  boot.plymouth.font = "${plymouthValidatedNerdFont}/font.ttf";
 
   # systemd in initrd: better Plymouth + LUKS ask-password integration than stage-1 script alone.
   boot.initrd.systemd.enable = true;
 
-  # After boot is confirmed with the above, switch to Black HUD (adi1090x) by replacing the two
-  # boot.plymouth lines above with:
-  #   boot.plymouth.theme = "black_hud";
-  #   boot.plymouth.themePackages = [
-  #     (pkgs.adi1090x-plymouth-themes.override {selected_themes = ["black_hud"];})
-  #   ];
-
-  # boot.initrd.luks.devices."luks-61d676d2-6e31-41cd-a953-13d2bf0fd257".device = "/dev/disk/by-uuid/61d676d2-6e31-41cd-a953-13d2bf0fd257";
+  boot.initrd.luks.devices."luks-61d676d2-6e31-41cd-a953-13d2bf0fd257".device = "/dev/disk/by-uuid/61d676d2-6e31-41cd-a953-13d2bf0fd257";
   networking.hostName = "Theseus"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
