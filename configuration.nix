@@ -25,6 +25,16 @@
   boot.plymouth.enable = true;
   boot.plymouth.theme = "bgrt";
 
+  # systemd in initrd: better Plymouth + LUKS ask-password integration than stage-1 script alone.
+  boot.initrd.systemd.enable = true;
+
+  # After boot is confirmed with the above, switch to Black HUD (adi1090x) by replacing the two
+  # boot.plymouth lines above with:
+  #   boot.plymouth.theme = "black_hud";
+  #   boot.plymouth.themePackages = [
+  #     (pkgs.adi1090x-plymouth-themes.override {selected_themes = ["black_hud"];})
+  #   ];
+
   boot.initrd.luks.devices."luks-61d676d2-6e31-41cd-a953-13d2bf0fd257".device = "/dev/disk/by-uuid/61d676d2-6e31-41cd-a953-13d2bf0fd257";
   networking.hostName = "Theseus"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
