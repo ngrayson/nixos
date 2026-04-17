@@ -23,6 +23,18 @@
       }
       install -Dm444 "${plymouthNerdFontSrc}" "$out/font.ttf"
     '';
+
+  # SDDM login background: image next to configuration.nix; Breeze theme with only background= patched.
+  sddmLoginBg = builtins.path {
+    path = ./login-bg.png;
+    name = "login-bg.png";
+  };
+  sddmThemeBreezeLogin = pkgs.runCommand "sddm-theme-breeze-login" {} ''
+    mkdir -p $out/share/sddm/themes
+    cp -r ${pkgs.kdePackages.plasma-desktop}/share/sddm/themes/breeze $out/share/sddm/themes/breeze-login
+    chmod -R u+w $out/share/sddm/themes/breeze-login
+    sed -i "s|^background=.*|background=${sddmLoginBg}|" $out/share/sddm/themes/breeze-login/theme.conf
+  '';
 in {
   imports = [
     # Include the results of the hardware scan.
@@ -110,6 +122,11 @@ in {
 
   # Enable the KDE Plasma Desktop Environment.
   services.displayManager.sddm.enable = true;
+  services.displayManager.sddm.theme = "breeze-login";
+  services.displayManager.sddm.settings.Theme = {
+    CursorTheme = "breeze_cursors";
+    CursorSize = 24;
+  };
   services.desktopManager.plasma6.enable = true;
 
   # Configure keymap in X11
@@ -287,75 +304,77 @@ in {
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
-  environment.systemPackages = with pkgs; [
-    # vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-    wget
-    micro
-    gh
-    chezmoi
-    btop
-    bottom
-    powertop
-    fastfetch
-    kitty
-    alejandra
-    fzf
-    libnotify
-    appimage-run
-    topgrade
-    kdePackages.kcolorchooser
-    pkgs.albert
-    # nix tools
-    nix-search-cli
+  environment.systemPackages =
+    [sddmThemeBreezeLogin]
+    ++ (with pkgs; [
+      # vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
+      wget
+      micro
+      gh
+      chezmoi
+      btop
+      bottom
+      powertop
+      fastfetch
+      kitty
+      alejandra
+      fzf
+      libnotify
+      appimage-run
+      topgrade
+      kdePackages.kcolorchooser
+      pkgs.albert
+      # nix tools
+      nix-search-cli
 
-    # core tools
-    openvpn
-    # Vortix (https://github.com/Harry-kp/vortix) — TUI for OpenVPN/WireGuard; install UI: nix profile install github:Harry-kp/vortix
-    curl
-    wireguard-tools
-    iptables
-    iproute2
-    pkgs.xd
+      # core tools
+      openvpn
+      # Vortix (https://github.com/Harry-kp/vortix) — TUI for OpenVPN/WireGuard; install UI: nix profile install github:Harry-kp/vortix
+      curl
+      wireguard-tools
+      iptables
+      iproute2
+      pkgs.xd
 
-    # apps
-    libreoffice
-    discord
-    obsidian
-    pkgs.spotify-qt
-    pkgs.librespot
-    pkgs.ungoogled-chromium
+      # apps
+      libreoffice
+      discord
+      obsidian
+      pkgs.spotify-qt
+      pkgs.librespot
+      pkgs.ungoogled-chromium
 
-    # bitwarden
-    bitwarden-desktop
+      # bitwarden
+      bitwarden-desktop
 
-    # tui
-    glow
-    chafa
-    astroterm
-    newsboat
-    pkgs.tmux
-    pkgs.tmuxifier
-    tree
+      # tui
+      glow
+      chafa
+      astroterm
+      newsboat
+      pkgs.tmux
+      pkgs.tmuxifier
+      tree
 
-    # games
-    pkgs.fuse # for slippi
-    steam
+      # games
+      pkgs.fuse # for slippi
+      steam
 
-    # dev
-    pkgs.nodejs_20
-    python3
-    godot
+      # dev
+      pkgs.nodejs_20
+      python3
+      godot
 
-    # ricing — Kvantum Qt style (Qt5 + Qt6; Plasma 6 needs Qt6)
-    libsForQt5.qtstyleplugin-kvantum
-    qt6Packages.qtstyleplugin-kvantum
+      # ricing — Kvantum Qt style (Qt5 + Qt6; Plasma 6 needs Qt6)
+      libsForQt5.qtstyleplugin-kvantum
+      qt6Packages.qtstyleplugin-kvantum
 
-    # for gtk theme
-    sassc
-    gnome-themes-extra
-    gtk-engine-murrine
-    tokyonight-gtk-theme
-  ];
+      # for gtk theme
+      sassc
+      gnome-themes-extra
+      gtk-engine-murrine
+      tokyonight-gtk-theme
+    ]);
 
   environment = {
     shells = [pkgs.zsh];
