@@ -21,6 +21,10 @@
   # AMD P-State active power management
   boot.kernelParams = ["amd_pstate=active"];
 
+  # Graphical boot splash (bgrt: stable default; good LUKS prompt support vs many third-party themes)
+  boot.plymouth.enable = true;
+  boot.plymouth.theme = "bgrt";
+
   boot.initrd.luks.devices."luks-61d676d2-6e31-41cd-a953-13d2bf0fd257".device = "/dev/disk/by-uuid/61d676d2-6e31-41cd-a953-13d2bf0fd257";
   networking.hostName = "Theseus"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
