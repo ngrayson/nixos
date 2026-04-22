@@ -35,10 +35,17 @@
     chmod -R u+w $out/share/sddm/themes/breeze-login
     sed -i "s|^background=.*|background=${sddmLoginBg}|" $out/share/sddm/themes/breeze-login/theme.conf
   '';
+
+  # home-manager: release-25.11 matches NixOS 25.11; see ./home.nix and MIGRATION.md
+  home-manager-src = builtins.fetchTarball {
+    url = "https://github.com/nix-community/home-manager/archive/release-25.11.tar.gz";
+    sha256 = "16mcnqpcgl3s2frq9if6vb8rpnfkmfxkz5kkkjwlf769wsqqg3i9";
+  };
 in {
   imports = [
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
+    (import (home-manager-src + "/nixos"))
     <nixos-hardware/framework/13-inch/amd-ai-300-series>
   ];
 
@@ -187,6 +194,12 @@ in {
       kdePackages.kate
       #  thunderbird
     ];
+  };
+
+  # Declarative $HOME: activates with nixos-rebuild; `home.nix` for user "wiz" (see MIGRATION.md)
+  home-manager = {
+    useGlobalPkgs = true;
+    users.wiz = import ./home.nix;
   };
 
   # enable nix-command for nix seach

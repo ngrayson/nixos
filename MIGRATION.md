@@ -17,12 +17,13 @@ This repo is the source of truth for system configuration. Use this list when re
    - `fileSystems` and **`boot.initrd.luks.devices`** (names and **UUIDs will change** with new disks/partitions)
    - `boot.initrd.availableKernelModules` / `kernelModules` as needed
    - `swapDevices` if applicable
-5. In **`configuration.nix`**, update at least:
+5. This repo includes **Home Manager** (`./home.nix`, pinned in `configuration.nix` via `fetchTarball` on the `release-25.11` branch). It activates with **`sudo nixos-rebuild switch`** the same as the rest of the system. On a fresh clone, no extra `home-manager` install step is required. Grow **`home.nix`** over time to hold dotfiles and user packages; until then, **chezmoi** can stay in use—avoid the same path in both until you pick one.
+6. In **`configuration.nix`**, update at least:
    - **`networking.hostName`** (e.g. old `Theseus` → new name)
    - **`<nixos-hardware/...>`** import when a profile exists for the **new** Framework model (path may differ from `framework/13-inch/amd-ai-300-series`); if none exists yet, comment the import and add hardware options manually.
    - **Kernel / boot**: Re-evaluate **`linuxPackages_latest`** and **`boot.kernelParams`** (e.g. `amd_pstate=active`) if the CPU is no longer the same (Intel vs AMD, etc.).
-6. Set **`system.stateVersion`** to match your *first* NixOS install on the new box if the installer suggests a new default; do not advance casually (see NixOS manual).
-7. Run **`sudo nixos-rebuild switch`** (or the flake equivalent) and reboot.
+7. Set **`system.stateVersion`** to match your *first* NixOS install on the new box if the installer suggests a new default; do not advance casually (see NixOS manual).
+8. Run **`sudo nixos-rebuild switch`** (or the flake equivalent) and reboot. That also runs **Home Manager** for user `wiz` (systemd `home-manager-wiz.service` or equivalent on your NixOS version).
 
 ## After first successful boot
 
@@ -30,8 +31,14 @@ This repo is the source of truth for system configuration. Use this list when re
 2. **WiFi**: Reconnect via NetworkManager (or add declarative connection files later).
 3. **KWallet / wallet prompt**: If something prompts unexpectedly, it is often the same PAM/fingerprint/KWallet story as in the NixOS wiki; log in with **password** first, then align fingerprint in **Settings** if needed.
 4. **VPN / stunnel**: Ensure **`/etc/...` paths** from `configuration.nix` (e.g. FrootVPN CA) exist; PEM is referenced from this repo in **`environment.etc`**, so a successful rebuild already places it.
-5. **Chezmoi / dotfiles**: Run your usual `chezmoi apply` (or init from your dotfile repo) so `~/.config` matches your expectations.
+5. **Chezmoi / dotfiles & Home Manager**: If you still use **chezmoi** for some paths, `chezmoi apply` is fine; if **`home.nix`** starts managing the same file, resolve the overlap (remove from chezmoi or drop the `home.file` in HM) to avoid clobbering. Prefer growing **`./home.nix`** on new hardware so the next migration is a single `git pull` + `nixos-rebuild`.
 6. **Plymouth / SDDM**: After rebuild, log out to SDDM once to confirm **theme** and **login background** (`breeze-login`, `login-bg.png`).
+
+## Optional: Framework setup roadmap (documentation)
+
+A **vendored copy** of the Stellarium **NixOS on Framework** project may live in **`documentation/nixos-framework-setup/`** in this repository (full files, not symlinks, so clones stay portable). It is the **phased checklist** (LOCKED, audit, session, Home Manager, rice) — **documentation only**; it does not change `nixos-rebuild` by itself. If you also keep a copy under a Stellarium checkout (`projects/nixos-framework-setup/`, gitignored at the Stellarium root), **sync the trees manually** when you want them to match.
+
+**Home Manager note:** this repo may include a **minimal** `home.nix` scaffold with the NixOS Home Manager module; **Phase D** in that roadmap (moving Kitty, zsh, git, etc. into `home.nix`) is still **deferred** until you choose to work it — see `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there.
 
 ## Optional: split machine-specific Nix
 
