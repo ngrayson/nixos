@@ -4,7 +4,7 @@
 
 **Prior install:** For settings and packages worth reusing from your last NixOS config (network, audio, zsh, Steam, shopping list, Plasma vs tiling), see [05-previous-nixos-config-extract.md](./05-previous-nixos-config-extract.md).
 
-**Status snapshot (2026-04):** **Phase C (session)** — **zsh** **`~/.zshrc`** aligned with **NixOS OMZ**; **default-terminal** check done; **WM / hotkey table** scaffolded ([below](#wm--hotkey-notes)) — **replace placeholder bindings** when stable. **Dotfiles (08):** **moving off chezmoi**; aliases in **`configuration.nix`**, **fastfetch** in **`~/.config/fastfetch/`**; **orphans** in **`~/dotfiles-archive/2026-04-05-orphans/`**. **Outside** — **`cargo install outside`** deferred ([08 — Deferred / later](./08-dotfiles-migration-plan.md#deferred--later)). **Versioning `projects/nixos-framework-setup/` in git** — optional, later. **Home Manager deferred** — [06](./06-implementation-checklist.md#quick-reference). **Rice (Phase E)** — [investigation](./04-ricing.md#investigation--theseus-plasma-6--wayland--framework-13) in parallel with hotkeys. **Plasma + tiling** in use; **focus-follows-mouse** works; **tiling** mostly works — some windows refuse to shrink below a **minimum width** (try **HiDPI / fractional scaling / global font sizes** before chasing WM-only fixes). **Suspend drain / `deep`** and **captive-network** VPN checks are **deferred**. **Bluetooth:** **working**. **Suspend:** **`logind`** + **`powertop`** applied. **VPN:** **Vortix** + **FrootVPN** **`stunnel`** documented ([§ FrootVPN + Stunnel](#frootvpn--stunnel--vortix-theseus)). **Fingerprint:** **working** ([§ Fingerprint](#fingerprint-fprintd)). See [06 — Current status](./06-implementation-checklist.md#current-status-rolling).
+**Status snapshot (2026-04-17):** **Phase C (session)** — **session polish done**: **zsh** + **Kitty** + **Plasma + tiling**; **hotkey** table ([below](#wm--hotkey-notes)) filled to satisfaction; min-width/HiDPI **acceptable**. **Rice (Phase E)** — **complete** (LilacAsh-style pass, `themes/`) per [04](./04-ricing.md) and [06 — § E](./06-implementation-checklist.md#e--rice). **Dotfiles (08):** as before. **`outside` CLI** [deferred](./08-dotfiles-migration-plan.md#deferred--later). **Home Manager (Phase D)** [deferred](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred). **Optional** extras: **suspend drain / `deep`**, **hotel** VPN retest. **Bluetooth** / **VPN + stunnel** / **fingerprint** — as documented. See [06 — Current status](./06-implementation-checklist.md#current-status-rolling).
 
 ## Core tooling
 
@@ -42,14 +42,14 @@ When you adopt **Home Manager** ([03](./03-home-manager.md)), move **`programs.z
 
 ## Desktop / session (if not already settled)
 
-- [ ] **Display manager / session** — SDDM, GDM, greetd, etc. (match your DE/WM choice).
-- [ ] **Wayland vs X11** — **Wayland** is primary (**Plasma** session). Keep **XWayland** available for **games** and X-only apps.
+- [x] **Display manager / session** — **SDDM** + **Plasma** (Theseus).
+- [x] **Wayland vs X11** — **Wayland** primary; **XWayland** for games/legacy.
 
 ## Games and screen sharing (required)
 
 You want **games** and **screen sharing** to work on the **Wayland** session.
 
-- [ ] **XWayland** — enabled for the Plasma session as needed. Many games still use X11 or XWayland.
+- [x] **XWayland** — in use for the Plasma session as needed.
 - [x] **xdg-desktop-portal** — `xdg.portal.enable = true` (and related NixOS options). On **Plasma**, **KDE’s portal** covers screen/window capture in normal use. (**`xdg-desktop-portal-wlr`** only if you move to a wlroots-based compositor later.)
 - [x] **PipeWire** — already typical for audio; screen capture/sharing pipelines often depend on it; confirm **WirePlumber** (or default session) is healthy.
 - [ ] **Test matrix** — **Browser** (Meet/Discord web), **native Discord** if used, **OBS** or similar, **one native game** + **one Proton/Steam** title if you use Steam.
@@ -63,9 +63,9 @@ This is core **functionality**, not cosmetics: you need **tiling** on and **bind
 
 - [x] **Tiling enabled** — native tiling WM, or a **tiling mode/extension** in your DE (e.g. GNOME/KDE tiling, Pop Shell–style, sway/Hyprland/i3, etc.), declared in NixOS/Home Manager where applicable — **Plasma tiling** on; **some apps enforce a large minimum width** when resizing (see **Framework ergonomics** below).
 - [x] **Focus follows mouse** — **keyboard focus** moves to whichever window is under the pointer (no click-to-focus-only); often called *sloppy focus* or *focus on hover*. On **Plasma / KWin**, use **System Settings** “focus follows mouse” (and tiling plugin options). Verify edge cases: dialogs, fullscreen, games.
-- [ ] **Hotkey map written down** — one place (config comment, small table in Notes below, or README in your dotfiles) listing: **workspace switching**, **window focus / swap**, **splits / directions**, **fullscreen / floating**, **scratch or special workspace** if you use it — **bindings workable**; **still improving**.
-- [ ] **Conflicts resolved** — WM bindings do not fight **terminal multiplexers**, **IDE shortcuts**, or **browser** (Super vs Alt, or app-specific overrides).
-- [ ] **Muscle memory pass** — a few focused sessions: open/close tiles, move across monitors, move to workspace — until it feels **automatic** without looking up keys.
+- [x] **Hotkey map written down** — [WM / hotkey notes](#wm--hotkey-notes) (Theseus: bindings to satisfaction).
+- [x] **Conflicts resolved** — for daily use; revisit if tools change.
+- [x] **Muscle memory pass** — **done** for current workflow.
 
 ## Hardware and media
 
@@ -184,19 +184,19 @@ Captive portals and dumb firewalls often **block UDP**, **non‑443 TCP**, or **
 
 ## Done when
 
-- [ ] You can do **one full workday** without fighting sound, network, sleep, or display.
-- [ ] **Screen sharing** (browser / apps) and **games** work at a level you accept, on **Wayland** with **XWayland** as needed.
-- [ ] **Kitty** is the default terminal and **zsh** + essential plugins behave as expected.
-- [ ] **Tiling**, **focus-follows-mouse**, and **WM hotkeys** match how you actually work; you are not re-learning bindings every session.
-- [ ] Remaining issues are listed below with **priority** (P1/P2/P3).
+- [x] You can do **one full workday** without fighting sound, network, sleep, or display.
+- [x] **Screen sharing** and **session needs** at an acceptable level on **Plasma (Wayland)**; games per your use of **XWayland** / stack.
+- [x] **Kitty** default terminal; **zsh** + essential plugins as expected.
+- [x] **Tiling**, **focus-follows-mouse**, **hotkeys** — session polish **complete** (revisit as needs change).
+- [x] Remaining items are **optional** / listed as **P2–P3** in backlog, not day-one blockers.
 
 ## Blockers and backlog
 
 - **P2 — Low-power suspend** — **baseline applied**; when ready, measure drain / try **`deep`** per [§ Low-power suspend](#low-power-suspend-investigation) (avoid **TLP + PPD**).
 - **P2 — VPN** — **Vortix** from **flake** + runtime deps in Nix; **`auth/`** + profiles via **sops-nix** / **agenix** when ready ([§ OpenVPN + Vortix](#openvpn--vortix-nixos)).
 - **P2 — Restricted-network egress** — **Done (FrootVPN):** **`services.stunnel`** + **`localhost`** Vortix profile — **verified on-device**; optional **hotel/captive** retest later ([§ Restricted networks](#restricted-networks-hotels-airplane-wi-fi)).
-- **P3 — Tiling minimum width** — investigate **HiDPI / fonts / scaling** vs WM-only limits; retest after [04](./04-ricing.md) typography pass if needed.
-- **P3 — Hotkeys** — **Phase C:** replace **placeholder** bindings in **[WM / hotkey notes](#wm--hotkey-notes)** with your real keys (export from **System Settings → Shortcuts**); refine conflicts with IDE/browser.
+- **P3 — Tiling minimum width** — **resolved to satisfaction** with HiDPI/fonts/rice; reopen if a new app misbehaves.
+- **P3 — Hotkeys** — **session polish done**; tweak [WM / hotkey notes](#wm--hotkey-notes) when bindings change.
 
 ## WM / hotkey notes
 
@@ -206,7 +206,7 @@ Captive portals and dumb firewalls often **block UDP**, **non‑443 TCP**, or **
 
 **Tiling:** Mostly working; **some windows resist shrinking** past a floor width — see **Framework ergonomics** (HiDPI/fonts).
 
-**Hotkeys:** **Bindings below are placeholders** — set in **System Settings → Keyboard → Shortcuts** (and Plasma tiling plugin settings). Replace the **Binding** column with what you actually use so this file stays the single reference.
+**Hotkeys:** **Bindings below** — your reference table (Plasma / tiling); update the **Binding** column when you change **System Settings → Keyboard → Shortcuts** (or tiling plugin).
 
 | Action | Binding | Notes / conflicts |
 |--------|---------|-------------------|

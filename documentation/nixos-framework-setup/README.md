@@ -2,9 +2,9 @@
 
 **Plan status:** **LOCKED** (2026-04-05) — authoritative snapshot: [LOCKED.md](./LOCKED.md)
 
-**Continue implementation:** ordered checklist — [06-implementation-checklist.md](./06-implementation-checklist.md) (see **Current status** there for rolling notes: VPN, stunnel/443, optional suspend measurements, tiling/hotkeys).
+**Continue implementation:** [06-implementation-checklist.md](./06-implementation-checklist.md) — **Next:** optional [Phase D — Home Manager](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred) and [Quick reference — optional items](./06-implementation-checklist.md#quick-reference) (`outside`, Stylix, extra suspend metrics, etc.).
 
-**Where we are:** **Bootstrap done**; **Phase 2 in progress** — mic/webcam/screen sharing OK; **Plasma + tiling** + **focus-follows-mouse** OK; **Bluetooth** and **fingerprint** working; **low-power suspend** stack applied (**logind** + **powertop**); optional drain/`deep` tests later; **VPN** — **Vortix** ([upstream flake](https://github.com/Harry-kp/vortix)); **stunnel on 443** when you tackle restricted Wi‑Fi; **hotkeys** workable; **min window width** — try **HiDPI/fonts** first (details in [02](./02-functional-improvements.md)).
+**Where we are (2026-04):** **Bootstrap (A)**, **base system (B)**, **session (C)**, and **rice (E)** are **complete** for Theseus; see [06 — Current status](./06-implementation-checklist.md#current-status-rolling). **Outstanding:** **Phase D** (optional Home Manager user-config migration) and small **optional** items in [06 — Quick reference](./06-implementation-checklist.md#quick-reference) (e.g. `outside` CLI, extra suspend metrics, **Stylix**).
 
 This folder is your **organized todo** for turning a fresh NixOS install on a Framework laptop into a capable, comfortable, and good-looking daily driver.
 

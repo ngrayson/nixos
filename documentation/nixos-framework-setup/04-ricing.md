@@ -1,8 +1,10 @@
 # Phase 4 — Rice: aesthetic overhaul
 
+**Status (Theseus, 2026-04-17):** **Complete** for the **Plasma + manual LilacAsh cross-app** approach (`themes/`, Kvantum, Kitty, Cursor, Obsidian, micro). **Stylix** (declarative Nix-wide theming) remains **optional** — see [Strategy](#strategy--plasma-first-then-stylix).
+
 **Goal:** Make the system **look and feel cohesive** — typography, color, icons, shell prompt, bar, launcher, notifications, and wallpaper — without sacrificing the stability from earlier phases.
 
-**Related:** [06 — § E](./06-implementation-checklist.md#e--rice) (checklist), [02 — WM / hotkey notes](./02-functional-improvements.md#wm--hotkey-notes) (bindings in parallel), [08](./08-dotfiles-migration-plan.md) (dotfile ownership).
+**Related:** [06 — § E](./06-implementation-checklist.md#e--rice) (checklist), [02 — WM / hotkey notes](./02-functional-improvements.md#wm--hotkey-notes), [08](./08-dotfiles-migration-plan.md) (dotfile ownership).
 
 ## Principles
 
@@ -128,26 +130,28 @@ There is **no single cross‑platform standard** where one config file forces **
 - **Keyboard backlight at night** — even **1%** in firmware or DE sliders can still be **too bright** in a dark room. **Investigate** whether you can set a **lower floor** manually (e.g. `**brightnessctl`**, paths under `**/sys/class/leds/**`, Framework + Linux docs, or vendor-specific interfaces) and document what works on your machine.
 - **Optional — tie to evening / night mode** — if **night mode** or **reduced blue light** turns on **at sunset** (Redshift, KDE **Night Color**, GNOME **Night Light**, etc.), explore **hooking the same moment** to **dim or cap** keyboard backlight (user script, **systemd** timer/service, or DE-specific automation) so you are not adjusting it by hand every evening.
 
-## Checklist — investigation (in progress)
+## Checklist — investigation (Theseus: done for current scope)
 
 Work in any order; tick when satisfied or superseded.
 
-- [ ] **Plasma:** Application style (Kvantum + Tokyo Night or chosen theme), **Colors** (dark/light), **GTK** consistent with Qt.
-- [ ] **Fonts:** Plasma **Fonts** + **Kitty** + monospace in editors you use daily.
-- [ ] **Window decorations:** border width / theme; sanity-check with **tiling plugin** ([02 — Framework ergonomics](./02-functional-improvements.md#framework-ergonomics)).
-- [ ] **Icons + cursor** — one coherent set; size for scaling.
-- [ ] **Wallpaper** — chosen; login (**SDDM**) does not clash badly with session.
-- [ ] **Kitty** — color scheme aligned with Plasma (or deliberately independent).
-- [ ] **Optional:** **Night Color** / redshift behavior + **keyboard backlight floor** ([Framework display](#framework-display)).
-- [ ] **Optional:** **Omarchy** palette / wallpaper notes recovered from backups (not chezmoi source today).
-- [ ] **NixOS:** decide whether to pin **`fonts.packages`** / theme packages declaratively vs Settings-only (Home Manager later: [03](./03-home-manager.md)).
-- [ ] **Phase 1 — Plasma only:** [Strategy](#strategy--plasma-first-then-stylix); [color categories](#color-categories-phase-1-plasma); [One palette everywhere?](#one-palette-everywhere-qt5-qt6-gtk-fonts-the-rest) (Kvantum Qt5+Qt6, GTK, fonts).
-- [ ] **Phase 2 — Stylix:** after colors are **happy**, add [Stylix](https://nix-community.github.io/stylix) to match Nix-wide ([Stylix docs](https://nix-community.github.io/stylix)).
+- [x] **Plasma:** Application style (**Kvantum** + **LilacAsh** / chosen scheme), **Colors**, **GTK** consistent with Qt.
+- [x] **Fonts:** Plasma + **Kitty** + editor monospace (see **Iosevka** / baseline in [02](./02-functional-improvements.md)).
+- [x] **Window decorations** — with **tiling plugin** ([02 — Framework ergonomics](./02-functional-improvements.md#framework-ergonomics)).
+- [x] **Icons + cursor** — coherent for daily use.
+- [x] **Wallpaper** + **SDDM** — acceptable (see `login-bg` / nixos theme work).
+- [x] **Kitty** — aligned with the chosen palette.
+- [ ] **Optional:** **Night Color** + **keyboard backlight floor** — tweak anytime ([Framework display](#framework-display)).
+- [ ] **Optional:** **Omarchy** / backup palette notes.
+- [x] **NixOS** — mix of **declarative** packages (see `configuration.nix` **ricing** / fonts) and **Plasma** settings; fine-tune in **Home Manager** later if desired ([03](./03-home-manager.md)).
+- [x] **Phase 1 — Plasma only** — [Strategy](#strategy--plasma-first-then-stylix) satisfied for this machine.
+- [ ] **Phase 2 — Stylix** — *optional*; not required for “rice complete” on Theseus. Add [Stylix](https://nix-community.github.io/stylix) later if you want Nix-wide declarative theming ([Stylix docs](https://nix-community.github.io/stylix)).
 
 ## Done when
 
 - A screenshot would show **consistent** font, colors, and chrome across terminal, panel, and apps you use most.
 - You are not fighting **random** light/dark mismatches after reboot.
+
+**Theseus (2026-04-17):** Treated as **done** for the **LilacAsh + Plasma** approach above; [Stylix](#strategy--plasma-first-then-stylix) remains a possible later layer, not a blocker.
 
 ## Inspiration (optional)
 

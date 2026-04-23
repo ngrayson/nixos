@@ -4,14 +4,15 @@ Use this **after** [LOCKED.md](./LOCKED.md). Work **top to bottom**; check items
 
 ## Current status (rolling)
 
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-17
 
 | Area | State |
 |------|--------|
 | **A — Bootstrap** | Complete. |
-| **B — Base system** | **Functionally complete** for now. **Deferred (later):** suspend **drain / `deep`** ([02 — Low-power](./02-functional-improvements.md#low-power-suspend-investigation)); **real captive/hotel** Wi‑Fi spot-check for FrootVPN. Otherwise: mic, webcam, portals, **Bluetooth** / **fingerprint**, **VPN** + **FrootVPN stunnel** as documented. |
-| **C — Session** | **Kitty** + **`$TERMINAL`**; **zsh / git / shellAliases** Nix-aligned; **fastfetch** in **`~/.config/fastfetch/`**. **Moving off chezmoi** — machine policy in **`configuration.nix`**, ad hoc configs under **`~/.config`**. **[08](./08-dotfiles-migration-plan.md) migration wave** done for current scope; **orphans** in **`~/dotfiles-archive/2026-04-05-orphans/`**. **Hotkey placeholders** in [02](./02-functional-improvements.md#wm--hotkey-notes). **`outside`** via **`cargo install`** — [deferred](./08-dotfiles-migration-plan.md#deferred--later). **Stellarium** push — done. **Home Manager migration (Phase D) deferred**; **minimal `home.nix` scaffold** may exist — [LOCKED](./LOCKED.md#execution-note-rolling). **Tiling min-width** — [02 — Framework ergonomics](./02-functional-improvements.md#framework-ergonomics). |
-| **D / E** | **D (move user config into Home Manager)** still **open** (Kitty, zsh, etc. in **`home.nix`**). **E (rice)** now includes a **working LilacAsh cross-app pass**: **Kvantum**, **Kitty**, **Cursor** (workbench + terminal ANSI), **Obsidian theme**, and **micro colorscheme**; shared palette + config links are in `themes/` (see checklist). |
+| **B — Base system** | **Functionally complete.** **Optional later:** measure suspend **drain / `deep`**, **hotel** Wi‑Fi retest for FrootVPN; see [02 — Low-power](./02-functional-improvements.md#low-power-suspend-investigation). |
+| **C — Session** | **Complete** (session polish as of 2026-04): **Kitty**, **zsh**, **Plasma + tiling**, **hotkeys** and **ergonomics** (incl. min-width / HiDPI) at a level you are happy with; table in [02 — WM / hotkey notes](./02-functional-improvements.md#wm--hotkey-notes) reflects real bindings. **`outside`** [deferred](./08-dotfiles-migration-plan.md#deferred--later). **Home Manager migration (Phase D) deferred**; **minimal `home.nix` scaffold** — [LOCKED](./LOCKED.md#execution-note-rolling). |
+| **D** | **Open:** move user programs into **Home Manager** / **`home.nix`** when you want to ([§ D](#d--home-manager-phase-d-migration-deferred)). |
+| **E — Rice** | **Complete** (as of 2026-04): **LilacAsh**-aligned pass across **Kvantum**, **Kitty**, **Cursor**, **Obsidian**, **micro**; `themes/links/`. **Stylix** not required for “done” — optional Nix-wide theme later per [04](./04-ricing.md#strategy--plasma-first-then-stylix). |
 
 ---
 
@@ -41,7 +42,7 @@ Use this **after** [LOCKED.md](./LOCKED.md). Work **top to bottom**; check items
 - [x] **Libinput** — touchpad (`services.libinput.enable` on current NixOS).
 - [x] **Browser** — e.g. `programs.firefox.enable = true;` so you have docs online.
 - [x] **Portals + screen sharing** — `xdg.portal.enable = true;` + **KDE portal** on Plasma ([Q2](./LOCKED.md)). (**wlr** portal only if you add a wlroots session later — not planned.)
-- [ ] **Suspend / brightness / dock** — **logind** lid + **`powertop`** in config ([02 § Low-power](./02-functional-improvements.md#low-power-suspend-investigation)) — **deferred:** **drain / `deep`** when you want to tune; brightness/dock sanity when you care.
+- [x] **Suspend / brightness / dock** — **logind** + **powertop** in config; **session-acceptable** for daily use. **Optional** extra tuning: **drain / `deep`** / dock verification — [02 § Low-power](./02-functional-improvements.md#low-power-suspend-investigation).
 - [x] **Fingerprint reader** — `services.fprintd.enable` + **`security.pam.services.*.fprintAuth`**; **enrollment** + **unlock / login / sudo** tests OK ([02 — Fingerprint](./02-functional-improvements.md#fingerprint-fprintd)).
 
 ---
@@ -51,7 +52,7 @@ Use this **after** [LOCKED.md](./LOCKED.md). Work **top to bottom**; check items
 - [x] **Kitty** — installed; default terminal in session (`$TERMINAL`, keybinding, `.desktop` / portal).
 - [x] **zsh** — **NixOS `programs.zsh`** + **`dot_zshrc` / `~/.zshrc`** aligned (no duplicate OMZ path); theme **`clean`** in `configuration.nix`; **`shellAliases`** (`ns`, `vpn`). Further dotfile moves stay **incremental** ([02 — Oh My Zsh on NixOS](./02-functional-improvements.md#chezmoi-bootstrap-then-nixos-migration)).
 - [x] **Compositor path:** **Plasma (Wayland) + tiling** — [Q1](./LOCKED.md); **Sway** not targeted.
-- [x] **Tiling + focus-follows-mouse + hotkeys** — documented in one place ([02](./02-functional-improvements.md)) — **focus-follows-mouse OK**; **tiling** mostly OK (**min window width** issue — see status table); **WM / hotkey table** scaffolded with **placeholders** — replace **Binding** cells with your real shortcuts when stable.
+- [x] **Tiling + focus-follows-mouse + hotkeys** — documented in one place ([02](./02-functional-improvements.md)); **session polish done** (bindings, conflicts, min-width/HiDPI to satisfaction).
 - [x] **Editors:** **`micro`** in env; **VS Code / VSCodium / Cursor**; **Glow** — declared in `configuration.nix` ([Q9](./LOCKED.md)); **Home Manager optional later**.
 - [x] **Cross-app style baseline:** **IosevkaTermSlab NFM** font set in Kitty/Cursor/Obsidian; terminal/UI palette aligned across **Kitty**, **Cursor** (including ANSI), **Obsidian**, and **micro**.
 - [x] **Dotfiles → Nix / `~/.config` (this wave):** **Aliases**, **newsboat**, **WM stack removal**, etc. per [08](./08-dotfiles-migration-plan.md). **Ongoing:** **Outside** ([08](./08-dotfiles-migration-plan.md)); **`.local/bin`** ([08](./08-dotfiles-migration-plan.md)). **NixOS:** keep **`~/.config/nixos`** committed/pushed as you already do for **`nixos-rebuild`** — **no chezmoi** workflow. Policy: [LOCKED](./LOCKED.md#execution-note-rolling).
@@ -73,9 +74,9 @@ Use this **after** [LOCKED.md](./LOCKED.md). Work **top to bottom**; check items
 
 - [x] **Cross-app palette + app configs (manual pass):** LilacAsh colors applied to **Kvantum**, **Kitty**, **Cursor**, **Obsidian**, **micro**.
 - [x] **Style config links in repo:** symlink hub created at `themes/links/` for active style files (`kitty`, `Cursor`, `Obsidian`, `micro`, `Kvantum`).
-- [ ] **Strategy** — [04 — Plasma first, then Stylix](./04-ricing.md#strategy--plasma-first-then-stylix): decide whether to keep this manual pass or formalize in **Plasma-only** + later **Stylix**.
-- [ ] **Investigation** — [04 — Theseus / Plasma 6](./04-ricing.md#investigation--theseus-plasma-6--wayland--framework-13) + [checklist](./04-ricing.md#checklist--investigation-in-progress) (parallel with [hotkeys](./02-functional-improvements.md#wm--hotkey-notes)).
-- [ ] **Polish “done”** — [04 — Done when](./04-ricing.md#done-when); **keyboard backlight at night** and optional **sunset / night-mode** sync ([04 — Framework display](./04-ricing.md#framework-display)).
+- [x] **Strategy** — [04 — Plasma first, then Stylix](./04-ricing.md#strategy--plasma-first-then-stylix): **Plasma + manual cross-app pass** (LilacAsh / links in `themes/`). **Stylix** left as an **optional** future add-on, not part of this “done.”
+- [x] **Investigation** — [04](./04-ricing.md#investigation--theseus-plasma-6--wayland--framework-13) checklist satisfied for **Theseus** (see [04 — investigation checklist](./04-ricing.md#checklist--investigation-in-progress)).
+- [x] **Polish** — [04 — Done when](./04-ricing.md#done-when) met; nice-to-haves in [04 — Framework display](./04-ricing.md#framework-display) (night keyboard floor, auto night sync) stay **optional** if you want them later.
 
 ---
 
@@ -86,4 +87,4 @@ Use this **after** [LOCKED.md](./LOCKED.md). Work **top to bottom**; check items
 | All locked choices | [LOCKED.md](./LOCKED.md) |
 | Package restore order | [05](./05-previous-nixos-config-extract.md) + [Q8](./00-audit-priorities-and-risks.md#q8-package-restore-priority) |
 
-**Current step:** **C + E follow-through** — finalize **[Hotkeys](./02-functional-improvements.md#wm--hotkey-notes)** and decide whether to codify current theming in [04](./04-ricing.md) (**Plasma-only first / Stylix later**). **`outside`:** [deferred](./08-dotfiles-migration-plan.md#deferred--later). **No Phase D HM user-config migration** until you work [§ D](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred) (scaffold is separate). **Deferred:** suspend **drain / `deep`**, **captive/hotel** VPN retest — [02 — Low-power](./02-functional-improvements.md#low-power-suspend-investigation), [FrootVPN + Stunnel](./02-functional-improvements.md#frootvpn--stunnel--vortix-theseus).
+**Current step:** **Phase D (optional)** — migrate user programs into **Home Manager** [§ D](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred) when you want; scaffold is already there. **Elsewhere optional:** **`outside`** [deferred](./08-dotfiles-migration-plan.md#deferred--later); suspend **drain / `deep`**, **hotel** VPN retest — [02 — Low-power](./02-functional-improvements.md#low-power-suspend-investigation), [FrootVPN + Stunnel](./02-functional-improvements.md#frootvpn--stunnel--vortix-theseus); **Stylix** [04](./04-ricing.md#strategy--plasma-first-then-stylix).
