@@ -40,11 +40,28 @@ A **vendored copy** of the Stellarium **NixOS on Framework** project may live in
 
 **Home Manager note:** this repo may include a **minimal** `home.nix` scaffold with the NixOS Home Manager module; **Phase D** in that roadmap (moving Kitty, zsh, git, etc. into `home.nix`) is still **deferred** until you choose to work it — see `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there.
 
+### Home Manager path ownership (audit, Theseus / `~/.config/nixos`)
+
+Use **one owner per path**. Chezmoi source: typically `~/.local/share/chezmoi` (not this repo). Update **`.chezmoiignore`** when Nix or HM takes over a path.
+
+| Path or topic | Current owner (typical) | Next HM / Nix step |
+|---------------|-------------------------|--------------------|
+| Session env (`EDITOR`, `TERMINAL`, `GIT_CONFIG_SYSTEM`, …) | [`home.nix`](./home.nix) | Done (step 1) |
+| `fastfetch` CLI | `home.packages` in [`home.nix`](./home.nix) | Done (step 2 — proof) |
+| `/etc/gitconfig` | NixOS `programs.git` in `configuration.nix` | Move to `programs.git` in `home.nix` later; then drop or slim system `programs.git` |
+| `~/.zshrc` + Nix `programs.zsh` | NixOS + chezmoi (`zshconfig` alias) | Move `programs.zsh` to `home.nix` later; align chezmoi |
+| `~/.config/kitty/kitty.conf` | chezmoi (`termconfig` alias) | `programs.kitty` in `home.nix` later; chezmoi ignore |
+| `~/.config/fastfetch/config.jsonc` | User-edited, not in Nix | `xdg.configFile` or `programs.fastfetch` in HM later (optional) |
+| `~/.config/obsidian` / `Cursor` / browser profiles | App defaults | Often stay imperative or app-managed |
+| `chezmoi` tool | was `systemPackages` | Stays in `systemPackages` until moved to `home.packages` (optional) |
+| `~/.config/newsboat`, `tmux`, etc. | Mixed | `programs.*` or `xdg` in HM in separate steps |
+
 ### Home Manager migration log
 
 Iterative: **one** logical change per rebuild; **verify** before the next (see `documentation/nixos-framework-setup/` roadmap).
 
 - **2026-04-17 — Step 1 (session env):** `home.sessionVariables` in `./home.nix` holds `EDITOR`, `SYSTEMD_EDITOR`, `VISUAL`, `TERMINAL`, `GIT_CONFIG_SYSTEM` (previously `environment.variables` + `environment.sessionVariables` in `configuration.nix`). Rebuild: `sudo nixos-rebuild switch`. **Verify:** new Kitty/Konsole: `echo "$EDITOR" "$TERMINAL"`, and `git config --list` still sees system config via `GIT_CONFIG_SYSTEM`.
+- **2026-04-17 — Step 2 (proof package):** `fastfetch` moved from `environment.systemPackages` to `home.packages` in `./home.nix` (user `wiz` only). Rebuild: `sudo nixos-rebuild switch`. **Verify:** `command -v fastfetch` and `fastfetch` in a new login shell; `fetch` zsh alias still works.
 
 ## Optional: split machine-specific Nix
 

@@ -14,4 +14,7 @@
     TERMINAL = "${pkgs.kitty}/bin/kitty";
     GIT_CONFIG_SYSTEM = "/run/current-system/etc/gitconfig";
   };
+
+  # First user-only package proof (was environment.systemPackages); more can move later.
+  home.packages = with pkgs; [fastfetch];
 }

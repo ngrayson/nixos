@@ -328,7 +328,6 @@ in {
       btop
       bottom
       powertop
-      fastfetch
       kitty
       alejandra
       fzf
