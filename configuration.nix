@@ -389,25 +389,10 @@ in {
       tokyonight-gtk-theme
     ]);
 
+  # User session env (EDITOR, TERMINAL, GIT_CONFIG_SYSTEM) is in home-manager ./home.nix (user wiz).
   environment = {
     shells = [pkgs.zsh];
     etc."frootvpn/stunnel-ca.pem".source = ./frootvpn-stunnel-ca.pem;
-    # sessionVariables: Plasma / graphical apps; store paths: reliable when PATH is thin.
-    variables = {
-      EDITOR = "${pkgs.micro}/bin/micro";
-      SYSTEMD_EDITOR = "${pkgs.micro}/bin/micro";
-      VISUAL = "${pkgs.micro}/bin/micro";
-    };
-    sessionVariables = {
-      EDITOR = "${pkgs.micro}/bin/micro";
-      SYSTEMD_EDITOR = "${pkgs.micro}/bin/micro";
-      VISUAL = "${pkgs.micro}/bin/micro";
-      # Default terminal for scripts / tmux helpers that respect $TERMINAL
-      TERMINAL = "${pkgs.kitty}/bin/kitty";
-      # Git defaults to /etc/gitconfig; some shells/environments see /etc without that symlink.
-      # Point at the generation-linked file so `git config --system` and `git config --list` match programs.git.
-      GIT_CONFIG_SYSTEM = "/run/current-system/etc/gitconfig";
-    };
   };
 
   # Some programs need SUID wrappers, can be configured further or are

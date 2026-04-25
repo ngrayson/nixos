@@ -17,7 +17,7 @@ This repo is the source of truth for system configuration. Use this list when re
    - `fileSystems` and **`boot.initrd.luks.devices`** (names and **UUIDs will change** with new disks/partitions)
    - `boot.initrd.availableKernelModules` / `kernelModules` as needed
    - `swapDevices` if applicable
-5. This repo includes **Home Manager** (`./home.nix`, pinned in `configuration.nix` via `fetchTarball` on the `release-25.11` branch). It activates with **`sudo nixos-rebuild switch`** the same as the rest of the system. On a fresh clone, no extra `home-manager` install step is required. Grow **`home.nix`** over time to hold dotfiles and user packages; until then, **chezmoi** can stay in use—avoid the same path in both until you pick one.
+5. This repo includes **Home Manager** (`./home.nix`, pinned in `configuration.nix` via `fetchTarball` on the `release-25.11` branch). It activates with **`sudo nixos-rebuild switch`** the same as the rest of the system. On a fresh clone, no extra `home-manager` install step is required. **User session env** may live in [`home.nix` via `home.sessionVariables`](./MIGRATION.md#home-manager-migration-log) (see log below). Grow **`home.nix`** further for more programs; **chezmoi** can stay in use for paths you have not moved—**one owner per path**.
 6. In **`configuration.nix`**, update at least:
    - **`networking.hostName`** (e.g. old `Theseus` → new name)
    - **`<nixos-hardware/...>`** import when a profile exists for the **new** Framework model (path may differ from `framework/13-inch/amd-ai-300-series`); if none exists yet, comment the import and add hardware options manually.
@@ -39,6 +39,12 @@ This repo is the source of truth for system configuration. Use this list when re
 A **vendored copy** of the Stellarium **NixOS on Framework** project may live in **`documentation/nixos-framework-setup/`** in this repository (full files, not symlinks, so clones stay portable). It is the **phased checklist** (LOCKED, audit, session, Home Manager, rice) — **documentation only**; it does not change `nixos-rebuild` by itself. If you also keep a copy under a Stellarium checkout (`projects/nixos-framework-setup/`, gitignored at the Stellarium root), **sync the trees manually** when you want them to match.
 
 **Home Manager note:** this repo may include a **minimal** `home.nix` scaffold with the NixOS Home Manager module; **Phase D** in that roadmap (moving Kitty, zsh, git, etc. into `home.nix`) is still **deferred** until you choose to work it — see `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there.
+
+### Home Manager migration log
+
+Iterative: **one** logical change per rebuild; **verify** before the next (see `documentation/nixos-framework-setup/` roadmap).
+
+- **2026-04-17 — Step 1 (session env):** `home.sessionVariables` in `./home.nix` holds `EDITOR`, `SYSTEMD_EDITOR`, `VISUAL`, `TERMINAL`, `GIT_CONFIG_SYSTEM` (previously `environment.variables` + `environment.sessionVariables` in `configuration.nix`). Rebuild: `sudo nixos-rebuild switch`. **Verify:** new Kitty/Konsole: `echo "$EDITOR" "$TERMINAL"`, and `git config --list` still sees system config via `GIT_CONFIG_SYSTEM`.
 
 ## Optional: split machine-specific Nix
 
