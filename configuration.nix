@@ -199,7 +199,7 @@ in {
   # Declarative $HOME: activates with nixos-rebuild; `home.nix` for user "wiz" (see MIGRATION.md)
   home-manager = {
     useGlobalPkgs = true;
-    # If HM-managed paths already exist (e.g. chezmoi `.zshrc`), first activation renames to `*.hm-backup` instead of failing
+    # If HM-managed paths already exist (e.g. a pre-HM `.zshrc`), first activation renames to `*.hm-backup` instead of failing
     backupFileExtension = "hm-backup";
     users.wiz = import ./home.nix;
   };
@@ -247,7 +247,6 @@ in {
       wget
       micro
       gh
-      chezmoi
       btop
       bottom
       powertop

@@ -1,5 +1,5 @@
 # Home Manager (user: wiz) — `home.username` / `home.homeDirectory` come from NixOS `users.users.wiz`
-# Iterative migration: session env + core programs.*; next: optional `xdg.*`, chezmoi alignment.
+# Dotfiles: Home Manager only (no chezmoi).
 {
   lib,
   pkgs,
@@ -11,8 +11,7 @@
   programs.home-manager.enable = true;
 
   # Migrated from NixOS `programs.zsh` in `configuration.nix` (NixOS no longer sets global zsh; HM owns `~/.zshrc`)
-  # Chezmoi: add `.zshrc` and `.zshenv` to `.chezmoiignore` so `chezmoi apply` does not overwrite HM. First activation: see
-  # `home-manager.backupFileExtension` in `configuration.nix` (existing files renamed with `.hm-backup` instead of clobber)
+  # First HM activation: see `home-manager.backupFileExtension` in `configuration.nix` if pre-existing `~/.zshrc` / `~/.zshenv` were renamed to `*.hm-backup`
   programs.zsh = {
     enable = true;
     package = pkgs.zsh;
@@ -32,9 +31,8 @@
       vpn = "sudo vortix";
       "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor agent";
       agent = "cd ~/Stellarium && ~/.local/bin/cursor agent --resume";
-      chezpush = "~/bin/chezpush.sh";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
-      config = "code ~/.local/share/chezmoi; chezmoi apply";
+      config = "code ~/.config/nixos";
       fetch = "fastfetch";
       gimp = "~/Apps/GIMP &";
       keyboard-flash = "sudo sleep 1; cd ~/pocket-reform/pocket-reform-keyboard-fw/pocket-hid; ./build.sh;echo \"flashing in 10s\";sleep 7; echo \"flashing in 3s\"; sleep 4;sudo picotool load build/pocket-hid.uf2 -f";
@@ -107,7 +105,7 @@
   home.packages = with pkgs; [fastfetch];
 
   # Kitty: sources live in this repo (./kitty/) — we use xdg, not programs.kitty, so HM does not generate a second kitty.conf
-  # One-time: `force` overwrites files left by chezmoi; back up if you need the old copy
+  # `force` overwrites pre-existing files in `~/.config/kitty/` on activation; back up first if you need the old copy
   xdg.configFile = {
     "kitty/lilac-ash.conf" = {
       source = ./kitty/lilac-ash.conf;
