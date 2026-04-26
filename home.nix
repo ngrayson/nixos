@@ -30,8 +30,8 @@
     shellAliases = {
       ns = "nix-search";
       vpn = "sudo vortix";
-      "agent-new" = "cd ~/Stellarium && cursor-agent";
-      agent = "cd ~/Stellarium && cursor-agent --resume";
+      "agent-new" = "cd ~/Stellarium && cursor agent";
+      agent = "cd ~/Stellarium && cursor agent --resume";
       chezpush = "~/bin/chezpush.sh";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
       config = "code ~/.local/share/chezmoi; chezmoi apply";
@@ -46,6 +46,7 @@
       notes = "obsidian";
       obsidian = "~/Apps/Obsidian &";
       ohmyzshconfig = "micro ~/.config/nixos/home.nix";
+      "os-rebuild" = "bash ~/.config/nixos/documentation/nixos-framework-setup/os-rebuild.sh";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
       termconfig = "micro ~/.config/nixos/kitty/kitty.conf";
       weather = "curl \"wttr.in/kirkland?FunQ2\"";
