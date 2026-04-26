@@ -21,7 +21,13 @@
   # Kitty: sources live in this repo (./kitty/) — we use xdg, not programs.kitty, so HM does not generate a second kitty.conf
   # One-time: `force` overwrites files left by chezmoi; back up if you need the old copy
   xdg.configFile = {
-    "kitty/lilac-ash.conf" = {source = ./kitty/lilac-ash.conf; force = true;};
-    "kitty/kitty.conf" = {source = ./kitty/kitty.conf; force = true;};
+    "kitty/lilac-ash.conf" = {
+      source = ./kitty/lilac-ash.conf;
+      force = true;
+    };
+    "kitty/kitty.conf" = {
+      source = ./kitty/kitty.conf;
+      force = true;
+    };
   };
 }
