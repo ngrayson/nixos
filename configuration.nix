@@ -45,8 +45,8 @@ in {
   imports = [
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
+    ./hostname.nix
     (import (home-manager-src + "/nixos"))
-    <nixos-hardware/framework/13-inch/amd-ai-300-series>
   ];
 
   # Bootloader.
@@ -55,8 +55,6 @@ in {
 
   # Use latest kernel.
   boot.kernelPackages = pkgs.linuxPackages_latest;
-  # AMD P-State active power management
-  boot.kernelParams = ["amd_pstate=active"];
 
   # Graphical boot splash — Black HUD (adi1090x); Nerd Font face (see plymouthNerdFont* in let)
   boot.plymouth.enable = true;
@@ -69,8 +67,7 @@ in {
   # systemd in initrd: better Plymouth + LUKS ask-password integration than stage-1 script alone.
   boot.initrd.systemd.enable = true;
 
-  boot.initrd.luks.devices."luks-61d676d2-6e31-41cd-a953-13d2bf0fd257".device = "/dev/disk/by-uuid/61d676d2-6e31-41cd-a953-13d2bf0fd257";
-  networking.hostName = "Theseus"; # Define your hostname.
+  # `networking.hostName`, nixos-hardware, extra LUKS, and `boot.kernelParams` (AMD) are in ./hostname.nix
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
   # Configure network proxy if necessary
