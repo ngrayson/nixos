@@ -84,7 +84,7 @@ in {
   i18n.defaultLocale = "en_CA.UTF-8";
 
   # Framework hardware support
-  services.fprintd.enable = true;
+  # services.fprintd.enable = true;
   # If `fprintd-list-devices` shows nothing after rebuild, try Goodix TOD (common on Framework):
   # services.fprintd.tod.enable = true;
   # services.fprintd.tod.driver = pkgs.libfprint-2-tod1-goodix;
@@ -95,9 +95,9 @@ in {
   # Keep your password working until enrollment succeeds (see NixOS wiki Fingerprint scanner).
   security.pam.services = {
     login.fprintAuth = false;
-    sudo.fprintAuth = true;
-    polkit-1.fprintAuth = true;
-    kscreenlocker.fprintAuth = true;
+    # sudo.fprintAuth = true;
+    # polkit-1.fprintAuth = true;
+    # kscreenlocker.fprintAuth = true;
   };
 
   security.polkit.enable = true;

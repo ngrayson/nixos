@@ -29,10 +29,22 @@
     if kvantumDir == null || !builtins.pathExists kvantumDir
     then {}
     else {
-      "Kvantum/kvantum.kvconfig" = {source = kvantumDir + "/kvantum.kvconfig"; force = true;};
-      "Kvantum/KvArcDark#/KvArcDark#.kvconfig" = {source = kvantumDir + "/KvArcDark#/KvArcDark#.kvconfig"; force = true;};
-      "Kvantum/LilacAsh/LilacAsh.kvconfig" = {source = kvantumDir + "/LilacAsh/LilacAsh.kvconfig"; force = true;};
-      "Kvantum/LilacAsh/LilacAsh.svg" = {source = kvantumDir + "/LilacAsh/LilacAsh.svg"; force = true;};
+      "Kvantum/kvantum.kvconfig" = {
+        source = kvantumDir + "/kvantum.kvconfig";
+        force = true;
+      };
+      "Kvantum/KvArcDark#/KvArcDark#.kvconfig" = {
+        source = kvantumDir + "/KvArcDark#/KvArcDark#.kvconfig";
+        force = true;
+      };
+      "Kvantum/LilacAsh/LilacAsh.kvconfig" = {
+        source = kvantumDir + "/LilacAsh/LilacAsh.kvconfig";
+        force = true;
+      };
+      "Kvantum/LilacAsh/LilacAsh.svg" = {
+        source = kvantumDir + "/LilacAsh/LilacAsh.svg";
+        force = true;
+      };
     };
 in {
   home.stateVersion = "25.11";
@@ -136,24 +148,26 @@ in {
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
-  xdg.configFile = {
-    "kitty/lilac-ash.conf" = {
-      source = ./kitty/lilac-ash.conf;
-      force = true;
-    };
-    "kitty/kitty.conf" = {
-      source = ./kitty/kitty.conf;
-      force = true;
-    };
-    "fastfetch/config.jsonc" = {
-      source = ./fastfetch/config.jsonc;
-      force = true;
-    };
-    "fastfetch/izar-tsp.gif" = {
-      source = ./fastfetch/izar-tsp.gif;
-      force = true;
-    };
-  } // kvantumConfigFiles;
+  xdg.configFile =
+    {
+      "kitty/lilac-ash.conf" = {
+        source = ./kitty/lilac-ash.conf;
+        force = true;
+      };
+      "kitty/kitty.conf" = {
+        source = ./kitty/kitty.conf;
+        force = true;
+      };
+      "fastfetch/config.jsonc" = {
+        source = ./fastfetch/config.jsonc;
+        force = true;
+      };
+      "fastfetch/izar-tsp.gif" = {
+        source = ./fastfetch/izar-tsp.gif;
+        force = true;
+      };
+    }
+    // kvantumConfigFiles;
 
   xdg.dataFile = desktopDataFiles;
 }
