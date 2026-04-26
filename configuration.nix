@@ -199,6 +199,8 @@ in {
   # Declarative $HOME: activates with nixos-rebuild; `home.nix` for user "wiz" (see MIGRATION.md)
   home-manager = {
     useGlobalPkgs = true;
+    # If HM-managed paths already exist (e.g. chezmoi `.zshrc`), first activation renames to `*.hm-backup` instead of failing
+    backupFileExtension = "hm-backup";
     users.wiz = import ./home.nix;
   };
 
@@ -208,44 +210,6 @@ in {
   # Install firefox.
   programs.firefox.enable = true;
 
-  # Git — system-wide /etc/gitconfig (replaces chezmoi ~/.gitconfig; see ~/.local/share/chezmoi/.chezmoiignore).
-  programs.git = {
-    enable = true;
-    config = [
-      {
-        user = {
-          name = "wiz";
-          # Replace with your real address (was chezmoi `email`); same value is fine if you update chezmoi data for other hosts.
-          email = "windows@example.com";
-        };
-        core = {
-          editor = "micro";
-          autocrlf = "input";
-        };
-        init.defaultBranch = "main";
-        pull.rebase = false;
-        push.default = "simple";
-        alias = {
-          st = "status";
-          co = "checkout";
-          br = "branch";
-          ci = "commit";
-          unstage = "reset HEAD --";
-          last = "log -1 HEAD";
-          visual = "!gitk";
-        };
-        credential."https://github.com".helper = [
-          ""
-          "!${pkgs.gh}/bin/gh auth git-credential"
-        ];
-        credential."https://gist.github.com".helper = [
-          ""
-          "!${pkgs.gh}/bin/gh auth git-credential"
-        ];
-      }
-    ];
-  };
-
   # Steam
   programs.steam = {
     enable = true;
@@ -254,49 +218,8 @@ in {
     localNetworkGameTransfers.openFirewall = true;
   };
 
-  # zshell
-  programs.zsh = {
-    enable = true;
-    autosuggestions.enable = true;
-    syntaxHighlighting.enable = true;
-    zsh-autoenv.enable = true;
-    ohMyZsh = {
-      enable = true;
-      plugins = ["git" "history" "fzf" "node"];
-      # Matches prior chezmoi ZSH_THEME; change in one place here, not ~/.zshrc
-      theme = "clean";
-    };
-    shellAliases = {
-      ns = "nix-search";
-      vpn = "sudo vortix";
-      # Merged from chezmoi dot_bash_aliases + dot_zshrc (see projects/nixos-framework-setup/08-dotfiles-migration-plan.md).
-      # Complex or one-off aliases: adjust here deliberately (not bulk copy-paste).
-      "agent-new" = "cd ~/Stellarium && cursor-agent";
-      agent = "cd ~/Stellarium && cursor-agent --resume";
-      chezpush = "~/bin/chezpush.sh";
-      clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
-      config = "code ~/.local/share/chezmoi; chezmoi apply";
-      fetch = "fastfetch";
-      gimp = "~/Apps/GIMP &";
-      keyboard-flash = "sudo sleep 1; cd ~/pocket-reform/pocket-reform-keyboard-fw/pocket-hid; ./build.sh;echo \"flashing in 10s\";sleep 7; echo \"flashing in 3s\"; sleep 4;sudo picotool load build/pocket-hid.uf2 -f";
-      kitty = "kitty 2>/dev/null";
-      l = "ls -CF";
-      la = "ls -A";
-      ll = "ls -ll";
-      moon = "curl \"wttr.in/moon?Fun\"";
-      notes = "obsidian";
-      obsidian = "~/Apps/Obsidian &";
-      ohmyzshconfig = "micro ~/.config/nixos/configuration.nix";
-      stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
-      termconfig = "micro ~/.config/nixos/kitty/kitty.conf";
-      weather = "curl \"wttr.in/kirkland?FunQ2\"";
-      "wifi-connect" = "nmcli device wifi connect";
-      "wifi-connection" = "nmcli connection show";
-      "wifi-list" = "nmcli device wifi list";
-      zshconfig = "chezmoi edit ~/.zshrc && chezmoi apply";
-    };
-  };
-
+  # zsh: `enable` must stay true on NixOS when the login shell is zsh (Nix store paths in /etc). Interactive bits live in home-manager ./home.nix
+  programs.zsh.enable = true;
   users.users.wiz.shell = pkgs.zsh;
   users.defaultUserShell = pkgs.zsh;
 
@@ -388,7 +311,7 @@ in {
       tokyonight-gtk-theme
     ]);
 
-  # User session env (EDITOR, TERMINAL, GIT_CONFIG_SYSTEM) is in home-manager ./home.nix (user wiz).
+  # User session env, programs.git, programs.zsh are in home-manager ./home.nix (user wiz).
   environment = {
     shells = [pkgs.zsh];
     etc."frootvpn/stunnel-ca.pem".source = ./frootvpn-stunnel-ca.pem;
