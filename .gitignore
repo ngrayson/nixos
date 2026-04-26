@@ -1,0 +1,3 @@
+# nix-build / nixos-rebuild convenience symlink in cwd
+result
+result-*

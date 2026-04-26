@@ -24,6 +24,7 @@ This repo is the source of truth for system configuration. Use this list when re
    - **Kernel / boot**: Re-evaluate **`linuxPackages_latest`** and **`boot.kernelParams`** (e.g. `amd_pstate=active`) if the CPU is no longer the same (Intel vs AMD, etc.).
 7. Set **`system.stateVersion`** to match your *first* NixOS install on the new box if the installer suggests a new default; do not advance casually (see NixOS manual).
 8. Run **`sudo nixos-rebuild switch`** (or the flake equivalent) and reboot. That also runs **Home Manager** for user `wiz` (systemd `home-manager-wiz.service` or equivalent on your NixOS version).
+9. Install Cursor + Cursor CLI in a way that matches this repo: see [`CURSOR_SETUP.md`](./CURSOR_SETUP.md).
 
 ## After first successful boot
 
@@ -38,7 +39,7 @@ This repo is the source of truth for system configuration. Use this list when re
 
 A **vendored copy** of the Stellarium **NixOS on Framework** project may live in **`documentation/nixos-framework-setup/`** in this repository (full files, not symlinks, so clones stay portable). It is the **phased checklist** (LOCKED, audit, session, Home Manager, rice) — **documentation only**; it does not change `nixos-rebuild` by itself. If you also keep a copy under a Stellarium checkout (`projects/nixos-framework-setup/`, gitignored at the Stellarium root), **sync the trees manually** when you want them to match.
 
-**Home Manager note:** this repo may include a **minimal** `home.nix` scaffold with the NixOS Home Manager module; **Phase D** in that roadmap (moving Kitty, zsh, git, etc. into `home.nix`) is still **deferred** until you choose to work it — see `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there.
+**Home Manager note:** `home.nix` in this repo now holds **session env, kitty, git, zsh**, and more (see the migration log). Remaining roadmap work (optional rice, extra `xdg.*`, chezmoi tightening) follows `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there.
 
 ### Home Manager path ownership (audit, Theseus / `~/.config/nixos`)
 
@@ -50,7 +51,7 @@ Use **one owner per path**. Chezmoi source: typically `~/.local/share/chezmoi` (
 | `fastfetch` CLI | `home.packages` in [`home.nix`](./home.nix) | Done (step 2 — proof) |
 | User git config (`~/.config/git/config`) | [`programs.git`](./home.nix) in [`home.nix`](./home.nix) | **Done (step 4).** NixOS `programs.git` removed from `configuration.nix`. |
 | `~/.zshrc` (HM-generated) + zsh | [`programs.zsh`](./home.nix) in [`home.nix`](./home.nix) | **Done (step 5).** NixOS `programs.zsh` removed. If chezmoi had `dot_zshrc`, add **`.zshrc`** to **`.chezmoiignore`** (or move snippets into `initContent`). `zshconfig` / `ohmyzshconfig` → `micro ~/.config/nixos/home.nix`. |
-| `~/.config/kitty/kitty.conf` + `lilac-ash.conf` | HM `xdg.configFile` from [`kitty/`](./kitty/) in this repo; package via `home.packages` | **Done (step 3).** Remove chezmoi `dot_config/kitty` templates; add to **`.chezmoiignore`**, then `chezmoi apply` once. |
+| `~/.config/kitty/kitty.conf` + `lilac-ash.conf` | HM `xdg.configFile` from [`kitty/`](./kitty/) in this repo; **`kitty` package in `environment.systemPackages`** (Plasma shortcuts need system `PATH`) | **Done (step 3).** Remove chezmoi `dot_config/kitty` templates; add to **`.chezmoiignore`**, then `chezmoi apply` once. |
 | `~/.config/fastfetch/config.jsonc` | User-edited, not in Nix | `xdg.configFile` or `programs.fastfetch` in HM later (optional) |
 | `~/.config/obsidian` / `Cursor` / browser profiles | App defaults | Often stay imperative or app-managed |
 | `chezmoi` tool | was `systemPackages` | Stays in `systemPackages` until moved to `home.packages` (optional) |
