@@ -100,12 +100,12 @@
     TERMINAL = "${pkgs.kitty}/bin/kitty";
   };
 
-  # User-only packages (migrated from systemPackages over time)
-  # kitty binary is in `environment.systemPackages` so Plasma shortcuts get it on the minimal system PATH; HM only owns config below
-  home.packages = with pkgs; [fastfetch];
+  # User-only CLIs (migrated from `environment.systemPackages` over time)
+  # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
+  home.packages = with pkgs; [fastfetch newsboat tmux tmuxifier];
 
-  # Kitty: sources live in this repo (./kitty/) — we use xdg, not programs.kitty, so HM does not generate a second kitty.conf
-  # `force` overwrites pre-existing files in `~/.config/kitty/` on activation; back up first if you need the old copy
+  # Kitty + fastfetch: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
+  # `force` overwrites pre-existing files under `~/.config/...` on activation; you can remove obsolete `~/.config/izar-tsp.gif` after first switch
   xdg.configFile = {
     "kitty/lilac-ash.conf" = {
       source = ./kitty/lilac-ash.conf;
@@ -113,6 +113,14 @@
     };
     "kitty/kitty.conf" = {
       source = ./kitty/kitty.conf;
+      force = true;
+    };
+    "fastfetch/config.jsonc" = {
+      source = ./fastfetch/config.jsonc;
+      force = true;
+    };
+    "fastfetch/izar-tsp.gif" = {
+      source = ./fastfetch/izar-tsp.gif;
       force = true;
     };
   };

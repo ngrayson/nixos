@@ -284,10 +284,7 @@ in {
       glow
       chafa
       astroterm
-      newsboat
       kitty
-      pkgs.tmux
-      pkgs.tmuxifier
       tree
 
       # games

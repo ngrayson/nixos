@@ -52,10 +52,11 @@ Use **one owner per path** — Home Manager for user config tracked in this repo
 | User git config (`~/.config/git/config`) | [`programs.git`](./home.nix) in [`home.nix`](./home.nix) | **Done (step 4).** NixOS `programs.git` removed from `configuration.nix`. |
 | `~/.zshrc` (HM-generated) + zsh | [`programs.zsh`](./home.nix) in [`home.nix`](./home.nix) | **Done (step 5).** `zshconfig` / `ohmyzshconfig` → `micro ~/.config/nixos/home.nix`. |
 | `~/.config/kitty/kitty.conf` + `lilac-ash.conf` | HM `xdg.configFile` from [`kitty/`](./kitty/) in this repo; **`kitty` package in `environment.systemPackages`** (Plasma shortcuts need system `PATH`) | **Done (step 3).** |
-| `~/.config/fastfetch/config.jsonc` | User-edited, not in Nix | `xdg.configFile` or `programs.fastfetch` in HM later (optional) |
+| `~/.config/fastfetch/config.jsonc` + logo | HM `xdg.configFile` from [`fastfetch/`](./fastfetch/) in this repo | **Done (step 6).** Theme logo path `~/.config/fastfetch/izar-tsp.gif`; you can remove stale `~/.config/izar-tsp.gif` after verify. |
 | `~/.config/obsidian` / `Cursor` / browser profiles | App defaults | Often stay imperative or app-managed |
 | `chezmoi` tool | *removed* | No longer in `environment.systemPackages`; use HM only. |
-| `~/.config/newsboat`, `tmux`, etc. | Mixed | `programs.*` or `xdg` in HM in separate steps |
+| `tmux`, `tmuxifier`, `newsboat` | `home.packages` in [`home.nix`](./home.nix) | **Done (step 6).** Removed from `environment.systemPackages`. |
+| `~/.config/newsboat` (URLs) | Runtime / user | Still imperative unless you add `xdg` or HM later. |
 
 ### Home Manager migration log
 
@@ -67,6 +68,7 @@ Iterative: **one** logical change per rebuild; **verify** before the next (see `
 - **2026-04-17 — Step 4 (Git):** `programs.git` moved from NixOS `configuration.nix` to [`programs.git`](./home.nix) in `./home.nix` (`settings` → `~/.config/git/config` per Home Manager). Removed `GIT_CONFIG_SYSTEM` from `home.sessionVariables`. Rebuild: `sudo nixos-rebuild switch`. **Verify:** `git config --list --show-origin` shows the expected entries from `~/.config/git/config`; `git` from a user shell still has GitHub / gist credential helpers; **`sudo` / minimal PATH:** if you need `git` as root without logging in as `wiz`, add `git` to `environment.systemPackages` (optional; HM installs `git` for user `wiz` only).
 - **2026-04-18 — Step 5 (zsh):** Interactive `programs.zsh` (Oh My Zsh, autosuggestion, syntax highlighting, `zsh-autoenv` via `initContent` order 1500, shell aliases) lives in [`programs.zsh`](./home.nix) in `./home.nix`. **`programs.zsh.enable = true`** remains in `configuration.nix` with **no** extra NixOS zsh options — required so login shells (including `root` if it uses zsh) get the usual NixOS `/etc` zsh `PATH` setup. `users.users.wiz.shell` / `defaultUserShell` stay **`pkgs.zsh`**. Rebuild: `sudo nixos-rebuild switch`. **Verify:** new login or `exec zsh -l` — same theme/aliases; `grep -E 'oh-my|autoenv' ~/.zshrc` shows managed bits. **If activation fails** with *Existing file* would be clobbered* for `~/.zshrc` / `~/.zshenv`:** do **not** set `home.file."…".force` (conflicts with `programs.zsh`); set **`home-manager.backupFileExtension = "hm-backup"`** in `configuration.nix` (first `switch` renames the old file to e.g. `.zshrc.hm-backup`), then remove the backups when satisfied.
 - **2026-04-26 — Chezmoi removed:** `chezmoi` dropped from `environment.systemPackages`; shell alias `config` opens **`~/.config/nixos`** in Cursor; **`chezpush`** alias removed. Do not run **`chezmoi apply`** on this machine unless you still maintain a separate chezmoi tree and know it will not overwrite HM files.
+- **2026-04-26 — Step 6 (fastfetch + user CLIs):** [`./fastfetch/config.jsonc`](./fastfetch/config.jsonc) + [`./fastfetch/izar-tsp.gif`](./fastfetch/izar-tsp.gif) vendored; `xdg.configFile` in `./home.nix`. **`tmux`**, **`tmuxifier`**, **`newsboat`** moved from `environment.systemPackages` to `home.packages` (with **`fastfetch`**). Rebuild: `sudo nixos-rebuild switch`. **Verify:** `command -v tmux fastfetch newsboat`, **`fastfetch`** shows logo; remove obsolete **`~/.config/izar-tsp.gif`** if present.
 
 ## Optional: split machine-specific Nix
 
