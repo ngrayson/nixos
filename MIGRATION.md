@@ -55,6 +55,7 @@ Use **one owner per path** — Home Manager for user config tracked in this repo
 | `tmux`, `tmuxifier`, `newsboat` | `home.packages` in [`home.nix`](./home.nix) | **Done (step 6).** Removed from `environment.systemPackages`. |
 | `~/.config/newsboat` (URLs) | Runtime / user | Still imperative unless you add `xdg` or HM later. |
 | `~/.local/share/applications/*.desktop` (custom) | [`desktop/applications/`](./desktop/applications/) → HM **`xdg.dataFile`** | Drop `*.desktop` in that dir; see [`README`](./desktop/applications/README.md). |
+| `~/.config/Kvantum/` (Qt style) | [`kvantum/<hostname>/`](./kvantum/README.md) → HM **`xdg.configFile`** | Per-host dir named like `networking.hostName`; see [`kvantum/README.md`](./kvantum/README.md). |
 
 ### Home Manager migration log
 
@@ -69,6 +70,7 @@ Iterative: **one** logical change per rebuild; **verify** before the next (see `
 - **2026-04-26 — Step 6 (fastfetch + user CLIs):** [`./fastfetch/config.jsonc`](./fastfetch/config.jsonc) + [`./fastfetch/izar-tsp.gif`](./fastfetch/izar-tsp.gif) vendored; `xdg.configFile` in `./home.nix`. **`tmux`**, **`tmuxifier`**, **`newsboat`** moved from `environment.systemPackages` to `home.packages` (with **`fastfetch`**). Rebuild: `sudo nixos-rebuild switch`. **Verify:** `command -v tmux fastfetch newsboat`, **`fastfetch`** shows logo; remove obsolete **`~/.config/izar-tsp.gif`** if present.
 - **2026-04-27 — `hostname.nix`:** Per-host **`networking.hostName`**, **`<nixos-hardware/...>`** import, extra **LUKS** entry, and **`boot.kernelParams` (amd\_pstate)** live in [`./hostname.nix`](./hostname.nix), imported from [`configuration.nix`](./configuration.nix). For a **second machine**, point imports at a different file (e.g. `hostname-other.nix`) or edit a branch-specific `hostname.nix` after `nixos-generate-config` on that hardware; keep **`./hardware-configuration.nix`** from the *new* install only, never copy blindly from Theseus.
 - **2026-04-28 — Custom `.desktop` files:** Each `*.desktop` in [`./desktop/applications/`](./desktop/applications/) is installed to **`~/.local/share/applications/`** via **`xdg.dataFile`** in `home.nix` (no need to list files in Nix; `readDir` picks them up). Rebuild: `sudo nixos-rebuild switch`.
+- **2026-04-29 — Kvantum (per host):** Theme + `kvantum.kvconfig` from [`./kvantum/<hostname>/`](./kvantum/README.md) (e.g. **Theseus**) using **`nixosConfig.networking.hostName`** in `home.nix`. Rebuild: `sudo nixos-rebuild switch`. Add new `xdg.configFile` paths in `home.nix` if a host’s theme adds files not listed there yet.
 
 ## Optional: per-machine Nix (done for Theseus)
 

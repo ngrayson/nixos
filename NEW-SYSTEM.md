@@ -40,6 +40,7 @@ Home Manager runs as part of that for **`wiz`** (no separate `home-manager switc
 - Re-enrol **fingerprint**, reconnect **Wi‑Fi**, fix **VPN** paths if you use them (`environment.etc` in `configuration.nix`).
 - **Cursor**: [CURSOR_SETUP.md](./CURSOR_SETUP.md) so `~/.local/bin/cursor` matches `home.nix` shell aliases.
 - Custom **`.desktop`** files: already in [`desktop/applications/`](./desktop/applications/); they land in `~/.local/share/applications/` via Home Manager.
+- **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in [`hostname.nix`](./hostname.nix), and extend `home.nix` if your theme includes extra files beyond the Theseus example.
 
 ## 7. Full detail and history
 

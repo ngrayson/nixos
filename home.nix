@@ -1,7 +1,9 @@
 # Home Manager (user: wiz) — `home.username` / `home.homeDirectory` come from NixOS `users.users.wiz`
 # Dotfiles: Home Manager only (no chezmoi).
+# `nixosConfig` is set by the Home Manager NixOS module (NixOS `config`, for host-scoped options).
 {
   lib,
+  nixosConfig ? null, # NixOS `config` from the Home Manager module (null only if not using the HM NixOS import)
   pkgs,
   ...
 }: let
@@ -17,6 +19,21 @@
     })
     (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".desktop" n) (builtins.readDir appDir)))
   );
+
+  # Kvantum: `./kvantum/<hostname>/` (see kvantum/README.md) — same layout as ~/.config/Kvantum/
+  kvantumDir =
+    if nixosConfig == null
+    then null
+    else ./kvantum + "/${nixosConfig.networking.hostName}";
+  kvantumConfigFiles =
+    if kvantumDir == null || !builtins.pathExists kvantumDir
+    then {}
+    else {
+      "Kvantum/kvantum.kvconfig" = {source = kvantumDir + "/kvantum.kvconfig"; force = true;};
+      "Kvantum/KvArcDark#/KvArcDark#.kvconfig" = {source = kvantumDir + "/KvArcDark#/KvArcDark#.kvconfig"; force = true;};
+      "Kvantum/LilacAsh/LilacAsh.kvconfig" = {source = kvantumDir + "/LilacAsh/LilacAsh.kvconfig"; force = true;};
+      "Kvantum/LilacAsh/LilacAsh.svg" = {source = kvantumDir + "/LilacAsh/LilacAsh.svg"; force = true;};
+    };
 in {
   home.stateVersion = "25.11";
 
@@ -117,8 +134,8 @@ in {
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
   home.packages = with pkgs; [fastfetch newsboat tmux tmuxifier];
 
-  # Kitty + fastfetch: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
-  # `force` overwrites pre-existing files under `~/.config/...` on activation; you can remove obsolete `~/.config/izar-tsp.gif` after first switch
+  # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
+  # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
   xdg.configFile = {
     "kitty/lilac-ash.conf" = {
       source = ./kitty/lilac-ash.conf;
@@ -136,7 +153,7 @@ in {
       source = ./fastfetch/izar-tsp.gif;
       force = true;
     };
-  };
+  } // kvantumConfigFiles;
 
   xdg.dataFile = desktopDataFiles;
 }
