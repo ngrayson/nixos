@@ -50,7 +50,7 @@ Use **one owner per path**. Chezmoi source: typically `~/.local/share/chezmoi` (
 | `fastfetch` CLI | `home.packages` in [`home.nix`](./home.nix) | Done (step 2 — proof) |
 | `/etc/gitconfig` | NixOS `programs.git` in `configuration.nix` | Move to `programs.git` in `home.nix` later; then drop or slim system `programs.git` |
 | `~/.zshrc` + Nix `programs.zsh` | NixOS + chezmoi (`zshconfig` alias) | Move `programs.zsh` to `home.nix` later; align chezmoi |
-| `~/.config/kitty/kitty.conf` | chezmoi (`termconfig` alias) | `programs.kitty` in `home.nix` later; chezmoi ignore |
+| `~/.config/kitty/kitty.conf` + `lilac-ash.conf` | HM `xdg.configFile` from [`kitty/`](./kitty/) in this repo; package via `home.packages` | **Done (step 3).** Remove chezmoi `dot_config/kitty` templates; add to **`.chezmoiignore`**, then `chezmoi apply` once. |
 | `~/.config/fastfetch/config.jsonc` | User-edited, not in Nix | `xdg.configFile` or `programs.fastfetch` in HM later (optional) |
 | `~/.config/obsidian` / `Cursor` / browser profiles | App defaults | Often stay imperative or app-managed |
 | `chezmoi` tool | was `systemPackages` | Stays in `systemPackages` until moved to `home.packages` (optional) |
@@ -62,6 +62,7 @@ Iterative: **one** logical change per rebuild; **verify** before the next (see `
 
 - **2026-04-17 — Step 1 (session env):** `home.sessionVariables` in `./home.nix` holds `EDITOR`, `SYSTEMD_EDITOR`, `VISUAL`, `TERMINAL`, `GIT_CONFIG_SYSTEM` (previously `environment.variables` + `environment.sessionVariables` in `configuration.nix`). Rebuild: `sudo nixos-rebuild switch`. **Verify:** new Kitty/Konsole: `echo "$EDITOR" "$TERMINAL"`, and `git config --list` still sees system config via `GIT_CONFIG_SYSTEM`.
 - **2026-04-17 — Step 2 (proof package):** `fastfetch` moved from `environment.systemPackages` to `home.packages` in `./home.nix` (user `wiz` only). Rebuild: `sudo nixos-rebuild switch`. **Verify:** `command -v fastfetch` and `fastfetch` in a new login shell; `fetch` zsh alias still works.
+- **2026-04-17 — Step 3 (Kitty):** `kitty` moved to `home.packages`; config from [`./kitty/kitty.conf`](./kitty/kitty.conf) + [`./kitty/lilac-ash.conf`](./kitty/lilac-ash.conf) via `xdg.configFile` in `./home.nix` (not `programs.kitty` — avoids a second generated `kitty.conf`). Removed `kitty` from `systemPackages`. `termconfig` alias now edits the **nixos repo** `kitty/` files. Rebuild: `sudo nixos-rebuild switch`. **Verify:** new Kitty; **Chezmoi:** delete or ignore `kitty` templates under `~/.local/share/chezmoi` and add the paths to **`.chezmoiignore`**, or `chezmoi` may overwrite `~/.config/kitty` until removed.
 
 ## Optional: split machine-specific Nix
 

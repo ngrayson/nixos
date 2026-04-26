@@ -288,7 +288,7 @@ in {
       obsidian = "~/Apps/Obsidian &";
       ohmyzshconfig = "micro ~/.config/nixos/configuration.nix";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
-      termconfig = "chezmoi edit ~/.config/kitty/kitty.conf && chezmoi apply";
+      termconfig = "micro ~/.config/nixos/kitty/kitty.conf";
       weather = "curl \"wttr.in/kirkland?FunQ2\"";
       "wifi-connect" = "nmcli device wifi connect";
       "wifi-connection" = "nmcli connection show";
@@ -328,7 +328,6 @@ in {
       btop
       bottom
       powertop
-      kitty
       alejandra
       fzf
       libnotify

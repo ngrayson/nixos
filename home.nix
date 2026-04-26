@@ -15,6 +15,12 @@
     GIT_CONFIG_SYSTEM = "/run/current-system/etc/gitconfig";
   };
 
-  # First user-only package proof (was environment.systemPackages); more can move later.
-  home.packages = with pkgs; [fastfetch];
+  # User-only packages (migrated from systemPackages over time; kitty here so HM owns the binary with config below)
+  home.packages = with pkgs; [fastfetch kitty];
+
+  # Kitty: sources live in this repo (./kitty/) — we use xdg, not programs.kitty, so HM does not generate a second kitty.conf
+  xdg.configFile = {
+    "kitty/lilac-ash.conf".source = ./kitty/lilac-ash.conf;
+    "kitty/kitty.conf".source = ./kitty/kitty.conf;
+  };
 }
