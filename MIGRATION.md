@@ -54,6 +54,7 @@ Use **one owner per path** — Home Manager for user config tracked in this repo
 | `chezmoi` tool | *removed* | No longer in `environment.systemPackages`; use HM only. |
 | `tmux`, `tmuxifier`, `newsboat` | `home.packages` in [`home.nix`](./home.nix) | **Done (step 6).** Removed from `environment.systemPackages`. |
 | `~/.config/newsboat` (URLs) | Runtime / user | Still imperative unless you add `xdg` or HM later. |
+| `~/.local/share/applications/*.desktop` (custom) | [`desktop/applications/`](./desktop/applications/) → HM **`xdg.dataFile`** | Drop `*.desktop` in that dir; see [`README`](./desktop/applications/README.md). |
 
 ### Home Manager migration log
 
@@ -67,6 +68,7 @@ Iterative: **one** logical change per rebuild; **verify** before the next (see `
 - **2026-04-26 — Chezmoi removed:** `chezmoi` dropped from `environment.systemPackages`; shell alias `config` opens **`~/.config/nixos`** in Cursor; **`chezpush`** alias removed. Do not run **`chezmoi apply`** on this machine unless you still maintain a separate chezmoi tree and know it will not overwrite HM files.
 - **2026-04-26 — Step 6 (fastfetch + user CLIs):** [`./fastfetch/config.jsonc`](./fastfetch/config.jsonc) + [`./fastfetch/izar-tsp.gif`](./fastfetch/izar-tsp.gif) vendored; `xdg.configFile` in `./home.nix`. **`tmux`**, **`tmuxifier`**, **`newsboat`** moved from `environment.systemPackages` to `home.packages` (with **`fastfetch`**). Rebuild: `sudo nixos-rebuild switch`. **Verify:** `command -v tmux fastfetch newsboat`, **`fastfetch`** shows logo; remove obsolete **`~/.config/izar-tsp.gif`** if present.
 - **2026-04-27 — `hostname.nix`:** Per-host **`networking.hostName`**, **`<nixos-hardware/...>`** import, extra **LUKS** entry, and **`boot.kernelParams` (amd\_pstate)** live in [`./hostname.nix`](./hostname.nix), imported from [`configuration.nix`](./configuration.nix). For a **second machine**, point imports at a different file (e.g. `hostname-other.nix`) or edit a branch-specific `hostname.nix` after `nixos-generate-config` on that hardware; keep **`./hardware-configuration.nix`** from the *new* install only, never copy blindly from Theseus.
+- **2026-04-28 — Custom `.desktop` files:** Each `*.desktop` in [`./desktop/applications/`](./desktop/applications/) is installed to **`~/.local/share/applications/`** via **`xdg.dataFile`** in `home.nix` (no need to list files in Nix; `readDir` picks them up). Rebuild: `sudo nixos-rebuild switch`.
 
 ## Optional: per-machine Nix (done for Theseus)
 

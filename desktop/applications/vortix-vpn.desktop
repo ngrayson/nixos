@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=VPN (Vortix)
+Comment=OpenVPN / WireGuard terminal UI (requires sudo)
+Exec=kitty -e sudo vortix
+Icon=network-vpn
+Categories=Network;Security;
+Keywords=vpn;openvpn;wireguard;

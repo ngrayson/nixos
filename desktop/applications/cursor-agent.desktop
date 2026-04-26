@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Cursor Agent Resume
+Comment=Open Cursor AI agent CLI
+Exec=kitty -e zsh -lic agent
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;
+Keywords=cursor;agent;ai;cli;code;assistant;

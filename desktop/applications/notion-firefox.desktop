@@ -1,0 +1,13 @@
+# If Firefox is from Flatpak, use: Exec=flatpak run org.mozilla.firefox -new-window https://www.notion.so/
+# Icon source: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/notion.svg (see notion-firefox.svg)
+# Install icon (from repo): cp desktop/notion-firefox.svg ~/.local/share/icons/hicolor/scalable/apps/
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Notion
+Comment=Open Notion in Firefox
+Exec=firefox -new-window https://www.notion.so/
+Icon=notion-firefox
+Terminal=false
+Categories=Office;Network;
+StartupNotify=true

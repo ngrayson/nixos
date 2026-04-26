@@ -4,7 +4,20 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  # `*.desktop` in ./desktop/applications/ → ~/.local/share/applications/ (see that folder’s README)
+  appDir = ./desktop/applications;
+  desktopDataFiles = lib.listToAttrs (
+    map (n: {
+      name = "applications/${n}";
+      value = {
+        source = appDir + "/${n}";
+        force = true;
+      };
+    })
+    (lib.attrNames (lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".desktop" n) (builtins.readDir appDir)))
+  );
+in {
   home.stateVersion = "25.11";
 
   # CLI: `home-manager` (useful for `home-manager news` and testing); system activation is via nixos-rebuild
@@ -124,4 +137,6 @@
       force = true;
     };
   };
+
+  xdg.dataFile = desktopDataFiles;
 }

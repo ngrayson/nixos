@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Cursor Agent (New)
+Comment=Create new Cursor AI agent instance
+Exec=kitty -e zsh -lic agent-new
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;
+Keywords=cursor;agent;new;ai;cli;code;assistant;instance;
