@@ -30,8 +30,8 @@
     shellAliases = {
       ns = "nix-search";
       vpn = "sudo vortix";
-      "agent-new" = "cd ~/Stellarium && cursor agent";
-      agent = "cd ~/Stellarium && cursor agent --resume";
+      "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor agent";
+      agent = "cd ~/Stellarium && ~/.local/bin/cursor agent --resume";
       chezpush = "~/bin/chezpush.sh";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
       config = "code ~/.local/share/chezmoi; chezmoi apply";
