@@ -363,6 +363,7 @@ in {
       chafa
       astroterm
       newsboat
+      kitty
       pkgs.tmux
       pkgs.tmuxifier
       tree

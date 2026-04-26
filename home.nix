@@ -15,8 +15,9 @@
     GIT_CONFIG_SYSTEM = "/run/current-system/etc/gitconfig";
   };
 
-  # User-only packages (migrated from systemPackages over time; kitty here so HM owns the binary with config below)
-  home.packages = with pkgs; [fastfetch kitty];
+  # User-only packages (migrated from systemPackages over time)
+  # kitty binary is in `environment.systemPackages` so Plasma shortcuts get it on the minimal system PATH; HM only owns config below
+  home.packages = with pkgs; [fastfetch];
 
   # Kitty: sources live in this repo (./kitty/) — we use xdg, not programs.kitty, so HM does not generate a second kitty.conf
   # One-time: `force` overwrites files left by chezmoi; back up if you need the old copy
