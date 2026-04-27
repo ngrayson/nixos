@@ -75,7 +75,11 @@
   '';
 
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
-    exec ${lib.getExe pkgs.quickshell} ipc -n call lock activate
+    set -euo pipefail
+    # Hyprland `exec` may omit some env; IPC socket lives under XDG_RUNTIME_DIR.
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${lib.getExe pkgs.quickshell} ipc -c default -n call lock activate
   '';
 in {
   home.stateVersion = "25.11";

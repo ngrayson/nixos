@@ -31,7 +31,8 @@ ShellRoot {
 	IpcHandler {
 		target: "lock"
 
-		function activate() {
+		// Return type required or quickshell will not register this for `ipc call lock activate`.
+		function activate(): void {
 			sessionLock.locked = true;
 		}
 	}
