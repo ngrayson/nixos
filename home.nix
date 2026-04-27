@@ -115,7 +115,7 @@
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
     "$H" -i 0 dispatch dpms on || true
-    sleep 0.5
+    sleep 1
     "$H" -i 0 dispatch dpms on || true
   '';
 in {
@@ -355,7 +355,7 @@ in {
 
   # User-only CLIs (migrated from `environment.systemPackages` over time)
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
-  home.packages = with pkgs; [dunst fastfetch grim hyprmon newsboat quickshell slurp swaylock tmux tmuxifier wl-clipboard];
+  home.packages = with pkgs; [dunst fastfetch grim hyprmon jq newsboat quickshell slurp swaylock tmux tmuxifier wl-clipboard];
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
