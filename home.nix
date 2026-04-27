@@ -135,6 +135,26 @@ in {
     };
   };
 
+  # Apply multi-monitor friendly KWin defaults on activation (idempotent kwriteconfig6).
+  home.activation.plasmaMultiMonitor = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    kwrite="${pkgs.kdePackages.kconfig}/bin/kwriteconfig6"
+    kwinrc="${config.home.homeDirectory}/.config/kwinrc"
+    kgs="${config.home.homeDirectory}/.config/kglobalshortcutsrc"
+    if [ -f "$kwinrc" ]; then
+      $DRY_RUN_CMD "$kwrite" --file "$kwinrc" --group Windows --key SeparateScreenFocus --type bool true
+      $DRY_RUN_CMD "$kwrite" --file "$kwinrc" --group TabBox --key MultiScreenMode --type int 2
+      if $DRY_RUN_CMD grep -q '^\[Script-krohnkite\]' "$kwinrc"; then
+        $DRY_RUN_CMD "$kwrite" --file "$kwinrc" --group Script-krohnkite --key layoutPerDesktop --type bool true
+      fi
+    fi
+    if [ -f "$kgs" ]; then
+      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Switch to Screen to the Left" "Meta+Ctrl+Alt+Left,Meta+Ctrl+Alt+Left,Switch to Screen to the Left"
+      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Switch to Screen to the Right" "Meta+Ctrl+Alt+Right,Meta+Ctrl+Alt+Right,Switch to Screen to the Right"
+      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Window One Screen to the Left" "Meta+Alt+Shift+Left,Meta+Alt+Shift+Left,Window One Screen to the Left"
+      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Window One Screen to the Right" "Meta+Alt+Shift+Right,Meta+Alt+Shift+Right,Window One Screen to the Right"
+    fi
+  '';
+
   # Was `environment.variables` + `environment.sessionVariables` in configuration.nix (user wiz only).
   home.sessionPath = ["${config.home.homeDirectory}/.local/bin"];
   home.sessionVariables = {
@@ -175,5 +195,30 @@ in {
     }
     // kvantumConfigFiles;
 
-  xdg.dataFile = desktopDataFiles;
+  # Merge: ./desktop/applications/*.desktop plus kitty override (absolute Exec for Plasma shortcuts).
+  xdg.dataFile =
+    desktopDataFiles
+    // {
+      "applications/kitty.desktop" = {
+        force = true;
+        text = ''
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=kitty
+          GenericName=Terminal emulator
+          Comment=Fast, feature-rich, GPU based terminal
+          TryExec=${pkgs.kitty}/bin/kitty
+          StartupNotify=true
+          Exec=${pkgs.kitty}/bin/kitty
+          Icon=kitty
+          Categories=System;TerminalEmulator;
+          X-TerminalArgExec=--
+          X-TerminalArgTitle=--title
+          X-TerminalArgAppId=--class
+          X-TerminalArgDir=--working-directory
+          X-TerminalArgHold=--hold
+        '';
+      };
+    };
 }
