@@ -101,8 +101,7 @@ in {
     CursorSize = 24;
   };
   services.desktopManager.plasma6.enable = true;
-
-  services.xserver.windowManager.i3.enable = true;
+  services.displayManager.defaultSession = "plasma";
 
   services.xserver.xkb = {
     layout = "us";
