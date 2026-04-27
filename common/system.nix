@@ -205,6 +205,7 @@ in {
       gh
       btop
       bottom
+      feh
       nautilus
       powertop
       alejandra
