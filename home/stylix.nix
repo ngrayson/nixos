@@ -1,7 +1,11 @@
 # Stylix via Home Manager only (no flakes): https://nix-community.github.io/stylix/installation.html
 # Use `builtins.fetchTarball` here (not `pkgs.fetchFromGitHub`) so `imports` does not force `pkgs`
 # before Home Manager has finished fixing up `_module.args` (avoids infinite recursion).
-{pkgs, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
   # Match `home-manager` release-25.11 (see Stylix install docs for stable + HM).
   stylixSrc = builtins.fetchTarball {
     url = "https://github.com/nix-community/stylix/archive/release-25.11.tar.gz";
@@ -50,15 +54,15 @@ in {
 
     targets = {
       fontconfig.enable = true;
-      gtk.enable = true;
+      gtk.enable = !config.theme.dynamic;
 
       kitty.enable = false;
 
       qt.enable = false;
 
       hyprland = {
-        enable = true;
-        hyprpaper.enable = true;
+        enable = !config.theme.dynamic;
+        hyprpaper.enable = !config.theme.dynamic;
       };
     };
   };

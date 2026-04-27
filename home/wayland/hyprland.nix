@@ -89,10 +89,15 @@ in {
       ];
     };
     extraConfig =
-      if hx.hyprMonitorsConf == null
-      then ""
-      else ''
-        source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
+      (
+        if hx.hyprMonitorsConf == null
+        then ""
+        else ''
+          source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
+        ''
+      )
+      + lib.optionalString config.theme.dynamic ''
+        source = ${config.home.homeDirectory}/.config/hypr/wallust/colors.conf
       '';
   };
 }

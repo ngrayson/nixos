@@ -197,6 +197,7 @@ in {
       appimage-run
       topgrade
       kdePackages.kcolorchooser
+      # Albert: extensions are toggled in-app or via ~/.config/albert/config (see home/programs/albert.nix).
       pkgs.albert
       nix-search-cli
       openvpn

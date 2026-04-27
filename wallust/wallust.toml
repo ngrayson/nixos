@@ -1,0 +1,31 @@
+# Wallust v3 — templates live in ./templates (this dir → ~/.config/wallust).
+# Run: wallust-run <image>
+
+[config]
+backend = "resized"
+threshold = 11
+fallback_generator = "dark"
+
+[templates.hypr]
+template = 'colors-hyprland.conf'
+target = '~/.config/hypr/wallust/colors.conf'
+
+[templates.kitty]
+template = 'colors-kitty.conf'
+target = '~/.config/kitty/wallust-colors.conf'
+
+[templates.gtk]
+template = 'colors-gtk.css'
+target = '~/.config/gtk-3.0/wallust-colors.css'
+
+[templates.gtk4]
+template = 'colors-gtk.css'
+target = '~/.config/gtk-4.0/wallust-colors.css'
+
+[templates.qt6ct]
+template = 'colors-qt6ct.conf'
+target = '~/.config/qt6ct/colors/wallust.conf'
+
+[templates.quickshell]
+template = 'colors-quickshell.qml'
+target = '~/.config/quickshell/WallustColors.qml'

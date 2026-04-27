@@ -9,6 +9,15 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 
 ShellRoot {
+
+	// Wallust palette (generated ~/.config/quickshell/WallustColors.qml when using theme.dynamic)
+	Loader {
+		id: wallustPal
+		asynchronous: false
+		active: true
+		source: "WallustColors.qml"
+	}
+
 	LockContext {
 		id: lockContext
 
@@ -56,7 +65,7 @@ ShellRoot {
 		anchors.left: true
 		anchors.right: true
 		implicitHeight: 32
-		color: "#1e1e2e"
+		color: wallustPal.item ? wallustPal.item.barBg : "#1e1e2e"
 
 		Component.onCompleted: syncBarScreen()
 
@@ -90,7 +99,7 @@ ShellRoot {
 						id: wsLabel
 						anchors.centerIn: parent
 						text: parent.wid
-						color: parent.isActive ? "#89b4fa" : "#6c7086"
+						color: parent.isActive ? (wallustPal.item ? wallustPal.item.accent : "#89b4fa") : (wallustPal.item ? wallustPal.item.muted : "#6c7086")
 						font.pixelSize: 14
 						font.bold: true
 					}
@@ -109,7 +118,7 @@ ShellRoot {
 
 			Text {
 				id: clockLabel
-				color: "#cdd6f4"
+				color: wallustPal.item ? wallustPal.item.text : "#cdd6f4"
 				font.pixelSize: 14
 
 				Timer {
