@@ -191,6 +191,8 @@ in {
     package = null;
     portalPackage = null;
     systemd.enable = true;
+    # Hypridle / user units see a full session env (PATH, WAYLAND_DISPLAY, etc.).
+    systemd.variables = ["--all"];
     xwayland.enable = true;
     settings = {
       "$mod" = "SUPER";
@@ -273,6 +275,35 @@ in {
       else ''
         source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
       '';
+  };
+
+  # hypridle: idle lock + DPMS. Tune `timeout` values (seconds) in `settings.listener` as you like.
+  # Default: 5 min → Quickshell lock; 10 min → DPMS off (resume turns DPMS back on).
+  services.hypridle = {
+    enable = true;
+    package = pkgs.hypridle;
+    settings = let
+      hyprctl = "${pkgs.hyprland}/bin/hyprctl";
+      lock = lib.getExe quickshellLock;
+    in {
+      general = {
+        lock_cmd = lock;
+        before_sleep_cmd = lock;
+        after_sleep_cmd = "${hyprctl} dispatch dpms on";
+        ignore_dbus_inhibit = false;
+      };
+      listener = [
+        {
+          timeout = 300;
+          on-timeout = lock;
+        }
+        {
+          timeout = 600;
+          on-timeout = "${hyprctl} dispatch dpms off";
+          on-resume = "${hyprctl} dispatch dpms on";
+        }
+      ];
+    };
   };
 
   # Multi-monitor KWin prefs + Krohnkite option (Plasma session only).

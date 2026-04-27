@@ -185,6 +185,7 @@ in {
       gh
       btop
       bottom
+      nautilus
       powertop
       alejandra
       hyprmon
