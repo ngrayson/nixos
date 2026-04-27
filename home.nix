@@ -52,6 +52,10 @@
     set -euo pipefail
     ${lib.getExe pkgs.grim} -g "$(${lib.getExe pkgs.slurp})" - | ${pkgs.wl-clipboard}/bin/wl-copy --type image
   '';
+
+  quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
+    exec ${lib.getExe pkgs.quickshell} ipc -n call lock activate
+  '';
 in {
   home.stateVersion = "25.11";
 
@@ -104,44 +108,6 @@ in {
   };
 
   # Migrated from NixOS `programs.git` in `configuration.nix` (was `/etc/gitconfig` + `GIT_CONFIG_SYSTEM`)
-  programs.waybar = {
-    enable = true;
-    systemd.enable = true;
-    settings = [
-      {
-        layer = "top";
-        position = "top";
-        height = 32;
-        modules-left = ["hyprland/workspaces"];
-        modules-center = ["clock"];
-        modules-right = ["tray" "battery" "network" "pulseaudio"];
-        "hyprland/workspaces" = {
-          all-outputs = true;
-        };
-        clock = {
-          format = "{:%a %d %b  %H:%M}";
-          tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
-        };
-        battery = {
-          states = {
-            warning = 30;
-            critical = 15;
-          };
-          format = "{capacity}% {icon}";
-        };
-        network = {
-          format-wifi = "{essid} ({signalStrength}%) ";
-          format-ethernet = "{ifname} ";
-          format-disconnected = "—";
-        };
-        pulseaudio = {
-          format = "{volume}% {icon}";
-          format-muted = "muted";
-        };
-      }
-    ];
-  };
-
   programs.git = {
     enable = true;
     settings = {
@@ -234,7 +200,7 @@ in {
         "$mod, Y, togglesplit"
         "$mod SHIFT, P, pseudo"
         "$mod SHIFT, S, exec, ${lib.getExe hyprScreenshotRegion}"
-        "$mod, L, exec, ${lib.getExe pkgs.swaylock}"
+        "$mod, L, exec, ${lib.getExe quickshellLock}"
         "$mod, B, exec, ${lib.getExe pkgs.firefox}"
         "$mod, D, exec, ${lib.getExe pkgs.discord}"
         "$mod, O, exec, ${lib.getExe pkgs.obsidian}"
@@ -258,6 +224,7 @@ in {
         "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
         "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
+        "${lib.getExe pkgs.quickshell} -d"
       ];
     };
     extraConfig = ''
@@ -292,12 +259,28 @@ in {
 
   # User-only CLIs (migrated from `environment.systemPackages` over time)
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
-  home.packages = with pkgs; [dunst fastfetch grim newsboat slurp swaylock tmux tmuxifier wl-clipboard];
+  home.packages = with pkgs; [dunst fastfetch grim newsboat quickshell slurp swaylock tmux tmuxifier wl-clipboard];
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
   xdg.configFile =
     {
+      "quickshell/shell.qml" = {
+        source = ./quickshell/shell.qml;
+        force = true;
+      };
+      "quickshell/LockContext.qml" = {
+        source = ./quickshell/LockContext.qml;
+        force = true;
+      };
+      "quickshell/LockSurface.qml" = {
+        source = ./quickshell/LockSurface.qml;
+        force = true;
+      };
+      "quickshell/pam/password.conf" = {
+        source = ./quickshell/pam/password.conf;
+        force = true;
+      };
       "kitty/lilac-ash.conf" = {
         source = ./kitty/lilac-ash.conf;
         force = true;
