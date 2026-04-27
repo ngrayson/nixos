@@ -25,7 +25,7 @@ in {
       };
       decoration = {
         rounding = 60;
-        rounding_power = 0.7;
+        rounding_power = 1.2;
       };
       input = {
         kb_layout = "us";
