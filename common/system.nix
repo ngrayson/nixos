@@ -174,7 +174,14 @@ in {
 
   nix.settings.experimental-features = ["nix-command" "flakes"];
 
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+    # Follow GTK / wallust gtk.css (Settings → Themes → System is the same ID).
+    preferences = {
+      "extensions.activeThemeID" = "default-system@mozilla.org";
+    };
+    preferencesStatus = "user";
+  };
 
   programs.steam = {
     enable = true;

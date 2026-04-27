@@ -18,7 +18,7 @@
   );
   theme-reload = pkgs.writeShellScriptBin "theme-reload" ''
     set -euo pipefail
-    export PATH="${lib.makeBinPath [pkgs.hyprland]}:$PATH"
+    export PATH="${lib.makeBinPath [pkgs.hyprland pkgs.albert]}:$PATH"
     hyprctl reload 2>/dev/null || true
     ${pkgs.procps}/bin/pkill -SIGUSR1 kitty 2>/dev/null || true
     if command -v gsettings >/dev/null; then
@@ -28,6 +28,8 @@
       gsettings set org.gnome.desktop.interface gtk-theme "$raw" 2>/dev/null || true
     fi
     touch "''${HOME}/.config/qt6ct/qt6ct.conf" 2>/dev/null || true
+    ${pkgs.procps}/bin/pkill -x albert 2>/dev/null || true
+    ${lib.getExe pkgs.albert} &
   '';
   wallust-run = pkgs.writeShellScriptBin "wallust-run" ''
     set -euo pipefail
@@ -83,6 +85,23 @@ in {
     (lib.mkIf config.theme.dynamic {
       home.packages = [pkgs.qt6Packages.qt6ct];
 
+      home.sessionVariables = {
+        QT_QPA_PLATFORMTHEME = "qt6ct";
+      };
+
+      # Fusion + custom palette; wallust writes ~/.config/qt6ct/colors/wallust.conf
+      xdg.configFile = {
+        "qt6ct/qt6ct.conf".text = ''
+          [Appearance]
+          custom_palette=true
+          standard_dialogs=default
+          style=Fusion
+          color_scheme_path=${config.home.homeDirectory}/.config/qt6ct/colors/wallust.conf
+        '';
+        "gtk-3.0/gtk.css".text = "@import 'wallust-colors.css';";
+        "gtk-4.0/gtk.css".text = "@import 'wallust-colors.css';";
+      };
+
       services.hyprpaper = {
         enable = true;
         package = pkgs.hyprpaper;
@@ -96,11 +115,6 @@ in {
           wallpaper = [",${wp}"];
           splash = false;
         };
-      };
-
-      xdg.configFile = {
-        "gtk-3.0/gtk.css".text = "@import 'wallust-colors.css';";
-        "gtk-4.0/gtk.css".text = "@import 'wallust-colors.css';";
       };
     })
   ];

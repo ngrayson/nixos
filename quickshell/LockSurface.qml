@@ -1,14 +1,20 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls.Fusion
+import QtQuick.Controls
 import Quickshell.Wayland
 
 Rectangle {
 	id: root
 	required property LockContext context
-	readonly property ColorGroup colors: Window.active ? palette.active : palette.inactive
 
-	color: colors.window
+	Loader {
+		id: wpal
+		asynchronous: false
+		active: true
+		source: "WallustColors.qml"
+	}
+
+	color: wpal.item ? wpal.item.barBg : "#1a1a2e"
 
 	Label {
 		id: clock
@@ -20,6 +26,7 @@ Rectangle {
 			topMargin: 100
 		}
 
+		color: wpal.item ? wpal.item.text : "#cdd6f4"
 		renderType: Text.NativeRendering
 		font.pointSize: 80
 
@@ -55,6 +62,17 @@ Rectangle {
 				enabled: !root.context.unlockInProgress
 				echoMode: TextInput.Password
 				inputMethodHints: Qt.ImhSensitiveData
+				placeholderText: "Password"
+				placeholderTextColor: wpal.item ? wpal.item.muted : "#6c7086"
+				color: wpal.item ? wpal.item.text : "#ffffff"
+
+				background: Rectangle {
+					implicitWidth: 400
+					color: wpal.item ? wpal.item.muted : "#2a2a3a"
+					border.width: 1
+					border.color: wpal.item ? wpal.item.accent : "#89b4fa"
+					radius: 4
+				}
 
 				onTextChanged: root.context.currentText = this.text;
 
@@ -70,6 +88,7 @@ Rectangle {
 			}
 
 			Button {
+				id: unlockBtn
 				text: "Unlock"
 				padding: 10
 
@@ -77,12 +96,30 @@ Rectangle {
 
 				enabled: !root.context.unlockInProgress && root.context.currentText !== "";
 				onClicked: root.context.tryUnlock();
+
+				contentItem: Text {
+					text: unlockBtn.text
+					font: unlockBtn.font
+					opacity: enabled ? 1.0 : 0.3
+				color: wpal.item ? (wpal.item.onAccent || "#1e1e2e") : "#1e1e2e"
+					horizontalAlignment: Text.AlignHCenter
+					verticalAlignment: Text.AlignVCenter
+					elide: Text.ElideRight
+				}
+
+				background: Rectangle {
+					implicitWidth: unlockBtn.implicitContentWidth + 20
+					implicitHeight: 40
+					color: wpal.item ? wpal.item.accent : "#89b4fa"
+					radius: 4
+				}
 			}
 		}
 
 		Label {
 			visible: root.context.showFailure
 			text: "Incorrect password"
+			color: wpal.item ? (wpal.item.error || "#f38ba8") : "#f38ba8"
 		}
 	}
 }

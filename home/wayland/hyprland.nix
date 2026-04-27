@@ -81,6 +81,8 @@ in {
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
       ];
+      # Propagate to exec-once (Albert, Quickshell) and app launches — Qt6 matches qt6ct + wallust.
+      env = lib.optionals config.theme.dynamic ["QT_QPA_PLATFORMTHEME,qt6ct"];
       "exec-once" = [
         "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
