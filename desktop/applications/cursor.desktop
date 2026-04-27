@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Cursor
 Comment=AI-first code editor (gui-session-launch for Albert/Electron)
-Exec=env GUI_SESSION_STDIO_LOG=/home/wiz/.cache/cursor-appimage-stdio.log /home/wiz/bin/gui-session-launch.sh /run/current-system/sw/bin/appimage-run /home/wiz/bin/Cursor-3.0.12-x86_64.AppImage %F
+Exec=env GUI_SESSION_STDIO_LOG=/home/wiz/.cache/cursor-appimage-stdio.log /home/wiz/bin/gui-session-launch.sh /run/current-system/sw/bin/appimage-run /home/wiz/bin/Cursor-3.2.11-x86_64.AppImage %F
 Icon=co.anysphere.cursor
 Terminal=false
 StartupNotify=false
