@@ -9,6 +9,6 @@
 
 ## Notes for this repo
 
-- `agent`/`agent-new` zsh aliases in `home.nix` call `~/.local/bin/cursor agent ...` directly.
+- `agent`/`agent-new` zsh aliases in [`home/programs/zsh.nix`](./home/programs/zsh.nix) call `~/.local/bin/cursor agent ...` directly.
 - This avoids PATH issues on fresh systems where `cursor` is not globally available yet.
 - Re-apply config after migrating: `sudo nixos-rebuild switch -I nixos-config=$HOME/.config/nixos/configuration.nix`

@@ -79,12 +79,14 @@ Keep the **four phase files** as the narrative spine, but use this **internal se
 1. Install and log into **tiling stack** (compositor + session + DM/greetd as required).
 2. **Focus-follows-mouse** + **tiling** + **hotkeys** + written binding table.
 3. **Kitty** + **zsh** + minimal plugins; **default terminal** wired correctly.
-4. **Chezmoi**: add **NixOS template conditions** and port **aliases/snippets** — *light* touch; full HM migration can wait until Phase D.
+4. **Chezmoi**: add **NixOS template conditions** and port **aliases/snippets** — *light* touch; on the **live** `~/.config/nixos` repo, chezmoi is dropped and **HM owns `./home/`** ([MIGRATION.md](../../MIGRATION.md)).
 
 ### Phase D — User config consolidation (**03**)
 
-1. Choose **standalone HM** vs **NixOS HM module**.
-2. Move **Kitty**, **zsh**, **git**, **session env** into HM where appropriate; resolve **chezmoi vs `home.file`** for each path.
+**Live `~/.config/nixos`:** **Done** — NixOS **HM module** + modular **[`./home/`](../../home/)**; see [03](./03-home-manager.md), [LOCKED — live repo note](./LOCKED.md#live-repo-note-2026-04).
+
+1. ~~Choose **standalone HM** vs **NixOS HM module**.~~ **NixOS module** in use.
+2. ~~Move **Kitty**, **zsh**, **git**, **session env** into HM~~ — present under **`./home/`**; resolve **chezmoi vs `home.file`** only on machines that still use chezmoi.
 3. Secrets hygiene when you add tokens.
 
 ### Phase E — Polish (**04** + tail of **05**)
@@ -132,7 +134,7 @@ All items below are **decided** — see [LOCKED.md](./LOCKED.md). The numbered l
 | 1 | Compositor / WM | **Plasma (Wayland) + tiling** | **Locked** daily driver; **Sway** / Hypr **not** targeted. |
 | 2 | Wayland vs X11 | **Wayland primary** | **Plasma** session. **XWayland** on for **games and legacy X apps**. **Screen sharing:** **xdg-desktop-portal** + **KDE** portal on Plasma; **PipeWire** for capture; verify **browser / Discord / OBS** after setup. (**wlr** portal only if you add a wlroots-based session later.) |
 | 3 | Flake vs classic `-I` | **Classic** | **`nixos-rebuild switch -I nixos-config=…`** (or minimal `/etc/nixos` import); **`nixpkgs` via channels**. **Flakes later** when you want pinned inputs — not required for Home Manager. |
-| 4 | Home Manager: standalone vs module | **NixOS module** + minimal **`home.nix`** (scaffold) | Original learning path was **standalone** `home-manager switch` first; **live system** uses the **NixOS module** so **`nixos-rebuild`** applies system + HM together. **Phase D** (Kitty, zsh, git, etc. in HM) still **deferred** — see [LOCKED](./LOCKED.md). |
+| 4 | Home Manager: standalone vs module | **NixOS module** + modular **`./home/`** (root [`home.nix`](../../home.nix)) | Original learning path was **standalone** `home-manager switch` first; **live system** uses the **NixOS module** so **`nixos-rebuild`** applies system + HM together. User config (Kitty via `xdg`, zsh, git, Hyprland stack, …) lives under **`./home/`** — see [LOCKED — live repo note](./LOCKED.md#live-repo-note-2026-04). |
 | 5 | Chezmoi strategy | **Hybrid (c)** — *confirmed* | **Chezmoi:** cross-distro templates ([debian-dotfiles](https://github.com/ngrayson/debian-dotfiles/tree/main)), machine-specific data, secrets. **HM:** `programs.kitty`, `programs.zsh`, `programs.git`, `sessionVariables`, other `programs.*` where you want Nix options. **Rule:** [one owner per path](#q5-chezmoi-vs-home-manager); maintain an **ownership list** in git. |
 | 6 | zsh story | **HM `programs.zsh` primary** — *confirmed approach* | **Syntax highlighting + autosuggestions + completions** in HM. **Oh-my-zsh** not required — use HM’s **`programs.zsh.ohMyZsh`** *only if* you want themes/plugins like the old box; otherwise stay slimmer. **Chezmoi:** optional **shared** snippets (e.g. aliases) via a **file HM sources** in `initExtra`, *or* aliases only in HM on Nix — [§Q6](#q6-zsh-story). |
 | 7 | Username / hostname | **`wiz`** / **`Theseus`** — *confirmed* | `networking.hostName = "Theseus";` — **users.users.wiz** (or equivalent). |
@@ -167,7 +169,7 @@ You already use **[chezmoi](https://www.chezmoi.io/)** with **[debian-dotfiles](
 | Option | Meaning | Fits your case? |
 |--------|---------|-----------------|
 | **(a) Chezmoi-first** | Chezmoi **renders** almost all dotfiles; Home Manager only manages what chezmoi does **not** (or only system-level stuff outside HM). | Keeps **one** template story for three OSes; risk of **under-using** HM’s `programs.*` (duplicated logic in shell snippets). |
-| **(b) Migrate to HM** | Move templates into **`home.nix`** / `home.file` / `xdg.configFile` and shrink chezmoi. | **Single** tool for Nix machines; **more work** up front; **Debian/Omarchy** either lose shared templates or need a **non-Nix** export path. |
+| **(b) Migrate to HM** | Move templates into **`./home/`** (e.g. `programs.*`, `xdg.configFile`) / `home.file` and shrink chezmoi. | **Single** tool for Nix machines; **more work** up front; **Debian/Omarchy** either lose shared templates or need a **non-Nix** export path. |
 | **(c) Hybrid + explicit ownership** | **Each path has exactly one owner.** Example split: HM for **`programs.kitty`**, **`programs.zsh`** (options/plugins), **`programs.git`**, **`sessionVariables`**; chezmoi for **editor configs**, **SSH/config** snippets, **`.local` scripts**, and **anything** still shared heavily across non-Nix OSes via templates. Maintain a **small list** (table in repo or Phase 3 notes). | **Practical default:** learn HM where it shines; keep chezmoi for **cross-distro** muscle memory and **per-machine** data. |
 
 **Rules that prevent pain:**

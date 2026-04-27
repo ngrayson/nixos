@@ -10,6 +10,14 @@ This file is the **frozen snapshot** of agreed decisions. Detailed rationale, ri
 
 ---
 
+## Live repo note (2026-04)
+
+**Home Manager** for user **`wiz`** is **modular**: root [`home.nix`](../../home.nix) only does `imports = [ ./home ];`; real options live under [`home/`](../../home/) ([`home/default.nix`](../../home/default.nix) imports `session.nix`, `programs/`, `wayland/hyprland.nix`, `services/hypridle.nix`, `xdg/`, `hypr/scripts.nix`, `lib/`, etc.). Authoritative path ownership: **[`MIGRATION.md`](../../MIGRATION.md)**.
+
+The **decision table** below is the **2026-04-05** Framework snapshot. **Row 4** described a *minimal* `home.nix` scaffold and **Phase D** deferred; on the **live** machine that snapshot is **out of date** — Kitty (via `xdg.configFile`), zsh, git, Hyprland, Quickshell, hypridle, and related user config are already in HM under **`./home/`**.
+
+---
+
 ## Decisions (authoritative)
 
 | # | Topic | Locked choice |
@@ -17,7 +25,7 @@ This file is the **frozen snapshot** of agreed decisions. Detailed rationale, ri
 | 1 | WM | **KDE Plasma (Wayland) + tiling** — daily driver; **Sway** / other wlroots WMs **not** planned |
 | 2 | Display | **Wayland** primary; **XWayland** for games; **KDE portal** + **PipeWire** for screen sharing on Plasma (add **wlr** portal only if you change compositor family) |
 | 3 | Nix layout | **Classic** — `nixos-rebuild` + **`-I nixos-config=…`** (or import); **channels** for `nixpkgs`; **flakes later** |
-| 4 | Home Manager | **NixOS module** + minimal **`home.nix`** (scaffold only); **Phase D** — move Kitty, zsh, git, etc. into HM per [03](./03-home-manager.md) — **deferred**. Learning path was **standalone** `home-manager switch` first; the live system uses the **module** so one `nixos-rebuild` applies system + HM |
+| 4 | Home Manager | **Original lock (2026-04-05):** **NixOS module** + minimal **`home.nix`** (scaffold); **Phase D** into HM — **deferred**. **Live `~/.config/nixos`:** modular **[`./home/`](../../home/)** (root [`home.nix`](../../home.nix) imports it); Phase D–style migration **done** — [Live repo note (2026-04)](#live-repo-note-2026-04). Learning path was **standalone** `home-manager switch` first; this system uses the **module** so one `nixos-rebuild` applies system + HM |
 | 5 | Dotfiles | **Hybrid (c)** — **one owner per path**; **chezmoi** + **HM**; **ownership list** in git |
 | 6 | zsh | **HM `programs.zsh`** primary; **oh-my-zsh** only via HM if wanted |
 | 7 | Identity | **User `wiz`**, **`networking.hostName = "Theseus"`** |
@@ -39,7 +47,9 @@ This file is the **frozen snapshot** of agreed decisions. Detailed rationale, ri
 
 ### Execution note (rolling)
 
-**Home Manager migration (Phase D)** — moving user programs into **`home.nix`** — is **deferred** until **Phase C** is stable and dotfiles are mostly **NixOS-managed** (see below). The nixos repo may already load the **Home Manager NixOS module** with a **minimal** `home.nix` (`stateVersion`, `programs.home-manager.enable`) so activation is unified with `nixos-rebuild`; that is **scaffold**, not Phase D. Long-term targets for **Q4–Q6** stay in the table above; **Phase D** in [06](./06-implementation-checklist.md) tracks **migration** work.
+**Historical (2026-04-05 lock):** **Phase D** was described as moving user programs into a monolithic **`home.nix`**, deferred until **Phase C** settled.
+
+**Live `~/.config/nixos` repo:** User programs and dotfiles are in **Home Manager** under modular **[`./home/`](../../home/)** (root [`home.nix`](../../home.nix) only imports that tree). See **[Live repo note (2026-04)](#live-repo-note-2026-04)** and **[`MIGRATION.md`](../../MIGRATION.md)**. [06](./06-implementation-checklist.md) § D is updated to match.
 
 **Dotfiles strategy (rolling)** — two phases:
 

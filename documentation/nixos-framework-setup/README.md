@@ -2,9 +2,9 @@
 
 **Plan status:** **LOCKED** (2026-04-05) — authoritative snapshot: [LOCKED.md](./LOCKED.md)
 
-**Continue implementation:** [06-implementation-checklist.md](./06-implementation-checklist.md) — **Next:** optional [Phase D — Home Manager](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred) and [Quick reference — optional items](./06-implementation-checklist.md#quick-reference) (`outside`, Stylix, extra suspend metrics, etc.).
+**Continue implementation:** [06-implementation-checklist.md](./06-implementation-checklist.md) — **Next:** small **optional** items in [Quick reference](./06-implementation-checklist.md#quick-reference) (`outside`, Stylix, extra suspend metrics, etc.). **Phase D** (Home Manager user config) is **done** on the live `~/.config/nixos` repo under [`./home/`](../../home/) — see [06 — § D](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred).
 
-**Where we are (2026-04):** **Bootstrap (A)**, **base system (B)**, **session (C)**, and **rice (E)** are **complete** for Theseus; see [06 — Current status](./06-implementation-checklist.md#current-status-rolling). **Outstanding:** **Phase D** (optional Home Manager user-config migration) and small **optional** items in [06 — Quick reference](./06-implementation-checklist.md#quick-reference) (e.g. `outside` CLI, extra suspend metrics, **Stylix**).
+**Where we are (2026-04):** **Bootstrap (A)**, **base system (B)**, **session (C)**, **Home Manager (D)** on the live machine, and **rice (E)** are **complete** for Theseus; see [06 — Current status](./06-implementation-checklist.md#current-status-rolling). **Outstanding:** small **optional** items in [06 — Quick reference](./06-implementation-checklist.md#quick-reference) (e.g. `outside` CLI, extra suspend metrics, **Stylix**).
 
 This folder is your **organized todo** for turning a fresh NixOS install on a Framework laptop into a capable, comfortable, and good-looking daily driver.
 

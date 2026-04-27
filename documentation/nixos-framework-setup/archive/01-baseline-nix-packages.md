@@ -40,7 +40,7 @@ Stock **`nix search`** / **`nix repl`** are enough to start. The plan also menti
 
 **Practical combo:** **`nix search`** or **`nix-search`** for finding packages + your **rebuild script** for day-to-day switches. Add **`nixos-cli`** when you want its TUIs / unified UX — it is optional.
 
-**Shell alias `ns`:** If you use **`nix-search-cli`**, add **`ns = "nix-search"`** to **`programs.zsh.shellAliases`** (system or Home Manager). Example fragment: [snippets/zsh-ns-alias.nix](./snippets/zsh-ns-alias.nix). Then **`ns firefox`** runs **`nix-search firefox`** (open a **new zsh** session after **`nixos-rebuild switch`**).
+**Shell alias `ns`:** If you use **`nix-search-cli`**, add **`ns = "nix-search"`** to **`programs.zsh.shellAliases`** (this repo: [`home/programs/zsh.nix`](../../home/programs/zsh.nix)). Example fragment: [snippets/zsh-ns-alias.nix](./snippets/zsh-ns-alias.nix). Then **`ns firefox`** runs **`nix-search firefox`** (open a **new zsh** session after **`nixos-rebuild switch`**).
 
 **Still seeing bash?** Check **`getent passwd wiz`** — if the shell is **zsh** but **`echo $SHELL`** is **bash**, your **desktop session** (e.g. Plasma) may still export **`SHELL=bash`**. Add **`environment.variables.SHELL = "${pkgs.zsh}/bin/zsh";`** (see snippet), **`sudo nixos-rebuild switch`**, then **log out of the desktop** (or **reboot**) so Konsole/Kitty pick up **zsh**.
 

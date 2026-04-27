@@ -11,4 +11,4 @@ To capture from a running system:
 mkdir -p kvantum/$(hostname) && cp -a ~/.config/Kvantum/. kvantum/$(hostname)/
 ```
 
-Then add the corresponding `xdg.configFile` entries in `home.nix` (or extend the set there) for any new file paths.
+Then add the corresponding `xdg.configFile` entries in [`home/lib/host-xdg.nix`](../home/lib/host-xdg.nix) (and merge via [`home/xdg/config.nix`](../home/xdg/config.nix)) for any new file paths.

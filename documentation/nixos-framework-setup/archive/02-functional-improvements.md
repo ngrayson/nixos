@@ -4,7 +4,7 @@
 
 **Prior install:** For settings and packages worth reusing from your last NixOS config (network, audio, zsh, Steam, shopping list, Plasma vs tiling), see [05-previous-nixos-config-extract.md](./05-previous-nixos-config-extract.md).
 
-**Status snapshot (2026-04-17):** **Phase C (session)** — **session polish done**: **zsh** + **Kitty** + **Plasma + tiling**; **hotkey** table ([below](#wm--hotkey-notes)) filled to satisfaction; min-width/HiDPI **acceptable**. **Rice (Phase E)** — **complete** (LilacAsh-style pass, `themes/`) per [04](./04-ricing.md) and [06 — § E](./06-implementation-checklist.md#e--rice). **Dotfiles (08):** as before. **`outside` CLI** [deferred](./08-dotfiles-migration-plan.md#deferred--later). **Home Manager (Phase D)** [deferred](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred). **Optional** extras: **suspend drain / `deep`**, **hotel** VPN retest. **Bluetooth** / **VPN + stunnel** / **fingerprint** — as documented. See [06 — Current status](./06-implementation-checklist.md#current-status-rolling).
+**Status snapshot (2026-04-17):** **Phase C (session)** — **session polish done**: **zsh** + **Kitty** + **Plasma + tiling**; **hotkey** table ([below](#wm--hotkey-notes)) filled to satisfaction; min-width/HiDPI **acceptable**. **Rice (Phase E)** — **complete** (LilacAsh-style pass, `themes/`) per [04](./04-ricing.md) and [06 — § E](./06-implementation-checklist.md#e--rice). **Dotfiles (08):** as before. **`outside` CLI** [deferred](./08-dotfiles-migration-plan.md#deferred--later). **Home Manager (Phase D)** **done** on live `~/.config/nixos` ([`./home/`](../../home/) — [06 § D](./06-implementation-checklist.md#d--home-manager-phase-d-migration-deferred)). **Optional** extras: **suspend drain / `deep`**, **hotel** VPN retest. **Bluetooth** / **VPN + stunnel** / **fingerprint** — as documented. See [06 — Current status](./06-implementation-checklist.md#current-status-rolling).
 
 ## Core tooling
 
@@ -38,7 +38,7 @@ Until migration finishes, **avoid defining the same behavior twice** (e.g. dupli
 
 **Oh My Zsh on NixOS:** **`~/.oh-my-zsh`** is **not** populated by default. **`programs.zsh.ohMyZsh`** in **`configuration.nix`** installs OMZ under the Nix store and **`/etc/zshrc`** loads it **before** **`~/.zshrc`**. A Debian-style **`~/.zshrc`** that sets **`ZSH=$HOME/.oh-my-zsh`**, **`zsh-defer`**, or **`source $ZSH/oh-my-zsh.sh`** will fail — remove that block and set **theme** / **plugins** in **`configuration.nix`** instead.
 
-When you adopt **Home Manager** ([03](./03-home-manager.md)), move **`programs.zsh`** (and optionally Kitty) into **`home.nix`** per [LOCKED Q6](./LOCKED.md) and shrink overlapping chezmoi paths deliberately.
+On this machine, **`programs.zsh`** and Kitty (**`xdg.configFile`**) live under **[`./home/`](../../home/)** via Home Manager ([03](./03-home-manager.md)); shrink overlapping chezmoi paths deliberately if you still use templates elsewhere.
 
 ## Desktop / session (if not already settled)
 

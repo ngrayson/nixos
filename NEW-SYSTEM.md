@@ -22,7 +22,7 @@ Under **`hosts/<hostname>/`** for **this** machine:
 
 Set **`NIXOS_CONFIG`** to **`…/hosts/<hostname>/configuration.nix`**, or edit the root [`configuration.nix`](./configuration.nix) import if this host is the repo default.
 
-Shared software and desktop options live in **[`common/system.nix`](./common/system.nix)** and **[`home.nix`](./home.nix)**.
+Shared **system** options live in **[`common/system.nix`](./common/system.nix)**. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.).
 
 ## 4. `system.stateVersion`
 
@@ -39,9 +39,9 @@ Home Manager runs as part of that for **`wiz`** (no separate `home-manager switc
 ## 6. After boot
 
 - Re-enrol **fingerprint**, reconnect **Wi‑Fi**, fix **VPN** paths if you use them (`environment.etc` in [`common/system.nix`](./common/system.nix)).
-- **Cursor**: [CURSOR_SETUP.md](./CURSOR_SETUP.md) so `~/.local/bin/cursor` matches `home.nix` shell aliases.
+- **Cursor**: [CURSOR_SETUP.md](./CURSOR_SETUP.md) so `~/.local/bin/cursor` matches shell aliases in [`home/programs/zsh.nix`](./home/programs/zsh.nix).
 - Custom **`.desktop`** files: already in [`desktop/applications/`](./desktop/applications/); they land in `~/.local/share/applications/` via Home Manager.
-- **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in **`hosts/<hostname>/host.nix`**, and extend `home.nix` if your theme includes extra files beyond the files already wired there (see **Tawa** / **Theseus** under `kvantum/`).
+- **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in **`hosts/<hostname>/host.nix`**, and extend [`home/lib/host-xdg.nix`](./home/lib/host-xdg.nix) / [`home/xdg/config.nix`](./home/xdg/config.nix) if your theme includes extra paths beyond those already wired (see **Tawa** / **Theseus** under `kvantum/`).
 
 ## 7. Full detail and history
 

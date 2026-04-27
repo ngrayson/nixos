@@ -31,7 +31,7 @@
     sed -i "s|^background=.*|background=${sddmLoginBg}|" $out/share/sddm/themes/breeze-login/theme.conf
   '';
 
-  # home-manager: release-25.11 matches NixOS 25.11; see ../home.nix and MIGRATION.md
+  # home-manager: release-25.11 matches NixOS 25.11; entry ../home.nix imports ./home/ — see MIGRATION.md
   home-manager-src = builtins.fetchTarball {
     url = "https://github.com/nix-community/home-manager/archive/release-25.11.tar.gz";
     sha256 = "16mcnqpcgl3s2frq9if6vb8rpnfkmfxkz5kkkjwlf769wsqqg3i9";
