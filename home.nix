@@ -47,6 +47,11 @@
         force = true;
       };
     };
+
+  hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
+    set -euo pipefail
+    ${lib.getExe pkgs.grim} -g "$(${lib.getExe pkgs.slurp})" - | ${pkgs.wl-clipboard}/bin/wl-copy --type image
+  '';
 in {
   home.stateVersion = "25.11";
 
@@ -99,6 +104,44 @@ in {
   };
 
   # Migrated from NixOS `programs.git` in `configuration.nix` (was `/etc/gitconfig` + `GIT_CONFIG_SYSTEM`)
+  programs.waybar = {
+    enable = true;
+    systemd.enable = true;
+    settings = [
+      {
+        layer = "top";
+        position = "top";
+        height = 32;
+        modules-left = ["hyprland/workspaces"];
+        modules-center = ["clock"];
+        modules-right = ["tray" "battery" "network" "pulseaudio"];
+        "hyprland/workspaces" = {
+          all-outputs = true;
+        };
+        clock = {
+          format = "{:%a %d %b  %H:%M}";
+          tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
+        };
+        battery = {
+          states = {
+            warning = 30;
+            critical = 15;
+          };
+          format = "{capacity}% {icon}";
+        };
+        network = {
+          format-wifi = "{essid} ({signalStrength}%) ";
+          format-ethernet = "{ifname} ";
+          format-disconnected = "—";
+        };
+        pulseaudio = {
+          format = "{volume}% {icon}";
+          format-muted = "muted";
+        };
+      }
+    ];
+  };
+
   programs.git = {
     enable = true;
     settings = {
@@ -157,51 +200,62 @@ in {
         kb_layout = "us";
         follow_mouse = 1;
       };
-      bind =
-        [
-          "$mod, Return, exec, ${pkgs.kitty}/bin/kitty"
-          "$mod, Q, killactive,"
-          "$mod, M, exit,"
-          "$mod, Space, exec, ${lib.getExe pkgs.albert} toggle"
-          "$mod, L, exec, ${lib.getExe pkgs.swaylock}"
-          "$mod, h, movefocus, l"
-          "$mod, j, movefocus, d"
-          "$mod, k, movefocus, u"
-          "$mod, l, movefocus, r"
-          "$mod SHIFT, h, movewindow, l"
-          "$mod SHIFT, j, movewindow, d"
-          "$mod SHIFT, k, movewindow, u"
-          "$mod SHIFT, l, movewindow, r"
-          "$mod, 1, workspace, 1"
-          "$mod, 2, workspace, 2"
-          "$mod, 3, workspace, 3"
-          "$mod, 4, workspace, 4"
-          "$mod, 5, workspace, 5"
-          "$mod, 6, workspace, 6"
-          "$mod, 7, workspace, 7"
-          "$mod, 8, workspace, 8"
-          "$mod, 9, workspace, 9"
-          "$mod SHIFT, 1, movetoworkspace, 1"
-          "$mod SHIFT, 2, movetoworkspace, 2"
-          "$mod SHIFT, 3, movetoworkspace, 3"
-          "$mod SHIFT, 4, movetoworkspace, 4"
-          "$mod SHIFT, 5, movetoworkspace, 5"
-          "$mod SHIFT, 6, movetoworkspace, 6"
-          "$mod SHIFT, 7, movetoworkspace, 7"
-          "$mod SHIFT, 8, movetoworkspace, 8"
-          "$mod SHIFT, 9, movetoworkspace, 9"
-          "$mod, mouse_down, workspace, e+1"
-          "$mod, mouse_up, workspace, e-1"
-        ]
-        ++ [
-          "$mod SHIFT, Space, togglefloating,"
-          "$mod, F, fullscreen, 0"
-        ];
+      # Session exit: Super+Shift+E (Super+M intentionally unbound per keybind pass).
+      bind = [
+        # --- Alt: navigation, workspaces, launcher ---
+        "ALT, h, movefocus, l"
+        "ALT, j, movefocus, d"
+        "ALT, k, movefocus, u"
+        "ALT, l, movefocus, r"
+        "ALT SHIFT, h, movewindow, l"
+        "ALT SHIFT, j, movewindow, d"
+        "ALT SHIFT, k, movewindow, u"
+        "ALT SHIFT, l, movewindow, r"
+        "ALT, Return, exec, ${pkgs.kitty}/bin/kitty"
+        "ALT, escape, killactive,"
+        "ALT SHIFT, Q, killactive,"
+        "ALT, Space, exec, ${lib.getExe pkgs.albert} toggle"
+        "ALT, 1, workspace, 1"
+        "ALT, 2, workspace, 2"
+        "ALT, 3, workspace, 3"
+        "ALT, 4, workspace, 4"
+        "ALT, 5, workspace, 5"
+        "ALT, 6, workspace, 6"
+        "ALT SHIFT, 1, movetoworkspace, 1"
+        "ALT SHIFT, 2, movetoworkspace, 2"
+        "ALT SHIFT, 3, movetoworkspace, 3"
+        "ALT SHIFT, 4, movetoworkspace, 4"
+        "ALT SHIFT, 5, movetoworkspace, 5"
+        "ALT SHIFT, 6, movetoworkspace, 6"
+        # --- Super: layout, apps, session ---
+        "$mod SHIFT, E, exit,"
+        "$mod, F, fullscreen, 0"
+        "$mod SHIFT, Space, togglefloating,"
+        "$mod, Y, togglesplit"
+        "$mod SHIFT, P, pseudo"
+        "$mod SHIFT, S, exec, ${lib.getExe hyprScreenshotRegion}"
+        "$mod, L, exec, ${lib.getExe pkgs.swaylock}"
+        "$mod, B, exec, ${lib.getExe pkgs.firefox}"
+        "$mod, D, exec, ${lib.getExe pkgs.discord}"
+        "$mod, O, exec, ${lib.getExe pkgs.obsidian}"
+        "$mod CTRL, h, resizeactive, -40 0"
+        "$mod CTRL, j, resizeactive, 0 40"
+        "$mod CTRL, k, resizeactive, 0 -40"
+        "$mod CTRL, l, resizeactive, 40 0"
+        "$mod, mouse_down, workspace, e+1"
+        "$mod, mouse_up, workspace, e-1"
+        "$mod, bracketleft, workspace, m-1"
+        "$mod, bracketright, workspace, m+1"
+        "$mod, Tab, cyclenext"
+        "$mod SHIFT, Tab, cyclenext, prev"
+        ", Print, exec, ${lib.getExe hyprScreenshotRegion}"
+      ];
       bindm = [
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
       ];
       "exec-once" = [
+        "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
         "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
       ];
@@ -238,7 +292,7 @@ in {
 
   # User-only CLIs (migrated from `environment.systemPackages` over time)
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
-  home.packages = with pkgs; [dunst fastfetch newsboat swaylock tmux tmuxifier wl-clipboard];
+  home.packages = with pkgs; [dunst fastfetch grim newsboat slurp swaylock tmux tmuxifier wl-clipboard];
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
