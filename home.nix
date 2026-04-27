@@ -107,15 +107,10 @@
     done < <("$H" monitors -j | "$J" -r '.[].name')
   '';
 
+  # Per-monitor `dpms on <name>` can leave DP heads black; global `dpms on` restores all (unlike `off`, where HDMI often needs per-output).
   hyprDpmsAllOn = pkgs.writeShellScriptBin "hypr-dpms-all-on" ''
     set -euo pipefail
-    H="${pkgs.hyprland}/bin/hyprctl"
-    J="${lib.getExe pkgs.jq}"
-    "$H" dispatch dpms on || true
-    while IFS= read -r name; do
-      [[ -n "$name" ]] || continue
-      "$H" dispatch dpms on "$name" || true
-    done < <("$H" monitors -j | "$J" -r '.[].name')
+    "${pkgs.hyprland}/bin/hyprctl" dispatch dpms on || true
   '';
 in {
   home.stateVersion = "25.11";
