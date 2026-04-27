@@ -2,6 +2,7 @@
 # Dotfiles: Home Manager only (no chezmoi).
 # `nixosConfig` is set by the Home Manager NixOS module (NixOS `config`, for host-scoped options).
 {
+  config,
   lib,
   nixosConfig ? null, # NixOS `config` from the Home Manager module (null only if not using the HM NixOS import)
   pkgs,
@@ -71,8 +72,8 @@ in {
     shellAliases = {
       ns = "nix-search";
       vpn = "sudo vortix";
-      "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor agent";
-      agent = "cd ~/Stellarium && ~/.local/bin/cursor agent --resume";
+      "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor-agent";
+      agent = "cd ~/Stellarium && ~/.local/bin/cursor-agent --resume";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
       config = "code ~/.config/nixos";
       fetch = "fastfetch";
@@ -135,6 +136,7 @@ in {
   };
 
   # Was `environment.variables` + `environment.sessionVariables` in configuration.nix (user wiz only).
+  home.sessionPath = ["${config.home.homeDirectory}/.local/bin"];
   home.sessionVariables = {
     EDITOR = "${pkgs.micro}/bin/micro";
     SYSTEMD_EDITOR = "${pkgs.micro}/bin/micro";
