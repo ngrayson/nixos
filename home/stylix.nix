@@ -16,7 +16,7 @@ in {
     autoEnable = false;
 
     polarity = "dark";
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/purpledream.yaml";
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/tokyo-night-dark.yaml";
     image = builtins.path {
       path = ../login-bg.png;
       name = "stylix-wallpaper.png";
