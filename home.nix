@@ -74,14 +74,23 @@
     ${lib.getExe pkgs.grim} -g "$(${lib.getExe pkgs.slurp})" - | ${pkgs.wl-clipboard}/bin/wl-copy --type image
   '';
 
-  # Same `-p` path as Hyprland `exec-once` so IPC matches the running instance (HM symlinks
-  # shell.qml into the store; `ipc -c default` targets a store id that often differs / is stale).
-  quickshellShellQml = "${config.home.homeDirectory}/.config/quickshell/shell.qml";
+  # One store path for all QML + pam so `shell.qml` resolves siblings (LockContext, LockSurface).
+  # HM otherwise symlinks each file to a different derivation directory → "LockContext is not a type".
+  quickshellBundled = pkgs.runCommand "quickshell-hm-config" {} ''
+    mkdir -p $out/pam
+    cp ${./quickshell/shell.qml} $out/shell.qml
+    cp ${./quickshell/LockContext.qml} $out/LockContext.qml
+    cp ${./quickshell/LockSurface.qml} $out/LockSurface.qml
+    cp ${./quickshell/pam/password.conf} $out/pam/password.conf
+  '';
+
+  # Same `-p` as Hyprland `exec-once` (directory → loads `shell.qml` inside).
+  quickshellConfigDir = "${config.home.homeDirectory}/.config/quickshell";
 
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    QS="''${HOME}/.config/quickshell/shell.qml"
+    QS="''${HOME}/.config/quickshell"
     exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
       ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
   '';
@@ -255,7 +264,7 @@ in {
         "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
         "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
-        "${lib.getExe pkgs.quickshell} -d -p ${quickshellShellQml}"
+        "${lib.getExe pkgs.quickshell} -d -p ${quickshellConfigDir}"
       ];
     };
     extraConfig =
@@ -297,19 +306,19 @@ in {
   xdg.configFile =
     {
       "quickshell/shell.qml" = {
-        source = ./quickshell/shell.qml;
+        source = "${quickshellBundled}/shell.qml";
         force = true;
       };
       "quickshell/LockContext.qml" = {
-        source = ./quickshell/LockContext.qml;
+        source = "${quickshellBundled}/LockContext.qml";
         force = true;
       };
       "quickshell/LockSurface.qml" = {
-        source = ./quickshell/LockSurface.qml;
+        source = "${quickshellBundled}/LockSurface.qml";
         force = true;
       };
       "quickshell/pam/password.conf" = {
-        source = ./quickshell/pam/password.conf;
+        source = "${quickshellBundled}/pam/password.conf";
         force = true;
       };
       "kitty/lilac-ash.conf" = {
