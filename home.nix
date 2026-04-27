@@ -94,6 +94,29 @@
     exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
       ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
   '';
+
+  # `dispatch dpms off` alone often skips an output (commonly HDMI). Hyprland: `dpms off <monitor>`.
+  hyprDpmsAllOff = pkgs.writeShellScriptBin "hypr-dpms-all-off" ''
+    set -euo pipefail
+    H="${pkgs.hyprland}/bin/hyprctl"
+    J="${lib.getExe pkgs.jq}"
+    "$H" dispatch dpms off || true
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      "$H" dispatch dpms off "$name" || true
+    done < <("$H" monitors -j | "$J" -r '.[].name')
+  '';
+
+  hyprDpmsAllOn = pkgs.writeShellScriptBin "hypr-dpms-all-on" ''
+    set -euo pipefail
+    H="${pkgs.hyprland}/bin/hyprctl"
+    J="${lib.getExe pkgs.jq}"
+    "$H" dispatch dpms on || true
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      "$H" dispatch dpms on "$name" || true
+    done < <("$H" monitors -j | "$J" -r '.[].name')
+  '';
 in {
   home.stateVersion = "25.11";
 
@@ -278,18 +301,19 @@ in {
   };
 
   # hypridle: idle lock + DPMS. Tune `timeout` values (seconds) in `settings.listener` as you like.
-  # Default: 5 min → Quickshell lock; 10 min → DPMS off (resume turns DPMS back on).
+  # Default: 5 min → Quickshell lock; 10 min → DPMS off (per-monitor + global; helps HDMI).
   services.hypridle = {
     enable = true;
     package = pkgs.hypridle;
     settings = let
-      hyprctl = "${pkgs.hyprland}/bin/hyprctl";
       lock = lib.getExe quickshellLock;
+      dpmsOff = lib.getExe hyprDpmsAllOff;
+      dpmsOn = lib.getExe hyprDpmsAllOn;
     in {
       general = {
         lock_cmd = lock;
         before_sleep_cmd = lock;
-        after_sleep_cmd = "${hyprctl} dispatch dpms on";
+        after_sleep_cmd = dpmsOn;
         ignore_dbus_inhibit = false;
       };
       listener = [
@@ -299,8 +323,8 @@ in {
         }
         {
           timeout = 600;
-          on-timeout = "${hyprctl} dispatch dpms off";
-          on-resume = "${hyprctl} dispatch dpms on";
+          on-timeout = dpmsOff;
+          on-resume = dpmsOn;
         }
       ];
     };
