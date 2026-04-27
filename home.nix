@@ -166,6 +166,10 @@ in {
         source = ./fastfetch/izar-tsp.gif;
         force = true;
       };
+      "topgrade.toml" = {
+        source = ./topgrade/topgrade.toml;
+        force = true;
+      };
     }
     // kvantumConfigFiles;
 

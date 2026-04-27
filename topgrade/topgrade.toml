@@ -1,0 +1,3 @@
+# Keep NixOS updates declarative via nixos-rebuild.
+# Disables Topgrade's Nix/profile step, which can mix closures.
+disable = ["nix"]
