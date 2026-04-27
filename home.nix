@@ -48,6 +48,27 @@
       };
     };
 
+  # Hyprland: `./hypr/<hostname>/monitors.conf` — only deployed when present (per-machine layout).
+  hyprMonitorsConf =
+    if nixosConfig == null
+    then null
+    else let
+      p = ./hypr + "/${nixosConfig.networking.hostName}/monitors.conf";
+    in
+      if builtins.pathExists p
+      then p
+      else null;
+
+  hyprMonitorsXdg =
+    if hyprMonitorsConf == null
+    then {}
+    else {
+      "hypr/monitors.conf" = {
+        source = hyprMonitorsConf;
+        force = true;
+      };
+    };
+
   hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
     set -euo pipefail
     ${lib.getExe pkgs.grim} -g "$(${lib.getExe pkgs.slurp})" - | ${pkgs.wl-clipboard}/bin/wl-copy --type image
@@ -104,6 +125,8 @@ in {
       "wifi-connection" = "nmcli connection show";
       "wifi-list" = "nmcli device wifi list";
       zshconfig = "micro ~/.config/nixos/home.nix";
+      # Hyprland: edit `./hypr/<hostname>/monitors.conf` (hostname must match `networking.hostName`).
+      hyprmon-cfg = "HYPRLAND_CONFIG=\"$HOME/.config/nixos/hypr/$(hostname)/monitors.conf\" ${lib.getExe pkgs.hyprmon}";
     };
   };
 
@@ -227,12 +250,12 @@ in {
         "${lib.getExe pkgs.quickshell} -d"
       ];
     };
-    extraConfig = ''
-      # Default workspaces per monitor (names from `hyprctl monitors`; edit if cabling changes).
-      workspace = 1, monitor:DP-3
-      workspace = 2, monitor:HDMI-A-1
-      workspace = 3, monitor:DP-1
-    '';
+    extraConfig =
+      if hyprMonitorsConf == null
+      then ""
+      else ''
+        source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
+      '';
   };
 
   # Multi-monitor KWin prefs + Krohnkite option (Plasma session only).
@@ -259,7 +282,7 @@ in {
 
   # User-only CLIs (migrated from `environment.systemPackages` over time)
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
-  home.packages = with pkgs; [dunst fastfetch grim newsboat quickshell slurp swaylock tmux tmuxifier wl-clipboard];
+  home.packages = with pkgs; [dunst fastfetch grim hyprmon newsboat quickshell slurp swaylock tmux tmuxifier wl-clipboard];
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
@@ -302,6 +325,7 @@ in {
         force = true;
       };
     }
+    // hyprMonitorsXdg
     // kvantumConfigFiles;
 
   # Merge: ./desktop/applications/*.desktop plus kitty override (absolute Exec for Plasma shortcuts).
