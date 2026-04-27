@@ -41,6 +41,9 @@ in {
     (import (home-manager-src + "/nixos"))
   ];
 
+  # Required for Stylix GTK theming via Home Manager (`gtk` target).
+  programs.dconf.enable = true;
+
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
@@ -224,7 +227,6 @@ in {
       sassc
       gnome-themes-extra
       gtk-engine-murrine
-      tokyonight-gtk-theme
     ]);
 
   environment = {

@@ -40,7 +40,7 @@ Stock **`nix search`** / **`nix repl`** are enough to start. The plan also menti
 
 **Practical combo:** **`nix search`** or **`nix-search`** for finding packages + your **rebuild script** for day-to-day switches. Add **`nixos-cli`** when you want its TUIs / unified UX — it is optional.
 
-**Shell alias `ns`:** If you use **`nix-search-cli`**, add **`ns = "nix-search"`** to **`programs.zsh.shellAliases`** (this repo: [`home/programs/zsh.nix`](../../home/programs/zsh.nix)). Example fragment: [snippets/zsh-ns-alias.nix](./snippets/zsh-ns-alias.nix). Then **`ns firefox`** runs **`nix-search firefox`** (open a **new zsh** session after **`nixos-rebuild switch`**).
+**Shell alias `ns`:** If you use **`nix-search-cli`**, add **`ns = "nix-search"`** to **`programs.zsh.shellAliases`** (this repo: [`home/programs/zsh.nix`](../../../home/programs/zsh.nix)). Example fragment: [snippets/zsh-ns-alias.nix](./snippets/zsh-ns-alias.nix). Then **`ns firefox`** runs **`nix-search firefox`** (open a **new zsh** session after **`nixos-rebuild switch`**).
 
 **Still seeing bash?** Check **`getent passwd wiz`** — if the shell is **zsh** but **`echo $SHELL`** is **bash**, your **desktop session** (e.g. Plasma) may still export **`SHELL=bash`**. Add **`environment.variables.SHELL = "${pkgs.zsh}/bin/zsh";`** (see snippet), **`sudo nixos-rebuild switch`**, then **log out of the desktop** (or **reboot**) so Konsole/Kitty pick up **zsh**.
 
@@ -84,7 +84,7 @@ Use the repository-provided helper for a clean, safe flow. It opens your editor 
 Install:
 
 ```bash
-sudo install -m 0755 ./os-rebuild.sh /usr/local/bin/os-rebuild
+sudo install -m 0755 ../os-rebuild.sh /usr/local/bin/os-rebuild
 ```
 
 Defaults (override via env):
@@ -153,7 +153,7 @@ notify-send -e "NixOS Rebuilt OK!" --icon=software-update-available
 
 **Polish ideas (optional):** configurable `NIXOS_CONFIG` / `CONFIG_DIR`; trap to `popd` on error; make grep step only surface stderr from nixos-rebuild without hiding success; pin `nixos-switch.log` in `.gitignore` if you do not want logs in the repo.
 
-**On Theseus:** canonical config is **`/etc/nixos/configuration.nix`** (classic layout, no `-I` needed for a normal `nixos-rebuild switch`). For the same workflow with logging, formatting, and optional git commit, use the **single** helper at **[`os-rebuild.sh`](./os-rebuild.sh)** in this directory (or Stellarium `scripts/os-rebuild.sh` if your checkout includes it) — install as `os-rebuild`; set **`NIXOS_CONFIG=/etc/nixos/configuration.nix`** if that is your file. Use the longer **git + alejandra** block above only if you want a **literal inline** example; behavior-wise **`os-rebuild`** supersedes it.
+**On Theseus:** canonical config is **`/etc/nixos/configuration.nix`** (classic layout, no `-I` needed for a normal `nixos-rebuild switch`). For the same workflow with logging, formatting, and optional git commit, use the helper at **[`../os-rebuild.sh`](../os-rebuild.sh)** (parent of `archive/`; or Stellarium `scripts/os-rebuild.sh` if your checkout includes it) — install as `os-rebuild`; set **`NIXOS_CONFIG=/etc/nixos/configuration.nix`** if that is your file. Use the longer **git + alejandra** block above only if you want a **literal inline** example; behavior-wise **`os-rebuild`** supersedes it.
 
 ## Framework-specific baseline (optional but useful early)
 
@@ -181,7 +181,7 @@ notify-send -e "NixOS Rebuilt OK!" --icon=software-update-available
 | **Repl** | `nix repl -f '<nixpkgs>'` |
 | **SHELL** | **`environment.variables`** + **`sessionVariables`** + **`~/.config/environment.d/99-zsh-shell.conf`** so **`$SHELL`** is zsh under Plasma |
 
-**Rebuild helper (single copy in this project folder):** [`os-rebuild.sh`](./os-rebuild.sh) — install to **`/usr/local/bin/os-rebuild`** (see [Rebuild helper: `os-rebuild`](#rebuild-helper-os-rebuild-guided-ux) above). For **`/etc/nixos`** only, set **`NIXOS_CONFIG=/etc/nixos/configuration.nix`**.
+**Rebuild helper:** [`../os-rebuild.sh`](../os-rebuild.sh) — install to **`/usr/local/bin/os-rebuild`** (see [Rebuild helper: `os-rebuild`](#rebuild-helper-os-rebuild-guided-ux) above). For **`/etc/nixos`** only, set **`NIXOS_CONFIG=/etc/nixos/configuration.nix`**.
 
 ### Config repo git (`NIXOS_DIR`)
 

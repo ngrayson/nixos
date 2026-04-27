@@ -4,12 +4,12 @@
 
 ## This repo (`~/.config/nixos`)
 
-**NixOS module** integration: [`common/system.nix`](../../common/system.nix) sets `home-manager.users.wiz = import ../home.nix`.
+**NixOS module** integration: [`common/system.nix`](../../../common/system.nix) sets `home-manager.users.wiz = import ../home.nix`.
 
-- Root **[`home.nix`](../../home.nix)** — Home Manager entry only: `imports = [ ./home ];`.
-- **[`home/default.nix`](../../home/default.nix)** — imports topic modules: [`session.nix`](../../home/session.nix), [`programs/`](../../home/programs/), [`wayland/hyprland.nix`](../../home/wayland/hyprland.nix), [`services/hypridle.nix`](../../home/services/hypridle.nix), [`xdg/`](../../home/xdg/), [`hypr/scripts.nix`](../../home/hypr/scripts.nix), [`lib/`](../../home/lib/), etc.
+- Root **[`home.nix`](../../../home.nix)** — Home Manager entry only: `imports = [ ./home ];`.
+- **[`home/default.nix`](../../../home/default.nix)** — imports topic modules: [`session.nix`](../../../home/session.nix), [`programs/`](../../../home/programs/), [`wayland/hyprland.nix`](../../../home/wayland/hyprland.nix), [`services/hypridle.nix`](../../../home/services/hypridle.nix), [`xdg/`](../../../home/xdg/), [`hypr/scripts.nix`](../../../home/hypr/scripts.nix), [`lib/`](../../../home/lib/), etc.
 
-**Historical roadmap text:** The original Framework plan assumed a *minimal* `home.nix` scaffold and **Phase D** migration later. On this machine, **Phase D–style** content is **already** under **`./home/`** — see [LOCKED — live repo note](./LOCKED.md#live-repo-note-2026-04) and **[`MIGRATION.md`](../../MIGRATION.md)**.
+**Historical roadmap text:** The original Framework plan assumed a *minimal* `home.nix` scaffold and **Phase D** migration later. On this machine, **Phase D–style** content is **already** under **`./home/`** — see [LOCKED — live repo note](./LOCKED.md#live-repo-note-2026-04) and **[`MIGRATION.md`](../../../MIGRATION.md)**.
 
 ## Concepts (read once, check when understood)
 
@@ -22,7 +22,7 @@
 **This repo:** **NixOS module** only — no standalone `~/.config/home-manager/home.nix` required.
 
 - [ ] **Standalone Home Manager** — install the `home-manager` tool; `~/.config/home-manager/home.nix` (typical). **Optional** for experiments on other machines.
-- [x] **NixOS module** — Home Manager declared in [`common/system.nix`](../../common/system.nix) so `nixos-rebuild` also applies user config.
+- [x] **NixOS module** — Home Manager declared in [`common/system.nix`](../../../common/system.nix) so `nixos-rebuild` also applies user config.
 
 ## Chezmoi dotfiles (existing base)
 
@@ -32,15 +32,15 @@ You already maintain **[ngrayson/debian-dotfiles](https://github.com/ngrayson/de
 
 - [ ] **Inventory** — list which templates/data apply unchanged vs need a **NixOS** (or distro-agnostic) branch in `.chezmoi.toml` / template conditions.
 - [ ] **Path and package assumptions** — replace FHS-only paths or `apt`-specific bits with NixOS equivalents where needed.
-- [ ] **Ownership list** — for each managed path, note **chezmoi** vs **HM**; update when you move a file from one to the other. **Live table:** [MIGRATION.md](../../MIGRATION.md#home-manager-path-ownership-audit-tawa--confignixos).
+- [ ] **Ownership list** — for each managed path, note **chezmoi** vs **HM**; update when you move a file from one to the other. **Live table:** [MIGRATION.md](../../../MIGRATION.md#home-manager-path-ownership-audit-tawa--confignixos).
 - [ ] **Track parity** — keep Debian/Omarchy/NixOS templates in sync enough that you are not maintaining three unrelated configs.
 
 ## First useful Home Manager goals (reference)
 
 **This repo status:** Many items below are **done** under **`./home/`** (Kitty via `xdg.configFile` in `home/xdg/config.nix`, not `programs.kitty`).
 
-- [x] **Terminal** — Kitty config from repo [`kitty/`](../../kitty/) via **`xdg.configFile`** (`home/xdg/config.nix`); **`kitty`** also in **`environment.systemPackages`** for Plasma launchers.
-- [x] **Fastfetch** — **`xdg.configFile`** from [`fastfetch/`](../../fastfetch/) in **`home/xdg/config.nix`**.
+- [x] **Terminal** — Kitty config from repo [`kitty/`](../../../kitty/) via **`xdg.configFile`** (`home/xdg/config.nix`); **`kitty`** also in **`environment.systemPackages`** for Plasma launchers.
+- [x] **Fastfetch** — **`xdg.configFile`** from [`fastfetch/`](../../../fastfetch/) in **`home/xdg/config.nix`**.
 - [x] **zsh** — **`programs.zsh`** in **`home/programs/zsh.nix`**; login shell via `users.users.wiz.shell` in NixOS.
 - [x] **Git** — **`programs.git`** in **`home/programs/git.nix`**.
 - [ ] **Editor** — minimal `programs.neovim` or link to your config (optional).

@@ -1,6 +1,7 @@
 # Home Manager module bundle (imported from ../home.nix). Per-topic files live under this directory.
 {...}: {
   imports = [
+    ./stylix.nix
     ./session.nix
     ./programs/zsh.nix
     ./programs/git.nix

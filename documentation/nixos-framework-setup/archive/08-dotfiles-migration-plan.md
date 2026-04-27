@@ -123,4 +123,4 @@ After removals, **re-decide** whether **`~/.local/bin`** stays chezmoi-managed o
 
 ## Home Manager
 
-**Live `~/.config/nixos`:** User config is already in **Home Manager** under **[`./home/`](../../home/)** (see [03 — Home Manager](./03-home-manager.md), [LOCKED — live repo note](./LOCKED.md#live-repo-note-2026-04), [MIGRATION.md](../../MIGRATION.md)). On other machines or fresh experiments, you can still use standalone **`home-manager switch`** with `~/.config/home-manager/home.nix` if you want a separate workflow.
+**Live `~/.config/nixos`:** User config is already in **Home Manager** under **[`./home/`](../../../home/)** (see [03 — Home Manager](./03-home-manager.md), [LOCKED — live repo note](./LOCKED.md#live-repo-note-2026-04), [MIGRATION.md](../../../MIGRATION.md)). On other machines or fresh experiments, you can still use standalone **`home-manager switch`** with `~/.config/home-manager/home.nix` if you want a separate workflow.

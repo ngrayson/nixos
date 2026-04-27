@@ -10,11 +10,11 @@ Use any category folder that matches how you organize **`projects/`** (for examp
 
 Create or clone the repo locally, keep the markdown and snippets there, and **`git push`** to your own remote.
 
-## Relationship to this wrapper
+## Relationship to `~/.config/nixos` (this archive)
 
-- **`os-rebuild.sh`** — lives **beside** these markdown files in **`projects/nixos-framework-setup/`**; you can `sudo install` it per Stellarium [quickstart](../../documentation/quickstart.md) (paths may be `scripts/os-rebuild.sh` at repo root in some checkouts). Behavior: **`NIXOS_CONFIG`** / **`NIXOS_DIR`**, `nixos-rebuild switch`, optional git diff/commit.
-- **`~/.config/nixos`** — your **live system config** is a **separate git repo**. To version this roadmap with it, **copy the full `nixos-framework-setup/` tree** into that repo (see [README — How this relates](./README.md#how-this-relates-to-the-stellarium-wrapper-repo)); keep Stellarium’s copy in sync by hand if you use both.
+- **`os-rebuild.sh`** — the copy used on **Tawa** lives next to this **`archive/`** folder: **[`../os-rebuild.sh`](../os-rebuild.sh)**. Behavior: **`NIXOS_CONFIG`** / **`NIXOS_DIR`**, `nixos-rebuild switch`, optional git diff/commit.
+- **Roadmap markdown** — these files are **archived**; current docs are **[`../../../MIGRATION.md`](../../../MIGRATION.md)** and **[`../../../home/`](../../../home/)**. See **[`../README.md`](../README.md)** (folder stub) and **[`README.md`](./README.md)** (this archive).
 
-## Registry
+## Registry (Stellarium wrapper)
 
-When you want this initiative listed alongside other work, add it to **`registry/projects.json`** using the normal [registry process](../processes/registry-process.md) (or edit the registry by hand with a suitable **`type`** / **`localPath`** if your tooling allows). The wrapper **never** commits project files under **`projects/`**; the registry only stores **metadata** pointing at your local path and remote.
+When this content lived under Stellarium’s **`projects/`** tree, you could register it in **`registry/projects.json`** per that repo’s process. The wrapper **never** commits project files under **`projects/`** by default; the registry only stores **metadata** pointing at your local path and remote.
