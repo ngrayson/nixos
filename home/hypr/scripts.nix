@@ -7,7 +7,6 @@
   quickshellBundled = pkgs.runCommand "quickshell-hm-config" {} ''
     mkdir -p $out/pam
     cp ${../../quickshell/shell.qml} $out/shell.qml
-    cp ${../../quickshell/WallustColors.qml} $out/WallustColors.qml
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
     cp ${../../quickshell/pam/password.conf} $out/pam/password.conf

@@ -81,8 +81,6 @@ in {
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
       ];
-      # Propagate to exec-once (Albert, Quickshell) and app launches — Qt6 matches qt6ct + wallust.
-      env = lib.optionals config.theme.dynamic ["QT_QPA_PLATFORMTHEME,qt6ct"];
       "exec-once" = [
         "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
@@ -90,16 +88,12 @@ in {
         "${lib.getExe pkgs.quickshell} -d -p ${hs.quickshellConfigDir}"
       ];
     };
-    extraConfig =
-      (
-        if hx.hyprMonitorsConf == null
-        then ""
-        else ''
-          source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
-        ''
-      )
-      + lib.optionalString config.theme.dynamic ''
-        source = ${config.home.homeDirectory}/.config/hypr/wallust/colors.conf
-      '';
+    extraConfig = (
+      if hx.hyprMonitorsConf == null
+      then ""
+      else ''
+        source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
+      ''
+    );
   };
 }

@@ -1,6 +1,0 @@
-/* wallust */
-@define-color theme_bg_color #{{background | strip}};
-@define-color theme_fg_color #{{foreground | strip}};
-@define-color accent_color #{{color4 | strip}};
-window { background-color: @theme_bg_color; color: @theme_fg_color; }
-headerbar { background-color: @theme_bg_color; color: @theme_fg_color; }

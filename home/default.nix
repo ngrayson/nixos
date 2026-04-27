@@ -1,7 +1,6 @@
 # Home Manager module bundle (imported from ../home.nix). Per-topic files live under this directory.
 {...}: {
   imports = [
-    ./theme-dynamic.nix
     ./stylix.nix
     ./session.nix
     ./programs/albert.nix
