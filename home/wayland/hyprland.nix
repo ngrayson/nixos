@@ -24,7 +24,7 @@ in {
         border_size = 2;
       };
       decoration = {
-        rounding = 60;
+        rounding = 40;
         rounding_power = 1.2;
       };
       input = {
