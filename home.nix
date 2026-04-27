@@ -135,23 +135,46 @@ in {
     };
   };
 
-  # Apply multi-monitor friendly KWin defaults on activation (idempotent kwriteconfig6).
+  # X11 i3 session config (used when you choose “i3” at SDDM; independent of Plasma / Krohnkite).
+  xsession.windowManager.i3 = {
+    enable = true;
+    package = pkgs.i3;
+    config = {
+      modifier = "Mod4";
+      terminal = "${pkgs.kitty}/bin/kitty";
+      menu = "${pkgs.dmenu}/bin/dmenu_run";
+      keybindings = lib.mkOptionDefault {
+        "Mod4+h" = "focus left";
+        "Mod4+j" = "focus down";
+        "Mod4+k" = "focus up";
+        "Mod4+l" = "focus right";
+        "Mod4+Shift+h" = "move left";
+        "Mod4+Shift+j" = "move down";
+        "Mod4+Shift+k" = "move up";
+        "Mod4+Shift+l" = "move right";
+      };
+    };
+    extraConfig = ''
+      # Sticky workspaces → outputs (names from `xrandr`; edit if you replug monitors).
+      # Use `workspace N output "…"` here; `workspace number N` is only for bindsym commands.
+      workspace 1 output "DP-3"
+      workspace 2 output "HDMI-A-1"
+      workspace 3 output "DP-1"
+
+      # Optional: after you run `arandr` once, `exec ~/.screenlayout/mylayout.sh` here to match your portrait/landscape geometry.
+    '';
+  };
+
+  # Multi-monitor KWin prefs + Krohnkite option (Plasma session only).
   home.activation.plasmaMultiMonitor = lib.hm.dag.entryAfter ["writeBoundary"] ''
     kwrite="${pkgs.kdePackages.kconfig}/bin/kwriteconfig6"
     kwinrc="${config.home.homeDirectory}/.config/kwinrc"
-    kgs="${config.home.homeDirectory}/.config/kglobalshortcutsrc"
     if [ -f "$kwinrc" ]; then
       $DRY_RUN_CMD "$kwrite" --file "$kwinrc" --group Windows --key SeparateScreenFocus --type bool true
       $DRY_RUN_CMD "$kwrite" --file "$kwinrc" --group TabBox --key MultiScreenMode --type int 2
       if $DRY_RUN_CMD grep -q '^\[Script-krohnkite\]' "$kwinrc"; then
         $DRY_RUN_CMD "$kwrite" --file "$kwinrc" --group Script-krohnkite --key layoutPerDesktop --type bool true
       fi
-    fi
-    if [ -f "$kgs" ]; then
-      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Switch to Screen to the Left" "Meta+Ctrl+Alt+Left,Meta+Ctrl+Alt+Left,Switch to Screen to the Left"
-      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Switch to Screen to the Right" "Meta+Ctrl+Alt+Right,Meta+Ctrl+Alt+Right,Switch to Screen to the Right"
-      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Window One Screen to the Left" "Meta+Alt+Shift+Left,Meta+Alt+Shift+Left,Window One Screen to the Left"
-      $DRY_RUN_CMD "$kwrite" --file "$kgs" --group kwin --key "Window One Screen to the Right" "Meta+Alt+Shift+Right,Meta+Alt+Shift+Right,Window One Screen to the Right"
     fi
   '';
 
@@ -166,7 +189,7 @@ in {
 
   # User-only CLIs (migrated from `environment.systemPackages` over time)
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
-  home.packages = with pkgs; [fastfetch newsboat tmux tmuxifier];
+  home.packages = with pkgs; [dmenu fastfetch newsboat tmux tmuxifier];
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation

@@ -133,14 +133,8 @@ in {
   };
   services.desktopManager.plasma6.enable = true;
 
-  # SDDM (X11 greeter): single primary display during login — matches connector names in
-  # ~/.config/kwinoutputconfig.json (DP-1 / HDMI-A-1 / DP-3). Plasma restores the full layout after login.
-  # Laptop / different dock: comment this out or adjust outputs.
-  services.xserver.displayManager.setupCommands = ''
-    ${pkgs.xorg.xrandr}/bin/xrandr --output HDMI-A-1 --primary --auto || true
-    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-1 --off || true
-    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-3 --off || true
-  '';
+  # X11 tiling WM — pick “i3” at SDDM for an i3/GlazeWM-style session (Plasma stays available as “Plasma (Wayland)” / etc.).
+  services.xserver.windowManager.i3.enable = true;
 
   # Configure keymap in X11
   services.xserver.xkb = {
