@@ -16,20 +16,37 @@
     })
     tmplNames
   );
-  # Qt/KDE/Quickshell steps need wallust output on disk; wallust-run invokes this after `wallust run`.
-  applyPlasmaKde = ''
-    _PA=${pkgs.kdePackages.plasma-workspace}/bin/plasma-apply-colorscheme
+  # `pkill -x` misses some binaries; relaunch on Wayland via Hypr (not bare nohup).
+  quickshellRelaunch = pkgs.writeShellScript "wallust-quickshell" ''
+    set -euo pipefail
+    export QT_QPA_PLATFORMTHEME=qt6ct
+    : "''${WAYLAND_DISPLAY:=}"
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    exec ${lib.getExe pkgs.quickshell} -d -p "''${HOME}/.config/quickshell"
+  '';
+  # Hyprland: no plasmashell/dbus; plasma-apply-colorscheme is best-effort only.
+  applyKdeColors = ''
     _KW=${pkgs.kdePackages.kconfig}/bin/kwriteconfig6
-    mkdir -p "''${HOME}/.local/share/color-schemes"
+    mkdir -p "''${HOME}/.local/share/color-schemes" "''${HOME}/.config"
     if [ -f "''${HOME}/.local/share/color-schemes/wallust.colors" ]; then
-      "$_PA" wallust 2>/dev/null || true
+      ${pkgs.kdePackages.plasma-workspace}/bin/plasma-apply-colorscheme wallust 2>/dev/null || true
+      # Both groups are read by KF6 apps; UiSettings is often what non-Plasma sessions miss.
       "$_KW" --file "''${HOME}/.config/kdeglobals" --group General --key ColorScheme --notify wallust 2>/dev/null || true
+      "$_KW" --file "''${HOME}/.config/kdeglobals" --group UiSettings --key ColorScheme --notify wallust 2>/dev/null || true
+      # Encourage a clean read of scheme files on next launch (no kded in pure Hyprland).
+      rm -rf "''${HOME}"/.cache/kcolor* 2>/dev/null || true
+      rm -rf "''${HOME}"/.cache/plasma* 2>/dev/null || true
+      rm -rf "''${HOME}"/.cache/kde* 2>/dev/null || true
     fi
   '';
   theme-reload = pkgs.writeShellScriptBin "theme-reload" (''
       set -euo pipefail
       export PATH="${lib.makeBinPath [pkgs.hyprland pkgs.albert]}:$PATH"
       export QT_QPA_PLATFORMTHEME=qt6ct
+      : "''${WAYLAND_DISPLAY:=}"
+      : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+      export WAYLAND_DISPLAY
+      export XDG_RUNTIME_DIR
       hyprctl reload 2>/dev/null || true
       ${pkgs.procps}/bin/pkill -SIGUSR1 kitty 2>/dev/null || true
       if command -v gsettings >/dev/null; then
@@ -39,17 +56,23 @@
         gsettings set org.gnome.desktop.interface gtk-theme "$raw" 2>/dev/null || true
       fi
     ''
-    + lib.optionalString config.theme.dynamic (applyPlasmaKde
+    + lib.optionalString config.theme.dynamic (applyKdeColors
       + ''
         touch "''${HOME}/.config/qt6ct/qt6ct.conf" 2>/dev/null || true
-        ${pkgs.procps}/bin/pkill -x quickshell 2>/dev/null || true
-        sleep 0.25
-        nohup ${lib.getExe pkgs.quickshell} -d -p "''${HOME}/.config/quickshell" > /dev/null 2>&1 &
+        ${pkgs.procps}/bin/pkill -f "quickshell" 2>/dev/null || true
+        for _w in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+          ${pkgs.procps}/bin/pgrep -f quickshell >/dev/null 2>&1 && sleep 0.1 || break
+        done
+        if command -v hyprctl >/dev/null 2>&1 && ${pkgs.hyprland}/bin/hyprctl activeworkspace >/dev/null 2>&1; then
+          ${pkgs.hyprland}/bin/hyprctl dispatch exec ${quickshellRelaunch} 2>/dev/null || { nohup ${quickshellRelaunch} >/dev/null 2>&1 & }
+        else
+          nohup ${quickshellRelaunch} >/dev/null 2>&1 &
+        fi
       '')
     + ''
       ${pkgs.procps}/bin/pkill albert 2>/dev/null || true
       sleep 0.1
-      nohup env QT_QPA_PLATFORMTHEME=qt6ct ${lib.getExe pkgs.albert} > /dev/null 2>&1 &
+      nohup env QT_QPA_PLATFORMTHEME=qt6ct ${lib.getExe pkgs.albert} >/dev/null 2>&1 &
     '');
   wallust-run = pkgs.writeShellScriptBin "wallust-run" ''
     set -euo pipefail
@@ -108,6 +131,9 @@ in {
       home.sessionVariables = {
         QT_QPA_PLATFORMTHEME = "qt6ct";
       };
+
+      # So Nix-wrapped Qt/KDE apps resolve ~/.local/share/color-schemes/wallust.colors
+      xdg.systemDirs.data = ["${config.home.homeDirectory}/.local/share"];
 
       # Fusion + custom palette; wallust writes ~/.config/qt6ct/colors/wallust.conf
       xdg.configFile = {
