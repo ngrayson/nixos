@@ -24,8 +24,8 @@ in {
         border_size = 2;
       };
       decoration = {
-        rounding = 40;
-        rounding_power = 1.6;
+        rounding = 25;
+        rounding_power = 1.2;
       };
       input = {
         kb_layout = "us";
