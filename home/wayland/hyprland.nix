@@ -19,12 +19,13 @@ in {
     settings = {
       "$mod" = "SUPER";
       general = {
-        gaps_in = 4;
-        gaps_out = 8;
+        gaps_in = 10;
+        gaps_out = 15;
         border_size = 2;
       };
       decoration = {
-        rounding = 3;
+        rounding = 80;
+        rounding_power = 3;
       };
       input = {
         kb_layout = "us";
