@@ -96,21 +96,27 @@
   '';
 
   # `dispatch dpms off` alone often skips an output (commonly HDMI). Hyprland: `dpms off <monitor>`.
+  # `-i 0`: hypridle/systemd often lack HYPRLAND_INSTANCE_SIGNATURE; plain hyprctl then no-ops.
   hyprDpmsAllOff = pkgs.writeShellScriptBin "hypr-dpms-all-off" ''
     set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
     J="${lib.getExe pkgs.jq}"
-    "$H" dispatch dpms off || true
+    "$H" -i 0 dispatch dpms off || true
     while IFS= read -r name; do
       [[ -n "$name" ]] || continue
-      "$H" dispatch dpms off "$name" || true
-    done < <("$H" monitors -j | "$J" -r '.[].name')
+      "$H" -i 0 dispatch dpms off "$name" || true
+    done < <("$H" -i 0 monitors -j | "$J" -r '.[].name')
   '';
 
-  # Per-monitor `dpms on <name>` can leave DP heads black; global `dpms on` restores all (unlike `off`, where HDMI often needs per-output).
+  # Global `dpms on` only (per-output `on` can strand DP). Second call after a beat helps some DP sinks.
   hyprDpmsAllOn = pkgs.writeShellScriptBin "hypr-dpms-all-on" ''
     set -euo pipefail
-    "${pkgs.hyprland}/bin/hyprctl" dispatch dpms on || true
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    H="${pkgs.hyprland}/bin/hyprctl"
+    "$H" -i 0 dispatch dpms on || true
+    sleep 0.5
+    "$H" -i 0 dispatch dpms on || true
   '';
 in {
   home.stateVersion = "25.11";
