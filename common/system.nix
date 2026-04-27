@@ -101,7 +101,12 @@ in {
     CursorSize = 24;
   };
   services.desktopManager.plasma6.enable = true;
-  services.displayManager.defaultSession = "plasma";
+  # Hyprland (Wayland) default; KDE still available as plasma / plasmax11 at SDDM.
+  programs.hyprland.enable = true;
+  services.displayManager.defaultSession = "hyprland";
+
+  # Prefer Hyprland for screencast/Wayland; GTK + KDE portals stay available (Plasma still installed).
+  xdg.portal.config.common.default = ["hyprland" "gtk" "kde"];
 
   services.xserver.xkb = {
     layout = "us";

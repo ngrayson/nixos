@@ -135,6 +135,85 @@ in {
     };
   };
 
+  # Hyprland: enable NixOS `programs.hyprland` in `common/system.nix` (session + portals).
+  # `package` / `portalPackage` = null so the system module owns those packages.
+  wayland.windowManager.hyprland = {
+    enable = true;
+    package = null;
+    portalPackage = null;
+    systemd.enable = true;
+    xwayland.enable = true;
+    settings = {
+      "$mod" = "SUPER";
+      general = {
+        gaps_in = 4;
+        gaps_out = 8;
+        border_size = 2;
+      };
+      decoration = {
+        rounding = 8;
+      };
+      input = {
+        kb_layout = "us";
+        follow_mouse = 1;
+      };
+      bind =
+        [
+          "$mod, Return, exec, ${pkgs.kitty}/bin/kitty"
+          "$mod, Q, killactive,"
+          "$mod, M, exit,"
+          "$mod, Space, exec, ${lib.getExe pkgs.albert} toggle"
+          "$mod, L, exec, ${lib.getExe pkgs.swaylock}"
+          "$mod, h, movefocus, l"
+          "$mod, j, movefocus, d"
+          "$mod, k, movefocus, u"
+          "$mod, l, movefocus, r"
+          "$mod SHIFT, h, movewindow, l"
+          "$mod SHIFT, j, movewindow, d"
+          "$mod SHIFT, k, movewindow, u"
+          "$mod SHIFT, l, movewindow, r"
+          "$mod, 1, workspace, 1"
+          "$mod, 2, workspace, 2"
+          "$mod, 3, workspace, 3"
+          "$mod, 4, workspace, 4"
+          "$mod, 5, workspace, 5"
+          "$mod, 6, workspace, 6"
+          "$mod, 7, workspace, 7"
+          "$mod, 8, workspace, 8"
+          "$mod, 9, workspace, 9"
+          "$mod SHIFT, 1, movetoworkspace, 1"
+          "$mod SHIFT, 2, movetoworkspace, 2"
+          "$mod SHIFT, 3, movetoworkspace, 3"
+          "$mod SHIFT, 4, movetoworkspace, 4"
+          "$mod SHIFT, 5, movetoworkspace, 5"
+          "$mod SHIFT, 6, movetoworkspace, 6"
+          "$mod SHIFT, 7, movetoworkspace, 7"
+          "$mod SHIFT, 8, movetoworkspace, 8"
+          "$mod SHIFT, 9, movetoworkspace, 9"
+          "$mod, mouse_down, workspace, e+1"
+          "$mod, mouse_up, workspace, e-1"
+        ]
+        ++ [
+          "$mod SHIFT, Space, togglefloating,"
+          "$mod, F, fullscreen, 0"
+        ];
+      bindm = [
+        "$mod, mouse:272, movewindow"
+        "$mod, mouse:273, resizewindow"
+      ];
+      "exec-once" = [
+        "${lib.getExe pkgs.dunst}"
+        "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
+      ];
+    };
+    extraConfig = ''
+      # Default workspaces per monitor (names from `hyprctl monitors`; edit if cabling changes).
+      workspace = 1, monitor:DP-3
+      workspace = 2, monitor:HDMI-A-1
+      workspace = 3, monitor:DP-1
+    '';
+  };
+
   # Multi-monitor KWin prefs + Krohnkite option (Plasma session only).
   home.activation.plasmaMultiMonitor = lib.hm.dag.entryAfter ["writeBoundary"] ''
     kwrite="${pkgs.kdePackages.kconfig}/bin/kwriteconfig6"
@@ -159,7 +238,7 @@ in {
 
   # User-only CLIs (migrated from `environment.systemPackages` over time)
   # `kitty` stays in `systemPackages` so Plasma / minimal PATH sees it; these are for interactive user `PATH` only
-  home.packages = with pkgs; [fastfetch newsboat tmux tmuxifier];
+  home.packages = with pkgs; [dunst fastfetch newsboat swaylock tmux tmuxifier wl-clipboard];
 
   # Kitty + fastfetch + Kvantum: sources in this repo — xdg, not `programs.kitty` / `programs.fastfetch`, so we do not get second generated configs
   # Kvantum: per-host under `./kvantum/<hostname>/` (theme + `kvantum.kvconfig`); `force` overwrites on activation
