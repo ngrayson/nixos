@@ -11,18 +11,28 @@
 
   networking.hostName = "Tawa";
 
-  # SDDM uses the X11 greeter unless `services.displayManager.sddm.wayland.enable` is set.
-  # Turn off side outputs so the Breeze greeter only appears on the center panel (names must
-  # match `xrandr` / `hypr/Tawa/monitors.conf`).
+  # Plasma 6 sets SDDM to the Wayland greeter (KWin) by default. That path never runs
+  # `services.xserver.displayManager.setupCommands`, so xrandr cannot shrink the login to one output.
+  services.displayManager.sddm.wayland.enable = lib.mkForce false;
+
+  # SDDM X11 greeter: turn off side outputs so Breeze only appears on the center panel.
+  # Connector names must match `xrandr` (use a TTY/login session: `DISPLAY=:0 xrandr -q`).
   services.xserver.displayManager.setupCommands = lib.mkAfter ''
     XRANDR=${pkgs.xorg.xrandr}/bin/xrandr
-    QUERY="$("$XRANDR" --query 2>/dev/null)" || exit 0
-    for o in DP-3 DP-1; do
-      echo "$QUERY" | ${pkgs.gnugrep}/bin/grep -q "^$o connected" && "$XRANDR" --output "$o" --off || true
-    done
-    if echo "$QUERY" | ${pkgs.gnugrep}/bin/grep -q "^HDMI-A-1 connected"; then
-      "$XRANDR" --output HDMI-A-1 --auto --primary || true
-    fi
+    LOG=/tmp/sddm-xsetup-xrandr.log
+    {
+      echo "--- $(date)"
+      "$XRANDR" --query || true
+      QUERY="$("$XRANDR" --query 2>/dev/null)" || exit 0
+      for o in DP-3 DP-1; do
+        echo "$QUERY" | ${pkgs.gnugrep}/bin/grep -q "^$o connected" && "$XRANDR" --output "$o" --off || true
+      done
+      if echo "$QUERY" | ${pkgs.gnugrep}/bin/grep -q "^HDMI-A-1 connected"; then
+        "$XRANDR" --output HDMI-A-1 --auto --primary || true
+      fi
+      echo "--- after ---"
+      "$XRANDR" --query || true
+    } >>"$LOG" 2>&1
   '';
 
   # boot.initrd.luks.devices."luks-…".device = "/dev/disk/by-uuid/…";
