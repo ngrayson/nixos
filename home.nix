@@ -74,12 +74,16 @@
     ${lib.getExe pkgs.grim} -g "$(${lib.getExe pkgs.slurp})" - | ${pkgs.wl-clipboard}/bin/wl-copy --type image
   '';
 
+  # Same `-p` path as Hyprland `exec-once` so IPC matches the running instance (HM symlinks
+  # shell.qml into the store; `ipc -c default` targets a store id that often differs / is stale).
+  quickshellShellQml = "${config.home.homeDirectory}/.config/quickshell/shell.qml";
+
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
     set -euo pipefail
-    # Hyprland `exec` may omit some env; IPC socket lives under XDG_RUNTIME_DIR.
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    QS="''${HOME}/.config/quickshell/shell.qml"
     exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
-      ${lib.getExe pkgs.quickshell} ipc -c default -n call lock activate
+      ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
   '';
 in {
   home.stateVersion = "25.11";
@@ -251,7 +255,7 @@ in {
         "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
         "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
-        "${lib.getExe pkgs.quickshell} -d"
+        "${lib.getExe pkgs.quickshell} -d -p ${quickshellShellQml}"
       ];
     };
     extraConfig =

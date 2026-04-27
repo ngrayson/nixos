@@ -1,5 +1,5 @@
 // Quickshell: top bar (Hyprland workspaces + clock) + WlSessionLock (PAM password).
-// Lock: `quickshell ipc -n call lock activate` (see home.nix Hyprland bind).
+// Lock: `quickshell ipc -p ~/.config/quickshell/shell.qml -n call lock activate` (see `quickshell-lock`).
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
