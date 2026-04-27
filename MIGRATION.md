@@ -36,7 +36,7 @@ This repo is the source of truth for system configuration. Use this list when re
 
 A **vendored copy** of the Stellarium **NixOS on Framework** project may live in **`documentation/nixos-framework-setup/`** in this repository (full files, not symlinks, so clones stay portable). It is the **phased checklist** (LOCKED, audit, session, Home Manager, rice) — **documentation only**; it does not change `nixos-rebuild` by itself. If you also keep a copy under a Stellarium checkout (`projects/nixos-framework-setup/`, gitignored at the Stellarium root), **sync the trees manually** when you want them to match.
 
-**Home Manager note:** `home.nix` in this repo now holds **session env, kitty, git, zsh**, and more (see the migration log). Remaining roadmap work (optional rice, extra `xdg.*`) follows `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there (those docs still mention chezmoi historically; this repo no longer uses it).
+**Home Manager note:** Root [`home.nix`](./home.nix) imports **[`./home/`](./home/)** (session env, kitty, git, zsh, Hyprland, etc.; see the migration log). Remaining roadmap work (optional rice, extra `xdg.*`) follows `documentation/nixos-framework-setup/06-implementation-checklist.md` and `LOCKED.md` there (those docs still mention chezmoi historically; this repo no longer uses it).
 
 ### Home Manager path ownership (audit, Tawa / `~/.config/nixos`)
 
@@ -44,15 +44,15 @@ Use **one owner per path** — Home Manager for user config tracked in this repo
 
 | Path or topic | Current owner (typical) | Next HM / Nix step |
 |---------------|-------------------------|--------------------|
-| Session env (`EDITOR`, `TERMINAL`, …) | [`home.nix`](./home.nix) `home.sessionVariables` | Done (step 1; `GIT_CONFIG_SYSTEM` removed in step 4) |
-| `fastfetch` CLI | `home.packages` in [`home.nix`](./home.nix) | Done (step 2 — proof) |
-| User git config (`~/.config/git/config`) | [`programs.git`](./home.nix) in [`home.nix`](./home.nix) | **Done (step 4).** NixOS `programs.git` removed from `configuration.nix`. |
-| `~/.zshrc` (HM-generated) + zsh | [`programs.zsh`](./home.nix) in [`home.nix`](./home.nix) | **Done (step 5).** `zshconfig` / `ohmyzshconfig` → `micro ~/.config/nixos/home.nix`. |
+| Session env (`EDITOR`, `TERMINAL`, …) | [`home/session.nix`](./home/session.nix) (imported from [`home.nix`](./home.nix)) | Done (step 1; `GIT_CONFIG_SYSTEM` removed in step 4) |
+| `fastfetch` CLI | `home.packages` in [`home/session.nix`](./home/session.nix) | Done (step 2 — proof) |
+| User git config (`~/.config/git/config`) | [`home/programs/git.nix`](./home/programs/git.nix) | **Done (step 4).** NixOS `programs.git` removed from `configuration.nix`. |
+| `~/.zshrc` (HM-generated) + zsh | [`home/programs/zsh.nix`](./home/programs/zsh.nix) | **Done (step 5).** `zshconfig` / `ohmyzshconfig` → `micro ~/.config/nixos/home/default.nix`. |
 | `~/.config/kitty/kitty.conf` + `lilac-ash.conf` | HM `xdg.configFile` from [`kitty/`](./kitty/) in this repo; **`kitty` package in `environment.systemPackages`** (Plasma shortcuts need system `PATH`) | **Done (step 3).** |
 | `~/.config/fastfetch/config.jsonc` + logo | HM `xdg.configFile` from [`fastfetch/`](./fastfetch/) in this repo | **Done (step 6).** Theme logo path `~/.config/fastfetch/izar-tsp.gif`; you can remove stale `~/.config/izar-tsp.gif` after verify. |
 | `~/.config/obsidian` / `Cursor` / browser profiles | App defaults | Often stay imperative or app-managed |
 | `chezmoi` tool | *removed* | No longer in `environment.systemPackages`; use HM only. |
-| `tmux`, `tmuxifier`, `newsboat` | `home.packages` in [`home.nix`](./home.nix) | **Done (step 6).** Removed from `environment.systemPackages`. |
+| `tmux`, `tmuxifier`, `newsboat` | `home.packages` in [`home/session.nix`](./home/session.nix) | **Done (step 6).** Removed from `environment.systemPackages`. |
 | `~/.config/newsboat` (URLs) | Runtime / user | Still imperative unless you add `xdg` or HM later. |
 | `~/.local/share/applications/*.desktop` (custom) | [`desktop/applications/`](./desktop/applications/) → HM **`xdg.dataFile`** | Drop `*.desktop` in that dir; see [`README`](./desktop/applications/README.md). |
 | `~/.config/Kvantum/` (Qt style) | [`kvantum/<hostname>/`](./kvantum/README.md) → HM **`xdg.configFile`** | Per-host dir named like `networking.hostName`; see [`kvantum/README.md`](./kvantum/README.md). |
@@ -73,6 +73,7 @@ Iterative: **one** logical change per rebuild; **verify** before the next (see `
 - **2026-04-27 — `hosts/<hostname>/`:** Per-host **`networking.hostName`**, **`<nixos-hardware/...>`**, **LUKS**, **`boot.kernelParams`** live in **`hosts/<hostname>/host.nix`**; disk layout in **`hosts/<hostname>/hardware-configuration.nix`**; entry **`hosts/<hostname>/configuration.nix`**. Shared NixOS + HM pin in **[`common/system.nix`](./common/system.nix)**. Root [`configuration.nix`](./configuration.nix) imports **`./hosts/Tawa/configuration.nix`** for this desktop; other machines set **`NIXOS_CONFIG`** to their host entry (or change the root import on a branch).
 - **2026-04-28 — Custom `.desktop` files:** Each `*.desktop` in [`./desktop/applications/`](./desktop/applications/) is installed to **`~/.local/share/applications/`** via **`xdg.dataFile`** in `home.nix` (no need to list files in Nix; `readDir` picks them up). Rebuild: `sudo nixos-rebuild switch`.
 - **2026-04-29 — Kvantum (per host):** Theme + `kvantum.kvconfig` from [`./kvantum/<hostname>/`](./kvantum/README.md) (hostname = **`networking.hostName`**, e.g. **Tawa**) using **`nixosConfig.networking.hostName`** in `home.nix`. Rebuild: `sudo nixos-rebuild switch`. Add new `xdg.configFile` paths in `home.nix` if a host’s theme adds files not listed there yet.
+- **2026-04-26 — Modular Home Manager:** User config is split under **[`./home/`](./home/)** (e.g. `programs/`, `wayland/`, `xdg/`); root **[`home.nix`](./home.nix)** only re-exports `imports = [ ./home ];`. **`hyprctl` from hypridle** often has no `HYPRLAND_INSTANCE_SIGNATURE`; helper scripts use **`hyprctl -i 0`** so `dispatch dpms` works. Rebuild: `sudo nixos-rebuild switch`.
 
 ## Optional: per-machine Nix
 
