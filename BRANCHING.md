@@ -2,7 +2,7 @@
 
 | Branch | Purpose |
 |--------|---------|
-| **`main`** | Current machine: Framework (**Theseus**), `~/.config/nixos` — active config. |
+| **`main`** | Desktop **Tawa** (`hosts/Tawa/`) is the default root import; **Theseus** (`hosts/Theseus/`) is the Framework laptop entry — set **`NIXOS_CONFIG`** to that path on the laptop. |
 | **`legacy/previous-machine`** | Snapshot of **GitHub `main` before 2026-04** (prior NixOS install history). |
 
 Remote: **`https://github.com/ngrayson/nixos.git`** (`git remote rename nixos origin` if you prefer the usual name).

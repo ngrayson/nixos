@@ -5,7 +5,8 @@ set -euo pipefail
 # Requirements: sudo, $EDITOR set, nixos-rebuild. Optional: alejandra, git, notify-send.
 #
 # Defaults and env overrides:
-#   NIXOS_CONFIG       Path to configuration.nix (default: ~/.config/nixos/configuration.nix)
+#   NIXOS_CONFIG       Path to configuration.nix (default: ~/.config/nixos/configuration.nix;
+#                      for a non-default host use e.g. …/hosts/<hostname>/configuration.nix)
 #   NIXOS_DIR          Directory containing config (default: dirname of NIXOS_CONFIG)
 #   OS_REBUILD_LOG_DIR Where to store logs (default: ~/.cache/os-rebuild)
 #   OS_REBUILD_NO_PROMPT=1  Future non-interactive mode (currently unused; reserved)

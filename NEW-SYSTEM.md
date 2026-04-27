@@ -1,6 +1,6 @@
 # New system setup (short)
 
-This repo is the NixOS + [Home Manager](https://nix-community.github.io/home-manager/) config for user **`wiz`**. NixOS **25.11** and Home Manager **`release-25.11`** are assumed (see `configuration.nix`).
+This repo is the NixOS + [Home Manager](https://nix-community.github.io/home-manager/) config for user **`wiz`**. NixOS **25.11** and Home Manager **`release-25.11`** are assumed (see [`common/system.nix`](./common/system.nix)).
 
 ## 1. Install NixOS on the hardware
 
@@ -12,20 +12,21 @@ This repo is the NixOS + [Home Manager](https://nix-community.github.io/home-man
 
 If the live config is not `/etc/nixos`, use `NIXOS_CONFIG` or `-I nixos-config=…` (see [`BRANCHING.md`](./BRANCHING.md) if you use a non-default path).
 
-## 3. Machine-specific options: `hostname.nix`
+## 3. Machine-specific options: `hosts/<hostname>/`
 
-Edit **[`hostname.nix`](./hostname.nix)** (or swap the import in `configuration.nix` for another file) for **this** host:
+Under **`hosts/<hostname>/`** for **this** machine:
 
-- **`networking.hostName`**
-- **`imports`**: `<nixos-hardware/…>` profile, or remove if no match
-- **`boot.initrd.luks.devices`**: UUIDs and names must match **this** disk layout (see `hardware-configuration.nix` and any extra LUKS volumes, e.g. swap)
-- **`boot.kernelParams`**: e.g. drop `amd_pstate=active` on Intel
+- **`host.nix`**: **`networking.hostName`**, **`imports`** (`<nixos-hardware/…>`), **`boot.initrd.luks.devices`**, **`boot.kernelParams`**
+- **`hardware-configuration.nix`**: from **`nixos-generate-config`** for this host only
+- **`configuration.nix`**: imports **`../../common/system.nix`**, `./hardware-configuration.nix`, `./host.nix`
 
-Shared software and desktop stuff stay in **`configuration.nix`** and **`home.nix`**.
+Set **`NIXOS_CONFIG`** to **`…/hosts/<hostname>/configuration.nix`**, or edit the root [`configuration.nix`](./configuration.nix) import if this host is the repo default.
+
+Shared software and desktop options live in **[`common/system.nix`](./common/system.nix)** and **[`home.nix`](./home.nix)**.
 
 ## 4. `system.stateVersion`
 
-Set **`system.stateVersion`** in `configuration.nix` to what the **installer** recommends for a **first** install on this machine; see the NixOS manual before changing it later.
+Set **`system.stateVersion`** in [`common/system.nix`](./common/system.nix) to what the **installer** recommends for a **first** install on this machine; see the NixOS manual before changing it later.
 
 ## 5. Build and switch
 
@@ -37,10 +38,10 @@ Home Manager runs as part of that for **`wiz`** (no separate `home-manager switc
 
 ## 6. After boot
 
-- Re-enrol **fingerprint**, reconnect **Wi‑Fi**, fix **VPN** paths if you use them (`environment.etc` in `configuration.nix`).
+- Re-enrol **fingerprint**, reconnect **Wi‑Fi**, fix **VPN** paths if you use them (`environment.etc` in [`common/system.nix`](./common/system.nix)).
 - **Cursor**: [CURSOR_SETUP.md](./CURSOR_SETUP.md) so `~/.local/bin/cursor` matches `home.nix` shell aliases.
 - Custom **`.desktop`** files: already in [`desktop/applications/`](./desktop/applications/); they land in `~/.local/share/applications/` via Home Manager.
-- **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in [`hostname.nix`](./hostname.nix), and extend `home.nix` if your theme includes extra files beyond the Theseus example.
+- **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in **`hosts/<hostname>/host.nix`**, and extend `home.nix` if your theme includes extra files beyond the files already wired there (see **Tawa** / **Theseus** under `kvantum/`).
 
 ## 7. Full detail and history
 
