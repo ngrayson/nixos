@@ -12,12 +12,13 @@ in {
     package = pkgs.hypridle;
     settings = let
       lock = lib.getExe hs.quickshellLock;
+      beforeSleep = lib.getExe hs.hyprBeforeSleep;
       dpmsOff = lib.getExe hs.hyprDpmsAllOff;
       dpmsOn = lib.getExe hs.hyprDpmsAllOn;
     in {
       general = {
         lock_cmd = lock;
-        before_sleep_cmd = lock;
+        before_sleep_cmd = beforeSleep;
         after_sleep_cmd = dpmsOn;
         ignore_dbus_inhibit = false;
       };

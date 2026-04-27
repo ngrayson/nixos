@@ -13,7 +13,7 @@
   '';
 
   quickshellConfigDir = "${config.home.homeDirectory}/.config/quickshell";
-in {
+in rec {
   inherit quickshellBundled quickshellConfigDir;
 
   hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
@@ -39,6 +39,17 @@ in {
       [[ -n "$name" ]] || continue
       "$H" -i 0 dispatch dpms off "$name" || true
     done < <("$H" -i 0 monitors -j | "$J" -r '.[].name')
+  '';
+
+  # Lock then blank outputs before systemd suspend (quickshell-lock uses exec and cannot be chained).
+  hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
+    set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    QS="''${HOME}/.config/quickshell"
+    env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
+    sleep 1
+    ${lib.getExe hyprDpmsAllOff}
   '';
 
   hyprDpmsAllOn = pkgs.writeShellScriptBin "hypr-dpms-all-on" ''
