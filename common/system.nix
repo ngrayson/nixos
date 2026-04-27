@@ -187,6 +187,7 @@ in {
       bottom
       powertop
       alejandra
+      hyprmon
       fzf
       libnotify
       appimage-run
