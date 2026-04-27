@@ -3,11 +3,11 @@
 1. Set **`theme.dynamic = true`** in [`home.nix`](file:///home/wiz/.config/nixos/home.nix) (uncomment the line).
 2. `sudo nixos-rebuild switch`
 3. Run **`wallust-run /path/to/wallpaper.png`** (uses `~/.config/wallust` from this repo).
-4. **`theme-reload`** re-runs Hyprland reload, kitty USR1, GTK gsettings nudge, restarts **Albert** (so Qt picks up the wallust palette), and touches **qt6ct** so running Qt apps can refresh.
+4. **`theme-reload`** (after each `wallust run`) reloads Hyprland, nudges GTK, applies the **KDE color scheme** (`plasma-apply-colorscheme` + `kwriteconfig6` so **Dolphin/Kate** follow `~/.local/share/color-schemes/wallust.colors`), touches **qt6ct**, **restarts Quickshell** (so `WallustColors.qml` is re-read from disk), then **restarts Albert** with `QT_QPA_PLATFORMTHEME=qt6ct`.
 
-**Qt (Albert, many third-party Qt apps):** Hyprland sets `env = QT_QPA_PLATFORMTHEME,qt6ct`, and Home Manager installs `~/.config/qt6ct/qt6ct.conf` (Fusion + `color_scheme_path` → `~/.config/qt6ct/colors/wallust.conf`). `qt6ct` must be installed (`theme.dynamic` adds it). If the qt6ct GUI still warns, log out and back in so the full session sees `QT_QPA_PLATFORMTHEME`.
+**Qt (Albert, non-KDE Qt apps):** Hyprland sets `env = QT_QPA_PLATFORMTHEME,qt6ct`, and Home Manager installs `~/.config/qt6ct/qt6ct.conf` (Fusion + wallust `color_scheme_path`). Full session may need a re-login once for all launchers to see the variable.
 
-**KDE / Kate with Plasma enabled:** Kate may follow **System Settings → Appearance** (Breeze) instead of qt6ct. Matching wallust there may require KDE’s own color schemes or Kvantum; qt6ct is most reliable for non-KDE Qt apps (e.g. Albert).
+**KDE (Dolphin, Kate, etc.):** Wallust writes **`wallust.colors`**; `theme-reload` sets **`ColorScheme=wallust`** in `~/.config/kdeglobals` and runs **`plasma-apply-colorscheme wallust`**. If a running Dolphin/Kate instance does not refresh, close and reopen it once (KDE does not always repaint every open window).
 
 **Firefox:** NixOS sets the **system theme** preference so the browser chrome can follow GTK / `~/.config/gtk-*` (where wallust writes). You may still need to pick **System theme** once under **Settings → Themes** if the UI was on a built-in dark/light theme.
 

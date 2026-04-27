@@ -16,21 +16,41 @@
     })
     tmplNames
   );
-  theme-reload = pkgs.writeShellScriptBin "theme-reload" ''
-    set -euo pipefail
-    export PATH="${lib.makeBinPath [pkgs.hyprland pkgs.albert]}:$PATH"
-    hyprctl reload 2>/dev/null || true
-    ${pkgs.procps}/bin/pkill -SIGUSR1 kitty 2>/dev/null || true
-    if command -v gsettings >/dev/null; then
-      raw=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null || echo "'Adwaita'")
-      gsettings set org.gnome.desktop.interface gtk-theme Adwaita 2>/dev/null || true
-      sleep 0.25
-      gsettings set org.gnome.desktop.interface gtk-theme "$raw" 2>/dev/null || true
+  # Qt/KDE/Quickshell steps need wallust output on disk; wallust-run invokes this after `wallust run`.
+  applyPlasmaKde = ''
+    _PA=${pkgs.kdePackages.plasma-workspace}/bin/plasma-apply-colorscheme
+    _KW=${pkgs.kdePackages.kconfig}/bin/kwriteconfig6
+    mkdir -p "''${HOME}/.local/share/color-schemes"
+    if [ -f "''${HOME}/.local/share/color-schemes/wallust.colors" ]; then
+      "$_PA" wallust 2>/dev/null || true
+      "$_KW" --file "''${HOME}/.config/kdeglobals" --group General --key ColorScheme --notify wallust 2>/dev/null || true
     fi
-    touch "''${HOME}/.config/qt6ct/qt6ct.conf" 2>/dev/null || true
-    ${pkgs.procps}/bin/pkill -x albert 2>/dev/null || true
-    ${lib.getExe pkgs.albert} &
   '';
+  theme-reload = pkgs.writeShellScriptBin "theme-reload" (''
+      set -euo pipefail
+      export PATH="${lib.makeBinPath [pkgs.hyprland pkgs.albert]}:$PATH"
+      export QT_QPA_PLATFORMTHEME=qt6ct
+      hyprctl reload 2>/dev/null || true
+      ${pkgs.procps}/bin/pkill -SIGUSR1 kitty 2>/dev/null || true
+      if command -v gsettings >/dev/null; then
+        raw=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null || echo "'Adwaita'")
+        gsettings set org.gnome.desktop.interface gtk-theme Adwaita 2>/dev/null || true
+        sleep 0.25
+        gsettings set org.gnome.desktop.interface gtk-theme "$raw" 2>/dev/null || true
+      fi
+    ''
+    + lib.optionalString config.theme.dynamic (applyPlasmaKde
+      + ''
+        touch "''${HOME}/.config/qt6ct/qt6ct.conf" 2>/dev/null || true
+        ${pkgs.procps}/bin/pkill -x quickshell 2>/dev/null || true
+        sleep 0.25
+        nohup ${lib.getExe pkgs.quickshell} -d -p "''${HOME}/.config/quickshell" > /dev/null 2>&1 &
+      '')
+    + ''
+      ${pkgs.procps}/bin/pkill albert 2>/dev/null || true
+      sleep 0.1
+      nohup env QT_QPA_PLATFORMTHEME=qt6ct ${lib.getExe pkgs.albert} > /dev/null 2>&1 &
+    '');
   wallust-run = pkgs.writeShellScriptBin "wallust-run" ''
     set -euo pipefail
     if [ "$#" -lt 1 ]; then

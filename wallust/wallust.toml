@@ -29,3 +29,7 @@ target = '~/.config/qt6ct/colors/wallust.conf'
 [templates.quickshell]
 template = 'colors-quickshell.qml'
 target = '~/.config/quickshell/WallustColors.qml'
+
+[templates.kde]
+template = 'colors-kde.colors'
+target = '~/.local/share/color-schemes/wallust.colors'
