@@ -307,6 +307,8 @@ in {
   # User session env, programs.git, programs.zsh are in home-manager ./home.nix (user wiz).
   environment = {
     shells = [pkgs.zsh];
+    variables.SHELL = "${pkgs.zsh}/bin/zsh";
+    sessionVariables.SHELL = "${pkgs.zsh}/bin/zsh";
     etc."frootvpn/stunnel-ca.pem".source = ./frootvpn-stunnel-ca.pem;
   };
 
