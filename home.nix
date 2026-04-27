@@ -5,5 +5,5 @@
 {...}: {
   imports = [./home];
   # Wallust live theming: set `theme.dynamic = true` (disables Stylix Hyprland+GTK colors).
-  # theme.dynamic = true;
+  theme.dynamic = true;
 }

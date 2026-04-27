@@ -41,6 +41,23 @@ in {
     (import (home-manager-src + "/nixos"))
   ];
 
+  # Albert: release NixOS pins an older Albert without the bundled `firefox` Python plugin.
+  # nixos-unstable ships Albert 34.x, which includes it (Python API 5.x). Only `albert` is taken from unstable.
+  nixpkgs.overlays = [
+    (final: prev: let
+      nixpkgs-unstable = builtins.fetchTarball {
+        url = "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz";
+        sha256 = "0cnf0mc3nvj08p0x3amjfp3gf51i3afkhwzh8rsx9pzmwpybayhh";
+      };
+      unstablePkgs = import nixpkgs-unstable {
+        inherit (config.nixpkgs) config;
+        localSystem = prev.stdenv.hostPlatform;
+      };
+    in {
+      albert = unstablePkgs.albert;
+    })
+  ];
+
   # Required for Stylix GTK theming via Home Manager (`gtk` target).
   programs.dconf.enable = true;
 
@@ -197,7 +214,7 @@ in {
       appimage-run
       topgrade
       kdePackages.kcolorchooser
-      # Albert: extensions are toggled in-app or via ~/.config/albert/config (see home/programs/albert.nix).
+      # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
       nix-search-cli
       openvpn

@@ -1,6 +1,7 @@
 # Declaratively enable Albert Python sub-plugins (Emoji, Firefox bookmarks, Kill, Wikipedia).
 # Websearch + DuckDuckGo: use ~/.config/albert/websearch/engines.json (trigger `dd` is typical).
-# The Firefox sub-plugin reads ~/.mozilla/firefox (matches `programs.firefox.enable` on NixOS).
+# Firefox sub-plugin: needs ~/.mozilla/firefox with a profile containing places.sqlite *and* favicons.sqlite
+# (open Firefox at least once). It is only bundled in Albert 34+ — use unstable albert in common/system.nix overlay.
 {
   lib,
   config,

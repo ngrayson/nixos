@@ -47,6 +47,9 @@ in {
 
   config = lib.mkMerge [
     {
+      # Always on PATH; Hypr/GTK/Stylix wiring still follows `theme.dynamic`.
+      home.packages = [pkgs.wallust theme-reload wallust-run];
+
       xdg.configFile =
         {
           "wallust/wallust.toml".source = wallustDir + "/wallust.toml";
@@ -57,7 +60,7 @@ in {
     }
 
     (lib.mkIf config.theme.dynamic {
-      home.packages = [pkgs.wallust theme-reload wallust-run pkgs.qt6ct];
+      home.packages = [pkgs.qt6Packages.qt6ct];
 
       home.file.".config/hypr/wallust/colors.conf".text = "# run wallust-run to generate colors\n";
 
