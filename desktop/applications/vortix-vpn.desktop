@@ -1,8 +1,19 @@
 [Desktop Entry]
-Type=Application
-Name=VPN (Vortix)
+Categories=Network;Security;
+Comment[en_CA]=OpenVPN / WireGuard terminal UI (requires sudo)
 Comment=OpenVPN / WireGuard terminal UI (requires sudo)
 Exec=kitty -e sudo vortix
-Icon=network-vpn
-Categories=Network;Security;
+GenericName[en_CA]=
+GenericName=
+Icon=preferences-system-network-vpn
 Keywords=vpn;openvpn;wireguard;
+MimeType=
+Name[en_CA]=VPN (Vortix)
+Name=VPN (Vortix)
+Path=
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+X-KDE-SubstituteUID=false
+X-KDE-Username=

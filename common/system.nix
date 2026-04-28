@@ -215,6 +215,7 @@ in {
       appimage-run
       topgrade
       kdePackages.kcolorchooser
+      kdePackages.spectacle
       pkgs.hyprpaper
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
