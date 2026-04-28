@@ -16,9 +16,10 @@
 in rec {
   inherit quickshellBundled quickshellConfigDir;
 
+  # Super+Shift+S / Print: region capture via hyprshot (clipboard only; spectacle needs KWin on Wayland).
   hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
     set -euo pipefail
-    ${lib.getExe pkgs.grim} -g "$(${lib.getExe pkgs.slurp})" - | ${pkgs.wl-clipboard}/bin/wl-copy --type image
+    exec ${lib.getExe pkgs.hyprshot} -m region --clipboard-only
   '';
 
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''

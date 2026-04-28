@@ -18,5 +18,17 @@
   };
 
   # Interactive user PATH (kitty stays in systemPackages for Plasma launchers).
-  home.packages = with pkgs; [dunst fastfetch grim hyprmon jq newsboat quickshell slurp swaylock tmux tmuxifier wl-clipboard];
+  home.packages = with pkgs; [
+    dunst
+    fastfetch
+    hyprmon
+    hyprshot
+    jq
+    newsboat
+    quickshell
+    swaylock
+    tmux
+    tmuxifier
+    wl-clipboard
+  ];
 }
