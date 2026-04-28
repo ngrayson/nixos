@@ -3,6 +3,7 @@
   imports = [
     ./stylix.nix
     ./session.nix
+    ./programs/qt-palette.nix
     ./programs/albert.nix
     ./programs/zsh.nix
     ./programs/git.nix
