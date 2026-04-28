@@ -2,6 +2,7 @@
 {...}: {
   imports = [
     ./stylix.nix
+    ./services/rwpspread-wallpaper.nix
     ./session.nix
     ./programs/qt-palette.nix
     ./programs/albert.nix

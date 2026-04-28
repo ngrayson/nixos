@@ -2,9 +2,8 @@
 # Use `builtins.fetchTarball` here (not `pkgs.fetchFromGitHub`) so `imports` does not force `pkgs`
 # before Home Manager has finished fixing up `_module.args` (avoids infinite recursion).
 #
-# Tawa: `stylix.targets.hyprland.hyprpaper` (Stylix) uses one preloaded image as a Hyprpaper *fallback*
-# (`wallpaper = ,<path>`), so the same asset is applied to every Hyprland output without per-output
-# wallpaper lines — the usual way to cover a multi-monitor Izar layout (`hypr/<hostname>/monitors.conf`).
+# Tawa: multi-monitor Izar wallpaper is handled by [`services/rwpspread-wallpaper.nix`](./services/rwpspread-wallpaper.nix),
+# not Stylix Hyprpaper. Other hosts: Stylix preloads `stylix.image` as Hyprpaper fallback (`wallpaper = ,<path>`).
 {
   nixosConfig ? null,
   pkgs,
@@ -75,7 +74,7 @@ in {
 
       hyprland = {
         enable = true;
-        hyprpaper.enable = true;
+        hyprpaper.enable = !hostIsTawa;
       };
     };
   };
