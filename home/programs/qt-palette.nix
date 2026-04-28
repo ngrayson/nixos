@@ -4,7 +4,11 @@
 # KDE (Dolphin, Kate, etc.) ignores qt*ct palette files: they use KColorScheme from
 # ~/.config/kdeglobals + ~/.local/share/color-schemes/*.colors. Stylix targets.qt is off.
 # Kvantum + [KDE] widgetStyle=Kvantum in kdeglobals would override Fusion. This module
-# installs Izar.colors and pins Fusion + ColorScheme via Home Manager activation.
+# installs Izar.colors and pins ColorScheme via Home Manager activation.
+#
+# KDE apps: use Breeze + Izar.colors (Dolphin expects Breeze; Fusion + QT_STYLE_OVERRIDE
+# looks wrong). Pure Qt apps still get Fusion + Izar via qt5ct/qt6ct (HM qt.style unset).
+# Dolphin may keep a stale scheme in dolphinrc until [UiSettings] ColorScheme=* (bug 493384).
 {
   config,
   lib,
@@ -14,6 +18,7 @@
   h = config.home.homeDirectory;
   kde = "${pkgs.kdePackages.kconfig}/bin/kwriteconfig6";
   kdglobals = "${h}/.config/kdeglobals";
+  dolphinrc = "${h}/.config/dolphinrc";
 
   # Theme tokens: #RRGGBB or #RRGGBBAA -> QColor HexArgb #aarrggbb
   aa = rgb:
@@ -234,7 +239,7 @@
     ForegroundVisited=${mauveRgb}
 
     [Colors:View]
-    BackgroundAlternate=${purpleRgb}
+    BackgroundAlternate=${depthRgb}
     BackgroundNormal=${depthRgb}
     DecorationFocus=${tealRgb}
     DecorationHover=${tealRgb}
@@ -281,7 +286,8 @@ in {
   qt = {
     enable = true;
     platformTheme.name = "qtct";
-    style.name = "Fusion";
+    # Omit style.name so QT_STYLE_OVERRIDE is unset — KDE reads [KDE] widgetStyle (breeze).
+    style.name = null;
 
     qt6ctSettings.Appearance = {
       style = "Fusion";
@@ -307,7 +313,8 @@ in {
 
   home.activation.kdeIzarPalette = lib.hm.dag.entryAfter ["writeBoundary"] ''
     $DRY_RUN_CMD ${kde} --notify --file "${kdglobals}" --group General --key ColorScheme Izar
-    $DRY_RUN_CMD ${kde} --notify --file "${kdglobals}" --group KDE --key widgetStyle Fusion
+    $DRY_RUN_CMD ${kde} --notify --file "${kdglobals}" --group KDE --key widgetStyle breeze
+    $DRY_RUN_CMD ${kde} --notify --file "${dolphinrc}" --group UiSettings --key ColorScheme '*'
   '';
 
   home.packages = [pkgs.kdePackages.dolphin];
