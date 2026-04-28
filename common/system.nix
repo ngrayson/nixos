@@ -244,6 +244,7 @@ in {
       godot
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum
+      pkgs.nwg-look
       sassc
       gnome-themes-extra
       gtk-engine-murrine
