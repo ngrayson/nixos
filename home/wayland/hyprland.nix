@@ -97,8 +97,10 @@ in {
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
       ];
-      # GameMaker YoYo runner: WM_CLASS/instance from binary name (covers main UI + bundled fs.appimage dialogs)
+      # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
       windowrulev2 = [
+        "float, initialTitle:^(Pixel Composer)"
+        "float, initialTitle:^Select files$"
         "float, class:^(PixelComposer|pixelcomposer).*"
       ];
       "exec-once" = [
