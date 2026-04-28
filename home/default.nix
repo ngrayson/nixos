@@ -11,5 +11,7 @@
     ./activation/plasma-multi-monitor.nix
     ./xdg/config.nix
     ./xdg/data.nix
+    ./xdg/cursor-icon.nix
+    ./gui-session-launch.nix
   ];
 }
