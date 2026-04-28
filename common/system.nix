@@ -232,6 +232,7 @@ in {
       bitwarden-desktop
       glow
       chafa
+      brave
       astroterm
       kitty
       tree

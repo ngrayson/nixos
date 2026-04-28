@@ -99,8 +99,8 @@ in {
       ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
       windowrulev2 = [
-        "float, initialTitle:^(Pixel Composer)"
-        "float, initialTitle:^Select files$"
+        "float, title:^Pixel Composer.*"
+        "float, title:^Select files$"
         "float, class:^(PixelComposer|pixelcomposer).*"
       ];
       "exec-once" = [
