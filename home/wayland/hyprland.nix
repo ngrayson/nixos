@@ -86,6 +86,7 @@ in {
         "$mod, mouse:273, resizewindow"
       ];
       "exec-once" = [
+        "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"
         "${lib.getExe pkgs.albert}"
         "${lib.getExe pkgs.dunst}"
         "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
