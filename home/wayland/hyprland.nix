@@ -97,6 +97,10 @@ in {
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
       ];
+      # GameMaker YoYo runner: WM_CLASS/instance from binary name (covers main UI + bundled fs.appimage dialogs)
+      windowrulev2 = [
+        "float, class:^(PixelComposer|pixelcomposer).*"
+      ];
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"
         "${lib.getExe pkgs.albert}"

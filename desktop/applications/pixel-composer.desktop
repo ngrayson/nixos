@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Pixel Composer
+Comment=Node-based procedural image composition
+Exec=/run/current-system/sw/bin/appimage-run /home/wiz/bin/Pixel_Composer_1.21.0-x86_64.AppImage %F
+Icon=applications-graphics
+Terminal=false
+Type=Application
+Categories=Graphics;2DGraphics;
