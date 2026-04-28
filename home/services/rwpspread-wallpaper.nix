@@ -47,8 +47,9 @@ in
         ];
         Restart = "on-failure";
         RestartSec = "3";
+        # rwpspread shells out to `pidof` to locate hyprpaper — include procps on the PATH.
         Environment = [
-          "PATH=${lib.makeBinPath [pkgs.hyprland pkgs.hyprpaper]}"
+          "PATH=${lib.makeBinPath [pkgs.procps pkgs.hyprland pkgs.hyprpaper]}"
         ];
       };
     };
