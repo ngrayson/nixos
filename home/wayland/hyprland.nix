@@ -8,6 +8,13 @@
 }: let
   hs = import ../hypr/scripts.nix {inherit config lib pkgs;};
   hx = import ../lib/host-xdg.nix {inherit lib nixosConfig;};
+  # Must match dirs in ../session.nix (`xdg.systemDirs.data`). Hypr subprocesses (`exec-once`),
+  # including Albert, inherit the compositor env — SDDM/login does not reliably set these on NixOS.
+  xdgDataDirsShare = lib.concatStringsSep ":" [
+    "${config.home.homeDirectory}/.local/share"
+    "${config.home.profileDirectory}/share"
+    "/run/current-system/sw/share"
+  ];
 in {
   wayland.windowManager.hyprland = {
     enable = true;
@@ -18,7 +25,10 @@ in {
     xwayland.enable = true;
     settings = {
       # Ensure compositor children (and --all dbus import) see platform theme; qt6ct GUI checks this.
-      env = ["QT_QPA_PLATFORMTHEME,kde"];
+      env = [
+        "QT_QPA_PLATFORMTHEME,kde"
+        "XDG_DATA_DIRS,${xdgDataDirsShare}"
+      ];
       "$mod" = "SUPER";
       general = {
         gaps_in = 10;

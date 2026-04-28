@@ -6,6 +6,15 @@
 }: {
   home.stateVersion = "25.11";
 
+  # Mirrors `xdg.systemDirs.data` in `session.nix` — also set on Hypr's `env` so `exec-once` children
+  # (`albert`, etc.) inherit Nix `.desktop` + icon theme lookups without sourced login shells.
+  xdg.enable = true;
+  xdg.systemDirs.data = [
+    "${config.home.homeDirectory}/.local/share"
+    "${config.home.profileDirectory}/share"
+    "/run/current-system/sw/share"
+  ];
+
   # `home-manager` command (news/tests); system activation is nixos-rebuild.
   programs.home-manager.enable = true;
 
