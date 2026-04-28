@@ -17,6 +17,8 @@ in {
     systemd.variables = ["--all"];
     xwayland.enable = true;
     settings = {
+      # Ensure compositor children (and --all dbus import) see platform theme; qt6ct GUI checks this.
+      env = ["QT_QPA_PLATFORMTHEME,qt5ct"];
       "$mod" = "SUPER";
       general = {
         gaps_in = 10;

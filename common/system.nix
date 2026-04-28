@@ -251,7 +251,12 @@ in {
   environment = {
     shells = [pkgs.zsh];
     variables.SHELL = "${pkgs.zsh}/bin/zsh";
-    sessionVariables.SHELL = "${pkgs.zsh}/bin/zsh";
+    sessionVariables = {
+      SHELL = "${pkgs.zsh}/bin/zsh";
+      # HM qt module sets this too, but SDDM/Hyprland often start before user env.d is visible;
+      # qt6ct warns if unset. Match Home Manager: qtct → qt5ct (Qt6 loads qt6ct via same convention).
+      QT_QPA_PLATFORMTHEME = "qt5ct";
+    };
     etc."frootvpn/stunnel-ca.pem".source = ../frootvpn-stunnel-ca.pem;
   };
 
