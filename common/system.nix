@@ -146,6 +146,11 @@ in {
 
   services.libinput.enable = true;
 
+  # Make Nerd font families available system-wide so Qt/Quickshell can resolve icon glyphs.
+  fonts.packages = with pkgs; [
+    nerd-fonts.iosevka-term-slab
+  ];
+
   services.stunnel = {
     enable = true;
     clients.frootvpn = {

@@ -222,7 +222,7 @@ ShellRoot {
 						anchors.centerIn: parent
 						color: "#cdd6f4"
 						font.pixelSize: 14
-						font.family: "IosevkaTermSlab Nerd Font"
+						font.family: "IosevkaTermSlab NF"
 						text: shellRoot.audioIcon()
 					}
 
@@ -311,7 +311,7 @@ ShellRoot {
 						text: shellRoot.audioIcon()
 						color: "#cdd6f4"
 						font.pixelSize: 20
-						font.family: "IosevkaTermSlab Nerd Font"
+						font.family: "IosevkaTermSlab NF"
 					}
 
 					Rectangle {
