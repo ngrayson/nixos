@@ -271,7 +271,7 @@ ShellRoot {
 						scrollGestureEnabled: false
 						onClicked: mouse => {
 							if (mouse.button === Qt.LeftButton)
-								shellRoot.runAudioAction("pavucontrol", false);
+								shellRoot.runAudioAction("pavu-toggle", false);
 							else if (mouse.button === Qt.RightButton)
 								shellRoot.runAudioAction("pamixer -t", true);
 						}

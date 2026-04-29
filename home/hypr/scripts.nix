@@ -61,4 +61,28 @@ in rec {
     sleep 1
     "$H" -i 0 dispatch dpms on || true
   '';
+
+  # Toggle PulseAudio UI: used by Quickshell bar (PATH) and matches Hyprland `pavucontrol` window rules.
+  pavuToggle = pkgs.writeShellScriptBin "pavu-toggle" ''
+    set -eu
+    PAVU="${lib.getExe pkgs.pavucontrol}"
+    if pgrep -x pavucontrol >/dev/null 2>&1; then
+      pkill -x pavucontrol
+    else
+      exec "$PAVU"
+    fi
+  '';
+
+  # Close focused pavucontrol on Escape (Hyprland `bindn` runs this but still passes Escape to apps).
+  pavuEscapeClose = pkgs.writeShellScriptBin "pavu-escape-close" ''
+    set -eu
+    H="${pkgs.hyprland}/bin/hyprctl"
+    J="${lib.getExe pkgs.jq}"
+    class="$("$H" activewindow -j 2>/dev/null | "$J" -r '.class // empty' || true)"
+    case "$class" in
+      *pavucontrol*)
+        "$H" dispatch killactive
+        ;;
+    esac
+  '';
 }

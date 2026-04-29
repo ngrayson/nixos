@@ -122,12 +122,19 @@ in {
         "${lib.getExe pkgs.quickshell} -d -p ${hs.quickshellConfigDir}"
       ];
     };
-    extraConfig = (
-      if hx.hyprMonitorsConf == null
-      then ""
-      else ''
-        source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
-      ''
-    );
+    extraConfig =
+      (
+        if hx.hyprMonitorsConf == null
+        then ""
+        else ''
+          source = ${config.home.homeDirectory}/.config/hypr/monitors.conf
+        ''
+      )
+      + ''
+        # Non-consuming: Escape still reaches apps; closes pavucontrol when that window is focused.
+        bindn = , escape, exec, ${lib.getExe hs.pavuEscapeClose}
+      '';
   };
+
+  home.packages = [hs.pavuToggle hs.pavuEscapeClose];
 }
