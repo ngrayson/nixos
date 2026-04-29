@@ -11,6 +11,35 @@ import Quickshell.Wayland
 
 ShellRoot {
 	id: shellRoot
+	property int audioPercent: 0
+	property bool audioMuted: false
+	property bool audioOsdVisible: false
+
+	function audioIcon(): string {
+		if (audioMuted)
+			return "󰖁";
+		if (audioPercent < 34)
+			return "󰕿";
+		if (audioPercent < 67)
+			return "󰖀";
+		return "󰕾";
+	}
+
+	function refreshAudio(): void {
+		readAudio.command = ["sh", "-lc", "pamixer --get-volume; pamixer --get-mute"];
+		readAudio.running = true;
+	}
+
+	function runAudioAction(cmd: string, showOsd: bool): void {
+		audioAction.showOsdAfterExit = showOsd;
+		audioAction.command = ["sh", "-lc", cmd];
+		audioAction.running = true;
+	}
+
+	function showAudioOsd(): void {
+		audioOsdVisible = true;
+		osdHideTimer.restart();
+	}
 
 	// Monitor whose horizontal center is nearest the combined desktop midpoint (typical "center" panel).
 	function centerOutputScreen(): var {
@@ -84,6 +113,51 @@ ShellRoot {
 		}
 	}
 
+	IpcHandler {
+		target: "audio"
+
+		function notifyChange(): void {
+			refreshAudio();
+			showAudioOsd();
+		}
+	}
+
+	Process {
+		id: readAudio
+		running: false
+
+		onExited: exitCode => {
+			if (exitCode !== 0 || !stdout)
+				return;
+			const out = stdout.toString().trim().split(/\s+/);
+			const vol = parseInt(out[0] ?? "0");
+			const muted = (out[1] ?? "false") === "true";
+			if (!Number.isNaN(vol))
+				shellRoot.audioPercent = Math.max(0, Math.min(150, vol));
+			shellRoot.audioMuted = muted;
+		}
+	}
+
+	Process {
+		id: audioAction
+		running: false
+		property bool showOsdAfterExit: false
+
+		onExited: _ => {
+			shellRoot.refreshAudio();
+			if (showOsdAfterExit)
+				shellRoot.showAudioOsd();
+			showOsdAfterExit = false;
+		}
+	}
+
+	Timer {
+		id: osdHideTimer
+		interval: 1200
+		repeat: false
+		onTriggered: shellRoot.audioOsdVisible = false
+	}
+
 	Variants {
 		model: Quickshell.screens
 
@@ -103,37 +177,6 @@ ShellRoot {
 				anchors.leftMargin: 10
 				anchors.rightMargin: 10
 				spacing: 10
-
-				property string audioValue: "..."
-
-				function refreshAudio(): void {
-					readAudio.command = ["sh", "-lc", "pamixer --get-volume-human"];
-					readAudio.running = true;
-				}
-
-				function runAudioAction(cmd: string): void {
-					audioAction.command = ["sh", "-lc", cmd];
-					audioAction.running = true;
-				}
-
-				Process {
-					id: readAudio
-					running: false
-
-					onExited: exitCode => {
-						if (exitCode === 0 && stdout)
-							parent.audioValue = stdout.toString().trim();
-						else
-							parent.audioValue = "n/a";
-					}
-				}
-
-				Process {
-					id: audioAction
-					running: false
-
-					onExited: _ => parent.refreshAudio()
-				}
 
 				Repeater {
 					model: 6
@@ -172,24 +215,32 @@ ShellRoot {
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
-					implicitWidth: audioLabel.implicitWidth + 16
+					implicitWidth: 30
 
 					Text {
 						id: audioLabel
 						anchors.centerIn: parent
 						color: "#cdd6f4"
-						font.pixelSize: 13
-						text: "VOL " + parent.parent.audioValue
+						font.pixelSize: 14
+						text: shellRoot.audioIcon()
 					}
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton | Qt.RightButton
+						scrollGestureEnabled: false
 						onClicked: mouse => {
 							if (mouse.button === Qt.LeftButton)
-								parent.parent.parent.runAudioAction("pamixer -t");
+								shellRoot.runAudioAction("pavucontrol", false);
 							else if (mouse.button === Qt.RightButton)
-								parent.parent.parent.runAudioAction("pavucontrol");
+								shellRoot.runAudioAction("pamixer -t", true);
+						}
+						onWheel: event => {
+							if (event.angleDelta.y > 0)
+								shellRoot.runAudioAction("pamixer -i 5", true);
+							else if (event.angleDelta.y < 0)
+								shellRoot.runAudioAction("pamixer -d 5", true);
 						}
 					}
 				}
@@ -213,10 +264,68 @@ ShellRoot {
 					running: true
 					repeat: true
 					interval: 2000
-					onTriggered: parent.refreshAudio()
+					onTriggered: shellRoot.refreshAudio()
 				}
 
-				Component.onCompleted: refreshAudio()
+				Component.onCompleted: shellRoot.refreshAudio()
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = shellRoot.centerOutputScreen();
+				return c && modelData && c.name === modelData.name;
+			}
+
+			screen: modelData
+			color: "transparent"
+			visible: isCenterScreen && shellRoot.audioOsdVisible
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			Rectangle {
+				width: 250
+				height: 88
+				radius: 12
+				color: "#1e1e2e"
+				border.width: 1
+				border.color: "#45475a"
+				anchors.centerIn: parent
+
+				ColumnLayout {
+					anchors.fill: parent
+					anchors.margins: 12
+					spacing: 8
+
+					Text {
+						Layout.alignment: Qt.AlignHCenter
+						text: shellRoot.audioIcon()
+						color: "#cdd6f4"
+						font.pixelSize: 20
+					}
+
+					Rectangle {
+						Layout.fillWidth: true
+						Layout.preferredHeight: 8
+						radius: 4
+						color: "#313244"
+
+						Rectangle {
+							width: Math.max(0, Math.min(parent.width, parent.width * (shellRoot.audioPercent / 100.0)))
+							height: parent.height
+							radius: parent.radius
+							color: shellRoot.audioMuted ? "#6c7086" : "#89b4fa"
+						}
+					}
+				}
 			}
 		}
 	}

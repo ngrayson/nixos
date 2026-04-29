@@ -92,9 +92,9 @@ in {
         "$mod, Tab, cyclenext"
         "$mod SHIFT, Tab, cyclenext, prev"
         ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
-        ", XF86AudioRaiseVolume, exec, ${lib.getExe pkgs.pamixer} -i 5"
-        ", XF86AudioLowerVolume, exec, ${lib.getExe pkgs.pamixer} -d 5"
-        ", XF86AudioMute, exec, ${lib.getExe pkgs.pamixer} -t"
+        ", XF86AudioRaiseVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -i 5; ${lib.getExe pkgs.quickshell} ipc -p ${hs.quickshellConfigDir} -n call audio notifyChange'"
+        ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe pkgs.quickshell} ipc -p ${hs.quickshellConfigDir} -n call audio notifyChange'"
+        ", XF86AudioMute, exec, sh -lc '${lib.getExe pkgs.pamixer} -t; ${lib.getExe pkgs.quickshell} ipc -p ${hs.quickshellConfigDir} -n call audio notifyChange'"
         ", XF86AudioMicMute, exec, ${lib.getExe pkgs.pamixer} --default-source -t"
       ];
       bindm = [
@@ -106,6 +106,9 @@ in {
         "float, title:^Pixel Composer.*"
         "float, title:^Select files$"
         "float, class:^(PixelComposer|pixelcomposer).*"
+        "float, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
+        "size 900 600, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
+        "move 100%-w-20 20, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
       ];
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"
