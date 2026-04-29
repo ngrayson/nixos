@@ -8,6 +8,10 @@
 }: let
   hs = import ../hypr/scripts.nix {inherit config lib pkgs;};
   hx = import ../lib/host-xdg.nix {inherit lib nixosConfig;};
+  # Match Quickshell top bar height in ../quickshell/shell.qml (`topBarHeight`).
+  quickshellTopBarPx = 32;
+  pavuTopGutterPx = 20;
+  pavuWindowY = pavuTopGutterPx + quickshellTopBarPx;
   # Must match dirs in ../session.nix (`xdg.systemDirs.data`). Hypr subprocesses (`exec-once`),
   # including Albert, inherit the compositor env — SDDM/login does not reliably set these on NixOS.
   xdgDataDirsShare = lib.concatStringsSep ":" [
@@ -108,7 +112,7 @@ in {
         "float, class:^(PixelComposer|pixelcomposer).*"
         "float, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
         "size 900 600, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
-        "move 100%-w-20 20, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
+        "move 100%-w-20 ${toString pavuWindowY}, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
       ];
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"

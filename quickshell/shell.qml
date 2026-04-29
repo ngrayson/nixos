@@ -2,6 +2,7 @@
 // One bar per output via `Variants` + `Quickshell.screens` (not follow-focus on a single PanelWindow).
 // Lock: `quickshell ipc -p ~/.config/quickshell -n call lock activate` (see `quickshell-lock`).
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
+// Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -14,6 +15,10 @@ ShellRoot {
 	property int audioPercent: 0
 	property bool audioMuted: false
 	property bool audioOsdVisible: false
+	property bool debugAudio: false
+	property string audioDebugRaw: ""
+	property int audioLastExitCode: -999
+	readonly property int topBarHeight: 32
 
 	function audioIcon(): string {
 		if (audioMuted)
@@ -120,21 +125,46 @@ ShellRoot {
 			refreshAudio();
 			showAudioOsd();
 		}
+
+		function toggleDebug(): void {
+			shellRoot.debugAudio = !shellRoot.debugAudio;
+		}
+
+		function debugOn(): void {
+			shellRoot.debugAudio = true;
+		}
+
+		function debugOff(): void {
+			shellRoot.debugAudio = false;
+		}
 	}
 
 	Process {
 		id: readAudio
 		running: false
 
-		onExited: exitCode => {
-			if (exitCode !== 0 || !stdout)
-				return;
-			const out = stdout.toString().trim().split(/\s+/);
-			const vol = parseInt(out[0] ?? "0");
-			const muted = (out[1] ?? "false") === "true";
-			if (!Number.isNaN(vol))
-				shellRoot.audioPercent = Math.max(0, Math.min(150, vol));
-			shellRoot.audioMuted = muted;
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const raw = this.text.trim();
+				shellRoot.audioDebugRaw = raw;
+				if (shellRoot.debugAudio)
+					console.log("[audio] stdout:", JSON.stringify(raw));
+				if (!raw)
+					return;
+				const parts = raw.split(/\s+/).filter(Boolean);
+				const vol = parseInt(parts[0] ?? "0", 10);
+				const muteStr = (parts.length > 1 ? parts[parts.length - 1] : "false").toLowerCase();
+				const muted = muteStr === "true" || muteStr === "1";
+				if (!Number.isNaN(vol))
+					shellRoot.audioPercent = Math.max(0, Math.min(150, vol));
+				shellRoot.audioMuted = muted;
+			}
+		}
+
+		onExited: (exitCode, _exitStatus) => {
+			shellRoot.audioLastExitCode = exitCode;
+			if (shellRoot.debugAudio)
+				console.log("[audio] process exit code:", exitCode);
 		}
 	}
 
@@ -169,7 +199,7 @@ ShellRoot {
 			anchors.top: true
 			anchors.left: true
 			anchors.right: true
-			implicitHeight: 32
+			implicitHeight: shellRoot.topBarHeight
 			color: "#1e1e2e"
 
 			RowLayout {
@@ -188,7 +218,7 @@ ShellRoot {
 						property bool isActive: Hyprland.focusedWorkspace?.id === wid
 
 						implicitWidth: wsLabel.implicitWidth + 16
-						implicitHeight: 32
+						implicitHeight: shellRoot.topBarHeight
 
 						Text {
 							id: wsLabel
@@ -209,6 +239,14 @@ ShellRoot {
 
 				Item {
 					Layout.fillWidth: true
+				}
+
+				Text {
+					visible: shellRoot.debugAudio
+					Layout.alignment: Qt.AlignVCenter
+					color: "#fab387"
+					font.pixelSize: 9
+					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
 				}
 
 				Rectangle {
@@ -294,12 +332,14 @@ ShellRoot {
 
 			Rectangle {
 				width: 250
-				height: 88
+				height: shellRoot.debugAudio ? 118 : 88
 				radius: 12
 				color: "#1e1e2e"
 				border.width: 1
 				border.color: "#45475a"
-				anchors.centerIn: parent
+				anchors.horizontalCenter: parent.horizontalCenter
+				anchors.verticalCenter: parent.verticalCenter
+				anchors.verticalCenterOffset: parent.height * 0.25
 
 				ColumnLayout {
 					anchors.fill: parent
@@ -327,8 +367,19 @@ ShellRoot {
 							width: shellRoot.audioPercent > 0 ? Math.max(6, Math.min(parent.width, parent.width * (shellRoot.audioPercent / 100.0))) : 0
 							height: parent.height
 							radius: parent.radius
-							color: shellRoot.audioMuted ? "#6c7086" : "#89b4fa"
+							color: shellRoot.debugAudio ? "#a6e3a1" : (shellRoot.audioMuted ? "#6c7086" : "#89b4fa")
 						}
+					}
+
+					Text {
+						visible: shellRoot.debugAudio
+						Layout.fillWidth: true
+						Layout.alignment: Qt.AlignHCenter
+						color: "#fab387"
+						font.pixelSize: 9
+						wrapMode: Text.WrapAnywhere
+						horizontalAlignment: Text.AlignHCenter
+						text: "raw=|" + shellRoot.audioDebugRaw + "|"
 					}
 				}
 			}
