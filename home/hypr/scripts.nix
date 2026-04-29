@@ -63,13 +63,15 @@ in rec {
   '';
 
   # Toggle PulseAudio UI: used by Quickshell bar (PATH) and matches Hyprland `pavucontrol` window rules.
+  # Must background Pavu (no `exec`): Quickshell wraps this in `Process` and only one run can be active;
+  # `exec pavucontrol` would keep that process open until the window closes, so a second bar click never ran.
   pavuToggle = pkgs.writeShellScriptBin "pavu-toggle" ''
     set -eu
     PAVU="${lib.getExe pkgs.pavucontrol}"
     if pgrep -x pavucontrol >/dev/null 2>&1; then
       pkill -x pavucontrol
     else
-      exec "$PAVU"
+      "$PAVU" >/dev/null 2>&1 &
     fi
   '';
 
