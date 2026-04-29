@@ -243,7 +243,7 @@ in {
       godot
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum
-      pkgs.nwg-look
+      # pkgs.nwg-look
       pkgs.gnome-tweaks
       sassc
       gnome-themes-extra
