@@ -92,6 +92,10 @@ in {
         "$mod, Tab, cyclenext"
         "$mod SHIFT, Tab, cyclenext, prev"
         ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
+        ", XF86AudioRaiseVolume, exec, ${lib.getExe pkgs.pamixer} -i 5"
+        ", XF86AudioLowerVolume, exec, ${lib.getExe pkgs.pamixer} -d 5"
+        ", XF86AudioMute, exec, ${lib.getExe pkgs.pamixer} -t"
+        ", XF86AudioMicMute, exec, ${lib.getExe pkgs.pamixer} --default-source -t"
       ];
       bindm = [
         "$mod, mouse:272, movewindow"

@@ -30,10 +30,14 @@
   home.packages = with pkgs; [
     dunst
     fastfetch
+    helvum
     hyprmon
     hyprshot
     jq
     newsboat
+    pamixer
+    pavucontrol
+    qpwgraph
     quickshell
     swaylock
     tmux

@@ -104,6 +104,37 @@ ShellRoot {
 				anchors.rightMargin: 10
 				spacing: 10
 
+				property string audioValue: "..."
+
+				function refreshAudio(): void {
+					readAudio.command = ["sh", "-lc", "pamixer --get-volume-human"];
+					readAudio.running = true;
+				}
+
+				function runAudioAction(cmd: string): void {
+					audioAction.command = ["sh", "-lc", cmd];
+					audioAction.running = true;
+				}
+
+				Process {
+					id: readAudio
+					running: false
+
+					onExited: exitCode => {
+						if (exitCode === 0 && stdout)
+							parent.audioValue = stdout.toString().trim();
+						else
+							parent.audioValue = "n/a";
+					}
+				}
+
+				Process {
+					id: audioAction
+					running: false
+
+					onExited: _ => parent.refreshAudio()
+				}
+
 				Repeater {
 					model: 6
 
@@ -137,6 +168,32 @@ ShellRoot {
 					Layout.fillWidth: true
 				}
 
+				Rectangle {
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: audioLabel.implicitWidth + 16
+
+					Text {
+						id: audioLabel
+						anchors.centerIn: parent
+						color: "#cdd6f4"
+						font.pixelSize: 13
+						text: "VOL " + parent.parent.audioValue
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton
+						onClicked: mouse => {
+							if (mouse.button === Qt.LeftButton)
+								parent.parent.parent.runAudioAction("pamixer -t");
+							else if (mouse.button === Qt.RightButton)
+								parent.parent.parent.runAudioAction("pavucontrol");
+						}
+					}
+				}
+
 				Text {
 					id: clockLabel
 					color: "#cdd6f4"
@@ -151,6 +208,15 @@ ShellRoot {
 
 					Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 				}
+
+				Timer {
+					running: true
+					repeat: true
+					interval: 2000
+					onTriggered: parent.refreshAudio()
+				}
+
+				Component.onCompleted: refreshAudio()
 			}
 		}
 	}
