@@ -35,6 +35,7 @@
     hyprshot
     jq
     newsboat
+    nerd-fonts.iosevka-term-slab
     pamixer
     pavucontrol
     qpwgraph

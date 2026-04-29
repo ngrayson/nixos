@@ -26,7 +26,7 @@ ShellRoot {
 	}
 
 	function refreshAudio(): void {
-		readAudio.command = ["sh", "-lc", "pamixer --get-volume; pamixer --get-mute"];
+		readAudio.command = ["sh", "-lc", "printf \"%s %s\" \"$(pamixer --get-volume)\" \"$(pamixer --get-mute)\""];
 		readAudio.running = true;
 	}
 
@@ -222,6 +222,7 @@ ShellRoot {
 						anchors.centerIn: parent
 						color: "#cdd6f4"
 						font.pixelSize: 14
+						font.family: "IosevkaTermSlab Nerd Font"
 						text: shellRoot.audioIcon()
 					}
 
@@ -310,16 +311,20 @@ ShellRoot {
 						text: shellRoot.audioIcon()
 						color: "#cdd6f4"
 						font.pixelSize: 20
+						font.family: "IosevkaTermSlab Nerd Font"
 					}
 
 					Rectangle {
+						id: osdMeter
 						Layout.fillWidth: true
 						Layout.preferredHeight: 8
 						radius: 4
 						color: "#313244"
 
 						Rectangle {
-							width: Math.max(0, Math.min(parent.width, parent.width * (shellRoot.audioPercent / 100.0)))
+							anchors.left: parent.left
+							anchors.verticalCenter: parent.verticalCenter
+							width: shellRoot.audioPercent > 0 ? Math.max(6, Math.min(parent.width, parent.width * (shellRoot.audioPercent / 100.0))) : 0
 							height: parent.height
 							radius: parent.radius
 							color: shellRoot.audioMuted ? "#6c7086" : "#89b4fa"
