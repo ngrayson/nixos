@@ -4,9 +4,16 @@
 #
 # Tawa: multi-monitor Izar wallpaper is handled by [`services/rwpspread-wallpaper.nix`](./services/rwpspread-wallpaper.nix),
 # not Stylix Hyprpaper. Other hosts: Stylix preloads `stylix.image` as Hyprpaper fallback (`wallpaper = ,<path>`).
+#
+# GTK: Stylix uses theme name `adw-gtk3` (engine) plus generated `gtk.css` (Base16 colors) — `gsettings get
+# org.gnome.desktop.interface gtk-theme` may show `adw-gtk3` while Tokyo Night colors still apply.
+# Firefox “System theme” follows GTK/dconf; Stylix `targets.firefox` needs HM `programs.firefox` profiles +
+# `stylix.targets.firefox.profileNames` (see Stylix installation docs / Firefox module).
 {
   nixosConfig ? null,
   pkgs,
+  config,
+  lib,
   ...
 }: let
   # Match `home-manager` release-25.11 (see Stylix install docs for stable + HM).
@@ -29,7 +36,8 @@ in {
 
   stylix = {
     enable = true;
-    autoEnable = true;
+    # Explicit targets only (avoids surprise enables as Stylix adds defaults). See MIGRATION.md § Stylix.
+    autoEnable = false;
 
     polarity = "dark";
     base16Scheme = "${pkgs.base16-schemes}/share/themes/tokyo-night-dark.yaml";
@@ -78,4 +86,19 @@ in {
       };
     };
   };
+
+  # Leftover files from the reverted Wallust experiment; not referenced by Stylix HM `gtk.css` but confuse
+  # inspection and could interact badly if GTK ever loads them from the config dir.
+  home.activation.stylixRemoveStaleGtkCss = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    for f in \
+      "${config.home.homeDirectory}/.config/gtk-3.0/wallust-colors.css" \
+      "${config.home.homeDirectory}/.config/gtk-4.0/wallust-colors.css" \
+      "${config.home.homeDirectory}/.config/gtk-3.0/colors.css" \
+      "${config.home.homeDirectory}/.config/gtk-4.0/colors.css"
+    do
+      if [ -f "$f" ] && [ ! -L "$f" ]; then
+        $DRY_RUN_CMD rm -f "$f"
+      fi
+    done
+  '';
 }
