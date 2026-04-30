@@ -34,9 +34,18 @@ in rec {
   slippiIsEmulating = pkgs.writeShellScriptBin "slippi-is-emulating" ''
     set -euo pipefail
     PS="${pkgs.procps}/bin/ps"
-    # Slippi netplay runtime appears as AppRun.wrapped with this AppImage name in args.
-    # This intentionally excludes launcher-only processes.
-    if "$PS" -eo args | ${lib.getExe pkgs.gnugrep} -Fq "Slippi_Online-x86_64.AppImage"; then
+    # Match active netplay emulation only:
+    # - process name `AppRun.wrapped`
+    # - args include Slippi netplay AppImage
+    # - includes `-e <iso>` launch argument
+    # This avoids matching launcher-only processes and avoids grep self-matches.
+    if "$PS" -eo comm=,args= | ${lib.getExe pkgs.gawk} '
+      $1 == "AppRun.wrapped" &&
+      index($0, "Slippi_Online-x86_64.AppImage") &&
+      index($0, " -e ")
+      { found = 1 }
+      END { exit(found ? 0 : 1) }
+    '; then
       exit 0
     fi
     exit 1
