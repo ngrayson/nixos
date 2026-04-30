@@ -1,6 +1,7 @@
 # Home Manager module bundle (imported from ../home.nix). Per-topic files live under this directory.
 {...}: {
   imports = [
+    ./programs/firefox.nix
     ./stylix.nix
     ./services/rwpspread-wallpaper.nix
     ./session.nix
