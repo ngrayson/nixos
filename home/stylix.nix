@@ -79,7 +79,7 @@ in {
 
       kitty.enable = false;
 
-      qt.enable = false;
+      qt.enable = true;
 
       hyprland = {
         enable = true;
