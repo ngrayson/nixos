@@ -258,8 +258,10 @@ in {
       discord
       obsidian
       pkgs.spotify-qt
+      pkgs.spotifyd
       pkgs.librespot
       pkgs.ungoogled-chromium
+      pkgs.gimp-with-plugins
       bitwarden-desktop
       glow
       chafa
