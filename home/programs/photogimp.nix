@@ -50,6 +50,15 @@ in {
       $DRY_RUN_CMD rm -f "$_photogimp_dst/theme.css"
     fi
 
+    # Keep PhotoGIMP behavior, but force GIMP to use the GTK "System" theme so Stylix colors apply.
+    if [ -f "$_photogimp_dst/gimprc" ]; then
+      $DRY_RUN_CMD ${pkgs.gnused}/bin/sed -i \
+        -e '/^(theme /d' \
+        -e '/^(prefer-dark-theme /d' \
+        "$_photogimp_dst/gimprc"
+      $DRY_RUN_CMD ${pkgs.coreutils}/bin/printf '\n(theme "System")\n(prefer-dark-theme yes)\n' >> "$_photogimp_dst/gimprc"
+    fi
+
     if [ -d "$_photogimp_dst" ]; then
       $DRY_RUN_CMD ${pkgs.coreutils}/bin/touch "$_photogimp_marker"
     fi
