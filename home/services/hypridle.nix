@@ -11,9 +11,9 @@ in {
     enable = true;
     package = pkgs.hypridle;
     settings = let
-      lock = lib.getExe hs.quickshellLock;
+      lock = lib.getExe hs.quickshellLockGuarded;
       beforeSleep = lib.getExe hs.hyprBeforeSleep;
-      dpmsOff = lib.getExe hs.hyprDpmsAllOff;
+      dpmsOff = lib.getExe hs.hyprDpmsAllOffGuarded;
       dpmsOn = lib.getExe hs.hyprDpmsAllOn;
     in {
       general = {

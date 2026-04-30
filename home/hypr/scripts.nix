@@ -30,6 +30,18 @@ in rec {
       ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
   '';
 
+  # True when Slippi Dolphin netplay is actively emulating (launcher-only should not match).
+  slippiIsEmulating = pkgs.writeShellScriptBin "slippi-is-emulating" ''
+    set -euo pipefail
+    PS="${pkgs.procps}/bin/ps"
+    # Slippi netplay runtime appears as AppRun.wrapped with this AppImage name in args.
+    # This intentionally excludes launcher-only processes.
+    if "$PS" -eo args | ${lib.getExe pkgs.gnugrep} -Fq "Slippi_Online-x86_64.AppImage"; then
+      exit 0
+    fi
+    exit 1
+  '';
+
   hyprDpmsAllOff = pkgs.writeShellScriptBin "hypr-dpms-all-off" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
@@ -40,6 +52,24 @@ in rec {
       [[ -n "$name" ]] || continue
       "$H" -i 0 dispatch dpms off "$name" || true
     done < <("$H" -i 0 monitors -j | "$J" -r '.[].name')
+  '';
+
+  # Suppress idle lock while Slippi emulation is active.
+  quickshellLockGuarded = pkgs.writeShellScriptBin "quickshell-lock-guarded" ''
+    set -euo pipefail
+    if ${lib.getExe slippiIsEmulating}; then
+      exit 0
+    fi
+    exec ${lib.getExe quickshellLock}
+  '';
+
+  # Suppress DPMS blanking while Slippi emulation is active.
+  hyprDpmsAllOffGuarded = pkgs.writeShellScriptBin "hypr-dpms-all-off-guarded" ''
+    set -euo pipefail
+    if ${lib.getExe slippiIsEmulating}; then
+      exit 0
+    fi
+    exec ${lib.getExe hyprDpmsAllOff}
   '';
 
   # Lock then blank outputs before systemd suspend (quickshell-lock uses exec and cannot be chained).
