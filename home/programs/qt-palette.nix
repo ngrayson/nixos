@@ -179,7 +179,7 @@
 in {
   qt = {
     enable = true;
-    platformTheme.name = "kde";
+    platformTheme.name = lib.mkForce "kde";
     style.name = "breeze";
   };
 
