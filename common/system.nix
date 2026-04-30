@@ -153,13 +153,13 @@ in {
     pulse.enable = true;
   };
   services.spotifyd.enable = true;
-  systemd.services.spotifyd = {
-    # spotifyd resolves $XDG_CONFIG_PATH/spotifyd/spotifyd.conf per upstream docs.
-    environment.XDG_CONFIG_PATH = "/home/wiz/.config/nixos";
-    serviceConfig.ExecStart = lib.mkForce ''
-      ${pkgs.spotifyd}/bin/spotifyd --no-daemon --cache-path /var/cache/spotifyd \
-      --config-path /home/wiz/.config/nixos/spotifyd/spotifyd.conf
-    '';
+  services.spotifyd.settings.global = {
+    device_name = "Tawa";
+    device_type = "computer";
+    backend = "pulseaudio";
+    bitrate = 320;
+    use_mpris = true;
+    disable_discovery = false;
   };
 
   services.libinput.enable = true;
@@ -258,10 +258,8 @@ in {
       discord
       obsidian
       pkgs.spotify-qt
-      pkgs.spotifyd
       pkgs.librespot
       pkgs.ungoogled-chromium
-      pkgs.gimp-with-plugins
       bitwarden-desktop
       glow
       chafa
@@ -271,6 +269,7 @@ in {
       tree
       pkgs.fuse
       steam
+      pkgs.gimp-with-plugins
       pkgs.nodejs_20
       python3
       godot
