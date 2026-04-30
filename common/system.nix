@@ -156,7 +156,9 @@ in {
   services.spotifyd.settings.global = {
     device_name = "Tawa";
     device_type = "computer";
-    backend = "pulseaudio";
+    # System service should not depend on a per-user PulseAudio/pipewire-pulse socket.
+    backend = "alsa";
+    device = "default";
     bitrate = 320;
     # System service has no graphical session bus; disable MPRIS to avoid DBus startup crash.
     use_mpris = false;
