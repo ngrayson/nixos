@@ -158,7 +158,8 @@ in {
     device_type = "computer";
     backend = "pulseaudio";
     bitrate = 320;
-    use_mpris = true;
+    # System service has no graphical session bus; disable MPRIS to avoid DBus startup crash.
+    use_mpris = false;
     disable_discovery = false;
   };
 
