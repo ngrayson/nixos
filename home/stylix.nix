@@ -6,7 +6,7 @@
 # not Stylix Hyprpaper. Other hosts: Stylix preloads `stylix.image` as Hyprpaper fallback (`wallpaper = ,<path>`).
 #
 # GTK: Stylix uses theme name `adw-gtk3` (engine) plus generated `gtk.css` (Base16 colors) — `gsettings get
-# org.gnome.desktop.interface gtk-theme` may show `adw-gtk3` while Tokyo Night colors still apply.
+# org.gnome.desktop.interface gtk-theme` may show `adw-gtk3` while Izar palette still applies.
 # Firefox “System theme” follows GTK/dconf; Stylix `targets.firefox` needs HM `programs.firefox` profiles +
 # `stylix.targets.firefox.profileNames` (see Stylix installation docs / Firefox module).
 {
@@ -40,7 +40,8 @@ in {
     autoEnable = false;
 
     polarity = "dark";
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/tokyo-night-dark.yaml";
+    # Was `tokyo-night-dark`; Izar keeps Firefox/GTK/Stylix aligned with Hyprland + Kitty (chromamancer).
+    base16Scheme = "${../themes/izar-base16.yaml}";
     image = builtins.path {
       path = wallpaperFile;
       name = wallpaperName;

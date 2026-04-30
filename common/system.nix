@@ -179,15 +179,10 @@ in {
 
   nix.settings.experimental-features = ["nix-command" "flakes"];
 
-  # Stylix GTK uses adw-gtk3 + gtk.css; Firefox still drew light native chrome (title bar,
-  # settings/hamburger menus). ui.systemUsesDarkTheme darkens browser UI to match.
-  programs.firefox = {
-    enable = true;
-    preferences = {
-      "ui.systemUsesDarkTheme" = 1;
-    };
-    preferencesStatus = "user";
-  };
+  # Firefox: `ui.systemUsesDarkTheme=1` (NixOS `programs.firefox.preferences`) forces Gecko’s
+  # built‑in dark chrome (e.g. tab strip ~#222D32), not Stylix GTK — tabs stay “wrong” vs Izar.
+  # Leave unset so “System theme” follows GTK/Stylix (`headerbar_bg_color` / void from gtk.css).
+  programs.firefox.enable = true;
 
   programs.steam = {
     enable = true;

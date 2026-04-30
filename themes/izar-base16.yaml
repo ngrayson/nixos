@@ -1,0 +1,23 @@
+# Base16 palette for Stylix — derived from chromamancer `themes/izar/theme.jsonc` tokens.
+# Slots follow typical Base16 roles so Stylix GTK/Firefox align with Hyprland + Kitty (Izar).
+system: "base16"
+name: "Izar"
+author: "chromamancer (tokens: void, depth, purple, plum, blue, lavender, mint, mauve, teal, sage)"
+variant: "dark"
+palette:
+  base00: "#010212" # void — default background
+  base01: "#0B0A1C" # depth — surfaces / tab chrome
+  base02: "#302947" # plum — borders / elevated panels
+  base03: "#405495" # blue — muted / dividers
+  base04: "#756B94" # bright plum (kitty color8) — dim / comments
+  base05: "#D7CADC" # lavender — primary text
+  base06: "#DCF5E1" # mint — bright text
+  base07: "#DCF5E1" # mint — highest contrast
+  base08: "#A481CC" # mauve — errors / strong accent
+  base09: "#A481CC" # mauve
+  base0A: "#6ABAB5" # teal — highlights (was Tokyo cyan)
+  base0B: "#8CCCA4" # sage — success / strings
+  base0C: "#6ABAB5" # teal — cyan role
+  base0D: "#6ABAB5" # teal — links / focus (matches Hypr border #6ABAB5)
+  base0E: "#A481CC" # mauve — keywords
+  base0F: "#202661" # purple — secondary accent
