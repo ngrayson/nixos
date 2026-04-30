@@ -247,8 +247,9 @@ in {
       libreoffice
       discord
       obsidian
-      pkgs.gimp
+      pkgs.gimp-with-plugins
       pkgs.spotify-qt
+      pkgs.spotifyd
       pkgs.librespot
       pkgs.ungoogled-chromium
       bitwarden-desktop
