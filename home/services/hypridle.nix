@@ -15,6 +15,7 @@ in {
       beforeSleep = lib.getExe hs.hyprBeforeSleep;
       dpmsOff = lib.getExe hs.hyprDpmsAllOffGuarded;
       dpmsOn = lib.getExe hs.hyprDpmsAllOn;
+      suspendGuarded = lib.getExe hs.hyprSuspendGuarded;
     in {
       general = {
         lock_cmd = lock;
@@ -31,6 +32,10 @@ in {
           timeout = 600;
           on-timeout = dpmsOff;
           on-resume = dpmsOn;
+        }
+        {
+          timeout = 1800;
+          on-timeout = suspendGuarded;
         }
       ];
     };

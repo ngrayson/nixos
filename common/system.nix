@@ -247,6 +247,7 @@ in {
       libreoffice
       discord
       obsidian
+      gimp
       pkgs.spotify-qt
       pkgs.librespot
       pkgs.ungoogled-chromium

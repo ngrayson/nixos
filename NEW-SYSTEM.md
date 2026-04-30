@@ -46,3 +46,4 @@ Home Manager runs as part of that for **`wiz`** (no separate `home-manager switc
 ## 7. Full detail and history
 
 Use **[MIGRATION.md](./MIGRATION.md)** for a full checklist, migration log, and path-ownership table.
+See **“Idle policy (lock / display off / suspend) + Slippi rule”** there for Hypridle timing and the Slippi emulation exception.

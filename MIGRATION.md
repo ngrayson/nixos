@@ -112,3 +112,39 @@ Notes:
 - Because `main` is moving, hash mismatches are expected; prefetching is the normal update step.
 - Slippi launcher auto-update is intentionally disabled by the HM module, so updates should come from this Nix pin.
 - Upstream reference: [lytedev/slippi-nix](https://github.com/lytedev/slippi-nix).
+
+## Idle policy (lock / display off / suspend) + Slippi rule
+
+Idle behavior for the Hyprland session is configured in:
+
+- [`home/services/hypridle.nix`](./home/services/hypridle.nix)
+- [`home/hypr/scripts.nix`](./home/hypr/scripts.nix)
+
+Current timeout pipeline:
+
+1. **300s**: lock (`quickshell-lock-guarded`)
+2. **600s**: display blank / DPMS off (`hypr-dpms-all-off-guarded`)
+3. **1800s**: suspend (`hypr-suspend-guarded`, runs `systemctl suspend`)
+
+Slippi-specific guard:
+
+- Guard scripts call `slippi-is-emulating` before lock/DPMS/suspend actions.
+- `slippi-is-emulating` only returns true for active emulation, matching cmdline entries that include both:
+  - `Slippi_Online-x86_64.AppImage`
+  - ` -e ` (ISO launch argument)
+- This means **launcher-only** windows do not inhibit idle actions, but active netplay emulation does.
+
+Suspend notes:
+
+- This is **suspend** (sleep to RAM), not hibernate.
+- `before_sleep_cmd` still runs the lock path before actual system sleep.
+
+How to tune:
+
+- Change timeout values in [`home/services/hypridle.nix`](./home/services/hypridle.nix) listener blocks.
+- Change Slippi detection logic or guard behavior in [`home/hypr/scripts.nix`](./home/hypr/scripts.nix).
+- Apply with:
+  ```bash
+  sudo nixos-rebuild switch -I nixos-config=/home/wiz/.config/nixos/hosts/<hostname>/configuration.nix
+  systemctl --user restart hypridle
+  ```

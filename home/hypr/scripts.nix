@@ -77,6 +77,15 @@ in rec {
     exec ${lib.getExe hyprDpmsAllOff}
   '';
 
+  # Suspend after extended idle, but never while Slippi emulation is active.
+  hyprSuspendGuarded = pkgs.writeShellScriptBin "hypr-suspend-guarded" ''
+    set -euo pipefail
+    if ${lib.getExe slippiIsEmulating}; then
+      exit 0
+    fi
+    exec ${lib.getExe' pkgs.systemd "systemctl"} suspend
+  '';
+
   # Lock then blank outputs before systemd suspend (quickshell-lock uses exec and cannot be chained).
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
