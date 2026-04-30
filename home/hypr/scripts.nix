@@ -65,11 +65,20 @@ in rec {
   # Toggle PulseAudio UI: used by Quickshell bar (PATH) and matches Hyprland `pavucontrol` window rules.
   # Must background Pavu (no `exec`): Quickshell wraps this in `Process` and only one run can be active;
   # `exec pavucontrol` would keep that process open until the window closes, so a second bar click never ran.
+  # Detection uses Hyprland clients (class contains "pavucontrol"): `pgrep -x` often misses the real process name.
   pavuToggle = pkgs.writeShellScriptBin "pavu-toggle" ''
     set -eu
     PAVU="${lib.getExe pkgs.pavucontrol}"
-    if pgrep -x pavucontrol >/dev/null 2>&1; then
-      pkill -x pavucontrol
+    H="${pkgs.hyprland}/bin/hyprctl"
+    J="${lib.getExe pkgs.jq}"
+    clients="$("$H" -i 0 clients -j 2>/dev/null || true)"
+    case "''$clients" in
+      \[*) ;;
+      *) clients="[]" ;;
+    esac
+    pid="$("$J" -r '[.[]? | select(((.class // "") | ascii_downcase | contains("pavucontrol"))) | .pid][0] // empty' <<<"''$clients")"
+    if [ -n "$pid" ] && [ "$pid" != "null" ]; then
+      kill -TERM "$pid" 2>/dev/null || true
     else
       "$PAVU" >/dev/null 2>&1 &
     fi
@@ -80,10 +89,10 @@ in rec {
     set -eu
     H="${pkgs.hyprland}/bin/hyprctl"
     J="${lib.getExe pkgs.jq}"
-    class="$("$H" activewindow -j 2>/dev/null | "$J" -r '.class // empty' || true)"
+    class="$("$H" -i 0 activewindow -j 2>/dev/null | "$J" -r '.class // empty' || true)"
     case "$class" in
       *pavucontrol*)
-        "$H" dispatch killactive
+        "$H" -i 0 dispatch killactive
         ;;
     esac
   '';
