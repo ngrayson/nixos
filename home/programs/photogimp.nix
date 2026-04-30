@@ -39,16 +39,15 @@ in {
       $DRY_RUN_CMD cp -r --no-preserve=mode,ownership "$_photogimp_src"/. "$_photogimp_dst"/
     fi
 
-    # Files copied from the Nix store can be read-only; ensure GIMP and sed can update them.
+    # Files copied from the Nix store can be read-only; ensure GIMP can update them.
     if [ -d "$_photogimp_dst" ]; then
       $DRY_RUN_CMD ${pkgs.coreutils}/bin/chmod -R u+rwX "$_photogimp_dst"
     fi
 
+    # Let GIMP regenerate theme.css from current system theme (Stylix/GTK integration),
+    # while preserving PhotoGIMP layout/shortcuts from the rest of the profile.
     if [ -f "$_photogimp_dst/theme.css" ]; then
-      $DRY_RUN_CMD ${pkgs.gnused}/bin/sed -i \
-        -e 's|file:///app/share/gimp/3.0/themes/Default/gimp-dark.css|file:///run/current-system/sw/share/gimp/3.0/themes/Default/gimp-dark.css|g' \
-        -e '/file:\/\/\/app\/etc\/gimp\/3\.0\/gimp\.css/d' \
-        "$_photogimp_dst/theme.css"
+      $DRY_RUN_CMD rm -f "$_photogimp_dst/theme.css"
     fi
 
     if [ -d "$_photogimp_dst" ]; then
