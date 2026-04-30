@@ -33,21 +33,17 @@ in rec {
   # True when Slippi Dolphin netplay is actively emulating (launcher-only should not match).
   slippiIsEmulating = pkgs.writeShellScriptBin "slippi-is-emulating" ''
     set -euo pipefail
-    PS="${pkgs.procps}/bin/ps"
     # Match active netplay emulation only:
-    # - process name `AppRun.wrapped`
-    # - args include Slippi netplay AppImage
-    # - includes `-e <iso>` launch argument
-    # This avoids matching launcher-only processes and avoids grep self-matches.
-    if "$PS" -eo comm=,args= | ${lib.getExe pkgs.gawk} '
-      $1 == "AppRun.wrapped" &&
-      index($0, "Slippi_Online-x86_64.AppImage") &&
-      index($0, " -e ")
-      { found = 1 }
-      END { exit(found ? 0 : 1) }
-    '; then
-      exit 0
-    fi
+    # - cmdline contains Slippi netplay AppImage
+    # - cmdline includes ` -e <iso>` launch argument
+    # Launcher-only processes do not include ` -e `.
+    for cmdline in /proc/[0-9]*/cmdline; do
+      [[ -r "$cmdline" ]] || continue
+      cmd="$(${lib.getExe' pkgs.coreutils "tr"} '\000' ' ' <"$cmdline" 2>/dev/null || true)"
+      case "$cmd" in
+        *Slippi_Online-x86_64.AppImage*" -e "*) exit 0 ;;
+      esac
+    done
     exit 1
   '';
 
