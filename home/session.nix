@@ -28,6 +28,7 @@
 
   # Interactive user PATH (kitty stays in systemPackages for Plasma launchers).
   home.packages = with pkgs; [
+    glib.bin # gsettings, gdbus — GTK/dconf checks (not on default NixOS PATH)
     dunst
     fastfetch
     helvum

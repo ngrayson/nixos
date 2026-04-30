@@ -237,6 +237,7 @@ in {
       bitwarden-desktop
       glow
       chafa
+      pkgs.gcolor3
       brave
       astroterm
       kitty
