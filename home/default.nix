@@ -12,6 +12,7 @@
     ./programs/git.nix
     ./wayland/hyprland.nix
     ./services/hypridle.nix
+    ./services/spotifyd.nix
     ./activation/plasma-multi-monitor.nix
     ./xdg/config.nix
     ./xdg/data.nix

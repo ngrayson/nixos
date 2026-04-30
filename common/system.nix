@@ -152,19 +152,6 @@ in {
     alsa.support32Bit = true;
     pulse.enable = true;
   };
-  services.spotifyd.enable = true;
-  services.spotifyd.settings.global = {
-    device_name = "Tawa";
-    device_type = "computer";
-    # System service should not depend on a per-user PulseAudio/pipewire-pulse socket.
-    backend = "alsa";
-    device = "default";
-    bitrate = 320;
-    # System service has no graphical session bus; disable MPRIS to avoid DBus startup crash.
-    use_mpris = false;
-    disable_discovery = false;
-  };
-
   services.libinput.enable = true;
 
   # Make Nerd font families available system-wide so Qt/Quickshell can resolve icon glyphs.
