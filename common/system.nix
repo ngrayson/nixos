@@ -179,7 +179,15 @@ in {
 
   nix.settings.experimental-features = ["nix-command" "flakes"];
 
-  programs.firefox.enable = true;
+  # Stylix GTK uses adw-gtk3 + gtk.css; Firefox still drew light native chrome (title bar,
+  # settings/hamburger menus). ui.systemUsesDarkTheme darkens browser UI to match.
+  programs.firefox = {
+    enable = true;
+    preferences = {
+      "ui.systemUsesDarkTheme" = 1;
+    };
+    preferencesStatus = "user";
+  };
 
   programs.steam = {
     enable = true;
@@ -237,7 +245,6 @@ in {
       bitwarden-desktop
       glow
       chafa
-      pkgs.gcolor3
       brave
       astroterm
       kitty
