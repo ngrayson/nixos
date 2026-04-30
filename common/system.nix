@@ -45,6 +45,8 @@
 in {
   imports = [
     (import (home-manager-src + "/nixos"))
+    # Slippi NixOS module: udev/runtime tuning for official GameCube USB adapter input.
+    "${slippi-nix-src}/modules/nixos/gamecube-controller-adapter.nix"
   ];
 
   # Albert: release NixOS pins an older Albert without the bundled `firefox` Python plugin.
