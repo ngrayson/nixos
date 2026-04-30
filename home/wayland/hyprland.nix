@@ -83,7 +83,7 @@ in {
         "$mod SHIFT, S, exec, ${lib.getExe hs.hyprScreenshotRegion}"
         "$mod, L, exec, ${lib.getExe hs.quickshellLock}"
         "$mod, B, exec, ${lib.getExe pkgs.firefox}"
-        "$mod SHIFT, C, exec, ${lib.getExe pkgs.eyedropper}"
+        "$mod SHIFT, C, exec, ${lib.getExe pkgs.hyprpicker} -a -n"
         "$mod, D, exec, ${lib.getExe pkgs.discord}"
         "$mod, O, exec, ${lib.getExe pkgs.obsidian}"
         "$mod CTRL, h, resizeactive, -40 0"

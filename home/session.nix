@@ -29,11 +29,9 @@
   # Interactive user PATH (kitty stays in systemPackages for Plasma launchers).
   home.packages = with pkgs; [
     glib.bin # gsettings, gdbus — GTK/dconf checks (not on default NixOS PATH)
-    # Color from screen on Hyprland: gcolor3 uses X11-era “pick other window” flows and hits
-    # “Server is missing xdg_foreign support” on Wayland. hyprpicker reads the compositor buffer;
-    # eyedropper is a GTK4 picker (portal-friendly) when you want a GUI.
+    # Screen color picker on Hyprland (compositor buffer; avoids gcolor3 / xdg_foreign on Wayland).
+    # Super+Shift+C: see wayland/hyprland.nix (`hyprpicker -a -n` → wl-copy + dunst).
     hyprpicker
-    eyedropper
     dunst
     fastfetch
     helvum
