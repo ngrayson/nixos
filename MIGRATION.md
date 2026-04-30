@@ -86,3 +86,29 @@ A **gitignored** `local.nix` is still an option for secrets you do not want in g
 ## Flakes (optional)
 
 If you move to a **flake** + **`flake.lock`**, record that in a short “build command” note here (e.g. `nixos-rebuild switch --flake .#hostname`).
+
+## Keeping `slippi-nix` in sync with `main`
+
+`slippi-nix` is pinned in [`common/system.nix`](./common/system.nix) via:
+
+- `url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";`
+- `sha256 = "…";`
+
+When you want latest launcher / Dolphin versions from upstream `main`:
+
+1. Prefetch the new tarball hash:
+   ```bash
+   nix-prefetch-url --unpack https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz
+   ```
+2. Replace `slippi-nix-src.sha256` in [`common/system.nix`](./common/system.nix) with the returned hash.
+3. Rebuild for the target host:
+   ```bash
+   sudo nixos-rebuild switch -I nixos-config=/home/wiz/.config/nixos/hosts/<hostname>/configuration.nix
+   ```
+4. Optional check (without switching): build first with `nix-build '<nixpkgs/nixos>' -A config.system.build.toplevel -I nixos-config=... --no-out-link`.
+
+Notes:
+
+- Because `main` is moving, hash mismatches are expected; prefetching is the normal update step.
+- Slippi launcher auto-update is intentionally disabled by the HM module, so updates should come from this Nix pin.
+- Upstream reference: [lytedev/slippi-nix](https://github.com/lytedev/slippi-nix).

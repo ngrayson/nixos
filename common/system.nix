@@ -36,6 +36,12 @@
     url = "https://github.com/nix-community/home-manager/archive/release-25.11.tar.gz";
     sha256 = "16mcnqpcgl3s2frq9if6vb8rpnfkmfxkz5kkkjwlf769wsqqg3i9";
   };
+
+  # Slippi Launcher + Dolphin (AppImage wrappers): https://github.com/lytedev/slippi-nix
+  slippi-nix-src = builtins.fetchTarball {
+    url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";
+    sha256 = "0v7xgi78h9mxzqfw9lqf7nn7pgmsh798y672lha0x0zhnxsah2fn";
+  };
 in {
   imports = [
     (import (home-manager-src + "/nixos"))
@@ -174,7 +180,12 @@ in {
   home-manager = {
     useGlobalPkgs = true;
     backupFileExtension = "hm-backup";
-    users.wiz = import ../home.nix;
+    users.wiz = {
+      imports = [
+        ../home.nix
+        "${slippi-nix-src}/modules/home-manager/default.nix"
+      ];
+    };
   };
 
   nix.settings.experimental-features = ["nix-command" "flakes"];

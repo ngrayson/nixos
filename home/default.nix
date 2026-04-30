@@ -7,6 +7,7 @@
     ./session.nix
     ./programs/qt-palette.nix
     ./programs/albert.nix
+    ./programs/slippi.nix
     ./programs/zsh.nix
     ./programs/git.nix
     ./wayland/hyprland.nix
