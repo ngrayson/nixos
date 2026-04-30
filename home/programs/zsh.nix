@@ -26,7 +26,6 @@
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
       config = "code ~/.config/nixos";
       fetch = "fastfetch";
-      gimp = "~/Apps/GIMP &";
       keyboard-flash = "sudo sleep 1; cd ~/pocket-reform/pocket-reform-keyboard-fw/pocket-hid; ./build.sh;echo \"flashing in 10s\";sleep 7; echo \"flashing in 3s\"; sleep 4;sudo picotool load build/pocket-hid.uf2 -f";
       kitty = "kitty 2>/dev/null";
       l = "ls -CF";
@@ -34,7 +33,6 @@
       ll = "ls -ll";
       moon = "curl \"wttr.in/moon?Fun\"";
       notes = "obsidian";
-      obsidian = "~/Apps/Obsidian &";
       ohmyzshconfig = "micro ~/.config/nixos/home/default.nix";
       "os-rebuild" = "bash ~/.config/nixos/documentation/nixos-framework-setup/os-rebuild.sh";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
