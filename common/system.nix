@@ -2,6 +2,7 @@
 {
   config,
   pkgs,
+  lib,
   ...
 }: let
   # Plymouth: single TTF via FreeType — Nerd Fonts much smaller than Iosevka (~13 MiB → ~2.4 MiB).
@@ -151,6 +152,15 @@ in {
     alsa.support32Bit = true;
     pulse.enable = true;
   };
+  services.spotifyd.enable = true;
+  systemd.services.spotifyd = {
+    # spotifyd resolves $XDG_CONFIG_PATH/spotifyd/spotifyd.conf per upstream docs.
+    environment.XDG_CONFIG_PATH = "/home/wiz/.config/nixos";
+    serviceConfig.ExecStart = lib.mkForce ''
+      ${pkgs.spotifyd}/bin/spotifyd --no-daemon --cache-path /var/cache/spotifyd \
+      --config-path /home/wiz/.config/nixos/spotifyd/spotifyd.conf
+    '';
+  };
 
   services.libinput.enable = true;
 
@@ -247,9 +257,7 @@ in {
       libreoffice
       discord
       obsidian
-      pkgs.gimp-with-plugins
       pkgs.spotify-qt
-      pkgs.spotifyd
       pkgs.librespot
       pkgs.ungoogled-chromium
       bitwarden-desktop
