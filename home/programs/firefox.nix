@@ -26,6 +26,21 @@
           background-color: #302947 !important;
           box-shadow: inset 0 -2px #6abab5 !important;
         }
+        /* Tab labels (Proton inherits a dark text color onto plum — force Izar lavender) */
+        .tabbrowser-tab,
+        .tabbrowser-tab .tab-label,
+        .tabbrowser-tab .tab-text,
+        .tabbrowser-tab .tab-secondary-label {
+          color: #d7cadc !important;
+        }
+        .tabbrowser-tab:not([selected]) .tab-label,
+        .tabbrowser-tab:not([selected]) .tab-text {
+          opacity: 0.92 !important;
+        }
+        .tabbrowser-tab .tab-close-button {
+          color: #d7cadc !important;
+          fill: currentColor !important;
+        }
       '';
     };
   };
