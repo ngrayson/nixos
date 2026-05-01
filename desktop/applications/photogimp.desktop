@@ -2,6 +2,7 @@
 Version=1.0
 Type=Application
 Name=PhotoGIMP
+Name[en_US]=Gimp
 GenericName=Image Editor
 Comment=Edit images and photos with PhotoGIMP layout
 TryExec=/run/current-system/sw/bin/gimp

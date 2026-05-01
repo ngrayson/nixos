@@ -237,6 +237,7 @@ in {
       topgrade
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
+      pkgs.vscode
       nix-search-cli
       openvpn
       curl
