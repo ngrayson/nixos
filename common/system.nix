@@ -202,6 +202,9 @@ in {
     remotePlay.openFirewall = true;
     dedicatedServer.openFirewall = true;
     localNetworkGameTransfers.openFirewall = true;
+    # Inside Steam FHS so `gamescope … %command%` / `mangohud %command%` resolve (wiki / DeepWiki).
+    extraPackages = with pkgs; [gamescope mangohud];
+    extraCompatPackages = with pkgs; [proton-ge-bin];
   };
 
   programs.zsh.enable = true;
