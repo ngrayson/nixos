@@ -259,7 +259,6 @@ in {
       kitty
       tree
       pkgs.fuse
-      steam
       pkgs.gimp-with-plugins
       pkgs.nodejs_20
       python3

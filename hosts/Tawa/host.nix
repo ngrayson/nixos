@@ -11,6 +11,10 @@
 
   networking.hostName = "Tawa";
 
+  # Discrete AMD (RX 6700 class): explicit X / XWayland DDX; see NixOS Steam wiki / gaming guides.
+  services.xserver.videoDrivers = ["amdgpu"];
+  programs.gamemode.enable = true;
+
   # Plasma 6 sets SDDM to the Wayland greeter (KWin) by default. That path never runs
   # `services.xserver.displayManager.setupCommands`, so xrandr cannot shrink the login to one output.
   services.displayManager.sddm.wayland.enable = lib.mkForce false;
