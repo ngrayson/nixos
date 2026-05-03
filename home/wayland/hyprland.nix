@@ -108,6 +108,10 @@ in {
       ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
       windowrulev2 = [
+        # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
+        "noborder, class:^(steam_app_1888160)$"
+        "rounding 0, class:^(steam_app_1888160)$"
+        "noshadow, class:^(steam_app_1888160)$"
         "float, title:^Pixel Composer.*"
         "float, title:^Select files$"
         "float, class:^(PixelComposer|pixelcomposer).*"
