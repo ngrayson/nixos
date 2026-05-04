@@ -47,6 +47,11 @@ in {
         source = ../../topgrade/topgrade.toml;
         force = true;
       };
+      "ovpn" = {
+        source = ../../vpn/ovpn;
+        recursive = true;
+        force = true;
+      };
     }
     // hx.hyprMonitorsXdg
     // hx.kvantumConfigFiles;

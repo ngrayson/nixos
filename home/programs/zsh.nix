@@ -21,6 +21,7 @@
     shellAliases = {
       ns = "nix-search";
       vpn = "sudo vortix";
+      vpn-froot = "vpn-froot";
       "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor-agent";
       agent = "cd ~/Stellarium && ~/.local/bin/cursor-agent --resume";
       clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";

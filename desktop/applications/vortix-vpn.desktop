@@ -2,7 +2,7 @@
 Categories=Network;Security;
 Comment[en_CA]=OpenVPN / WireGuard terminal UI (requires sudo)
 Comment=OpenVPN / WireGuard terminal UI (requires sudo)
-Exec=kitty -e sudo vortix
+Exec=kitty -e vpn-froot
 GenericName[en_CA]=
 GenericName=
 Icon=preferences-system-network-vpn

@@ -48,6 +48,7 @@ in {
     (import (home-manager-src + "/nixos"))
     # Slippi NixOS module: udev/runtime tuning for official GameCube USB adapter input.
     "${slippi-nix-src}/modules/nixos/gamecube-controller-adapter.nix"
+    ./vpn-vortix.nix
   ];
 
   # Albert: release NixOS pins an older Albert without the bundled `firefox` Python plugin.
@@ -159,17 +160,6 @@ in {
     nerd-fonts.iosevka-term-slab
   ];
 
-  services.stunnel = {
-    enable = true;
-    clients.frootvpn = {
-      accept = "127.0.0.1:1194";
-      connect = "ca-west.frootvpn.com:443";
-      CAFile = "/etc/frootvpn/stunnel-ca.pem";
-      OCSPaia = false;
-      verifyHostname = "server";
-    };
-  };
-
   users.users.wiz = {
     isNormalUser = true;
     description = "Nick G";
@@ -242,11 +232,6 @@ in {
       pkgs.albert
       pkgs.vscode
       nix-search-cli
-      openvpn
-      curl
-      wireguard-tools
-      iptables
-      iproute2
       pkgs.xd
       libreoffice
       discord
@@ -282,7 +267,6 @@ in {
       # Match HM qt platform theme (kde): Dolphin/KF6 need kde, not qt5ct.
       QT_QPA_PLATFORMTHEME = "kde";
     };
-    etc."frootvpn/stunnel-ca.pem".source = ../frootvpn-stunnel-ca.pem;
   };
 
   system.stateVersion = "25.11";
