@@ -257,6 +257,7 @@ in {
       sassc
       gnome-themes-extra
       gtk-engine-murrine
+      pkgs.deluge-gtk
     ]);
 
   environment = {
