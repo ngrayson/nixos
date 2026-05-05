@@ -223,6 +223,7 @@ in {
       nautilus
       powertop
       vlc
+      pkgs.geeqie
       alejandra
       hyprmon
       fzf
