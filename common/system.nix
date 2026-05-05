@@ -222,6 +222,7 @@ in {
       feh
       nautilus
       powertop
+      vlc
       alejandra
       hyprmon
       fzf
