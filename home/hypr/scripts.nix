@@ -47,6 +47,19 @@ in rec {
     exit 1
   '';
 
+  # True when Deluge UI is running; used to block idle suspend while seeding.
+  delugeIsRunning = pkgs.writeShellScriptBin "deluge-is-running" ''
+    set -euo pipefail
+    for cmdline in /proc/[0-9]*/cmdline; do
+      [[ -r "$cmdline" ]] || continue
+      cmd="$(${lib.getExe' pkgs.coreutils "tr"} '\000' ' ' <"$cmdline" 2>/dev/null || true)"
+      case "$cmd" in
+        *deluge-gtk*|*org.deluge.Deluge*) exit 0 ;;
+      esac
+    done
+    exit 1
+  '';
+
   hyprDpmsAllOff = pkgs.writeShellScriptBin "hypr-dpms-all-off" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
@@ -77,10 +90,13 @@ in rec {
     exec ${lib.getExe hyprDpmsAllOff}
   '';
 
-  # Suspend after extended idle, but never while Slippi emulation is active.
+  # Suspend after extended idle, but never while Slippi emulation or Deluge is active.
   hyprSuspendGuarded = pkgs.writeShellScriptBin "hypr-suspend-guarded" ''
     set -euo pipefail
     if ${lib.getExe slippiIsEmulating}; then
+      exit 0
+    fi
+    if ${lib.getExe delugeIsRunning}; then
       exit 0
     fi
     exec ${lib.getExe' pkgs.systemd "systemctl"} suspend

@@ -108,8 +108,6 @@ in {
       ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
       windowrulev2 = [
-        # Keep seeding/UI responsive: hypridle respects Wayland idle inhibitors.
-        "idleinhibit always, class:^(deluge)$"
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "noborder, class:^(steam_app_1888160)$"
         "rounding 0, class:^(steam_app_1888160)$"
