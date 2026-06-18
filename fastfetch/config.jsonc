@@ -1,7 +1,6 @@
  {
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
-    
     "type": "kitty-icat",
     "source": "~/.config/fastfetch/izar-tsp.gif",
     "preserveAspectRatio": true,
@@ -84,15 +83,15 @@
 				"type": ["num", "bar"]
 			}
 		},
-		{
-			"type": "battery",
-			"key": "   └  ",
-			"keyColor": "dim_cyan",
-			"format": "{capacity-bar} ({4}) {time-hours}h{time-minutes}m {5}",
-			"percent": {
-				"type": ["num", "bar"]
-			}
-		},
+		//{
+		//	"type": "battery",
+		//	"key": "   └  ",
+		//	"keyColor": "dim_cyan",
+		//	"format": "{capacity-bar} ({4}) {time-hours}h{time-minutes}m {5}",
+		//	"percent": {
+		//		"type": ["num", "bar"]
+		//	}
+		//},
 		"break",
 		{
 			"type": "custom",
@@ -105,11 +104,11 @@
 			"keyColor": "cyan",
 			"format": "{3}"
 		},
-		{
-			"type": "de",
-			"key": "   ├  ",
-			"keyColor": "dim_cyan"
-		},
+		// {
+		// 	"type": "de",
+		// 	"key": "   ├  ",
+		// 	"keyColor": "dim_cyan"
+		// },
 		{
 			"type": "wm",
 			"key": "   ├  ",
