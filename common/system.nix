@@ -41,7 +41,7 @@
   # Slippi Launcher + Dolphin (AppImage wrappers): https://github.com/lytedev/slippi-nix
   slippi-nix-src = builtins.fetchTarball {
     url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";
-    sha256 = "0v7xgi78h9mxzqfw9lqf7nn7pgmsh798y672lha0x0zhnxsah2fn";
+    sha256 = "10hhkyb54c63y0falzqn1fnvcs082ydsmra1s0z155jm7gnvlb8n";
   };
 in {
   imports = [
@@ -172,6 +172,7 @@ in {
   home-manager = {
     useGlobalPkgs = true;
     backupFileExtension = "hm-backup";
+    extraSpecialArgs = {inherit slippi-nix-src;};
     users.wiz = {
       imports = [
         ../home.nix
