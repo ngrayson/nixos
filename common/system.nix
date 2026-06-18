@@ -43,6 +43,12 @@
     url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";
     sha256 = "10hhkyb54c63y0falzqn1fnvcs082ydsmra1s0z155jm7gnvlb8n";
   };
+
+  # Slippi Dolphin AppImages prepend /usr/lib via linux-env.sh; default FHS libcurl
+  # lacks CURL_OPENSSL_4. Shared by programs.appimage and environment.systemPackages.
+  appimageRunWithCurl = pkgs.appimage-run.override {
+    extraPkgs = p: [p.curl];
+  };
 in {
   imports = [
     (import (home-manager-src + "/nixos"))
@@ -210,6 +216,7 @@ in {
   programs.appimage = {
     enable = true;
     binfmt = true;
+    package = appimageRunWithCurl;
   };
 
   environment.systemPackages =
@@ -229,7 +236,7 @@ in {
       hyprmon
       fzf
       libnotify
-      appimage-run
+      appimageRunWithCurl
       topgrade
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
