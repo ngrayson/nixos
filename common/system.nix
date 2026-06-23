@@ -253,6 +253,7 @@ in {
       glow
       chafa
       brave
+      pkgs.mendeley
       astroterm
       kitty
       tree
