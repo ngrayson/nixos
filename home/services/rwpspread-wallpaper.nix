@@ -22,15 +22,19 @@ in
 
     wayland.windowManager.hyprland.settings.misc.disable_hyprland_logo = true;
 
+    # Chain off hyprpaper, not graphical-session.target: HM's hyprpaper unit is
+    # `After=graphical-session.target`, so also `WantedBy`/`PartOf` that target here
+    # creates an ordering cycle and systemd drops rwpspread on login (blank wallpaper).
     systemd.user.services.rwpspread = {
       Unit = {
         Description = "rwpspread multi-monitor wallpaper (Hyprpaper backend)";
         After = ["hyprpaper.service"];
-        PartOf = [config.wayland.systemd.target];
+        Requires = ["hyprpaper.service"];
+        PartOf = ["hyprpaper.service"];
         ConditionEnvironment = "WAYLAND_DISPLAY";
       };
 
-      Install.WantedBy = [config.wayland.systemd.target];
+      Install.WantedBy = ["hyprpaper.service"];
 
       Service = {
         Type = "simple";
