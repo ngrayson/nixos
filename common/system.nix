@@ -258,6 +258,7 @@ in {
       kitty
       tree
       pkgs.fuse
+      pkgs.imagemagick
       pkgs.gimp-with-plugins
       pkgs.nodejs_20
       python3
