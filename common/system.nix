@@ -270,6 +270,9 @@ in {
       gnome-themes-extra
       gtk-engine-murrine
       pkgs.deluge-gtk
+      pkgs.audacity
+      pkgs.zip
+      pkgs.ffmpeg
     ]);
 
   environment = {
