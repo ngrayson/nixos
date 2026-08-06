@@ -39,9 +39,11 @@
   };
 
   # Slippi Launcher + Dolphin (AppImage wrappers): https://github.com/lytedev/slippi-nix
+  # Pin includes Slippi netplay 3.6.4 (launcher rejects older Nix-wrapped 3.6.3 and
+  # overwrites it with a stock AppImage, breaking the Sys/ symlink layout on NixOS).
   slippi-nix-src = builtins.fetchTarball {
     url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";
-    sha256 = "10hhkyb54c63y0falzqn1fnvcs082ydsmra1s0z155jm7gnvlb8n";
+    sha256 = "0hhh8idsjqvyknw96hw44s5d8zarfbxvzdp0969j205w0bqf8asd";
   };
 
   # Slippi Dolphin AppImages prepend /usr/lib via linux-env.sh; default FHS libcurl
