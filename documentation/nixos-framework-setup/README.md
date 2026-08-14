@@ -15,6 +15,7 @@ This directory contains the active rebuild helper plus archived planning materia
 - Supports `explain`, `check`, `build`, `dry-activate`, `test`, `switch`, and `boot`.
 - Uses the Git-backed flake and validates every output before rebuilding.
 - Explains whether changes affect flake inputs, shared base modules, Home Manager, the selected host, hardware, another host, or only documentation/tooling.
+- Shows `git status` plus the full `git diff HEAD` (stat and patch) before check/build/activation.
 - Refuses to activate a different host accidentally, refuses placeholder hardware UUIDs, and stops when untracked configuration inputs would be invisible to the flake.
 - Logs rebuild output under `~/.cache/os-rebuild`.
 

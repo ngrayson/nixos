@@ -255,6 +255,28 @@ show_change_scope() {
   fi
 }
 
+show_repository_diff() {
+  command_exists git || return 0
+  git -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+
+  if [[ -z "$(git -C "$NIXOS_DIR" status --porcelain)" ]]; then
+    return 0
+  fi
+
+  heading "Repository diff"
+  git -C "$NIXOS_DIR" --no-pager status --short
+  printf "\n"
+  git -C "$NIXOS_DIR" --no-pager diff --stat HEAD
+  printf "\n"
+  # Staged + unstaged content vs HEAD (what a Git-backed flake build will see
+  # once untracked inputs are staged or committed).
+  git -C "$NIXOS_DIR" --no-pager diff HEAD
+  if [[ -n "$(git -C "$NIXOS_DIR" ls-files --others --exclude-standard)" ]]; then
+    printf "\n"
+    warn "Untracked files have no diff until staged; list above under Configuration scope."
+  fi
+}
+
 show_guidance() {
   heading "Guidance"
 
@@ -485,6 +507,7 @@ main() {
   fi
 
   show_change_scope
+  show_repository_diff
   show_guidance
 
   if [[ "$ACTION" == "explain" ]]; then

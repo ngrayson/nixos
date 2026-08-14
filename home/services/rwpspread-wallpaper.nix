@@ -17,7 +17,10 @@ in
   lib.mkIf (hostIsTawa && config.wayland.windowManager.hyprland.enable) {
     services.hyprpaper = {
       enable = true;
-      settings = {};
+      settings = {
+        # Hyprpaper defaults splash=true and paints random Hyprland quotes over wallpapers.
+        splash = false;
+      };
     };
 
     wayland.windowManager.hyprland.settings.misc.disable_hyprland_logo = true;
