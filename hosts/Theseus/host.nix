@@ -1,11 +1,8 @@
-# Theseus (Framework laptop) — hostname, nixos-hardware, LUKS, kernelParams.
+# Theseus (Framework laptop) — hostname, LUKS, hibernation, and host overrides.
+# The Framework AMD AI 300 module is imported by flake.nix.
 {...}: {
-  imports = [
-    # After adding nixos-hardware to flake or channel:
-    # <nixos-hardware/framework/13-inch/amd-ai-300-series>
-  ];
-
   networking.hostName = "Theseus";
+  system.stateVersion = "26.05";
 
   # boot.initrd.luks.devices."luks-…".device = "/dev/disk/by-uuid/…";
   # boot.kernelParams = [ ];

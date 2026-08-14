@@ -1,6 +1,6 @@
 # NixOS docs (Tawa / `~/.config/nixos`)
 
-This directory used to hold a full **Framework laptop + Theseus** phased roadmap. That material is **archived** — it is not part of day-to-day work on **Tawa** (this desktop config).
+This directory contains the active rebuild helper plus archived planning material from the original Framework migration.
 
 ## Use on Tawa
 
@@ -8,9 +8,22 @@ This directory used to hold a full **Framework laptop + Theseus** phased roadmap
 - **New machine / clone:** **[`NEW-SYSTEM.md`](../../NEW-SYSTEM.md)**.
 - **Home Manager implementation:** **[`home/default.nix`](../../home/default.nix)** and the rest of **[`home/`](../../home/)**.
 
-## Helper script (unchanged path)
+## Flake-aware rebuild helper
 
-- **[`os-rebuild.sh`](./os-rebuild.sh)** — guided `nixos-rebuild` wrapper. The zsh alias **`os-rebuild`** still points here.
+- **[`os-rebuild.sh`](./os-rebuild.sh)** — guided `nixos-rebuild` wrapper. The zsh alias **`os-rebuild`** points here.
+- Targets the current hostname by default, or a named flake output with `--host`.
+- Supports `build`, `dry-activate`, `test`, `switch`, and `boot`.
+- Formats and checks the flake before rebuilding, shows the Git diff summary, and logs rebuild output under `~/.cache/os-rebuild`.
+
+Examples:
+
+```bash
+os-rebuild build --host Tawa
+os-rebuild dry-activate --host Tawa
+os-rebuild boot --host Theseus
+```
+
+Use `--yes` only for noninteractive validation. `--commit` is opt-in and still asks before committing all repository changes.
 
 ## Archived Framework / Theseus roadmap
 

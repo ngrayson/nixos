@@ -1,6 +1,4 @@
-# Stylix via Home Manager only (no flakes): https://nix-community.github.io/stylix/installation.html
-# Use `builtins.fetchTarball` here (not `pkgs.fetchFromGitHub`) so `imports` does not force `pkgs`
-# before Home Manager has finished fixing up `_module.args` (avoids infinite recursion).
+# Stylix via Home Manager only. The module is supplied by the pinned flake input.
 #
 # Tawa: multi-monitor Izar wallpaper is handled by [`services/rwpspread-wallpaper.nix`](./services/rwpspread-wallpaper.nix),
 # not Stylix Hyprpaper. Other hosts: Stylix preloads `stylix.image` as Hyprpaper fallback (`wallpaper = ,<path>`).
@@ -11,17 +9,12 @@
 # `stylix.targets.firefox.profileNames` (see Stylix installation docs / Firefox module).
 {
   nixosConfig ? null,
+  stylixModule,
   pkgs,
   config,
   lib,
   ...
 }: let
-  # Match `home-manager` release-25.11 (see Stylix install docs for stable + HM).
-  stylixSrc = builtins.fetchTarball {
-    url = "https://github.com/nix-community/stylix/archive/release-25.11.tar.gz";
-    sha256 = "1pcldghrbln6pnbph990871442zkfa7vmzmqgh9x62ijjgbzvr62";
-  };
-  stylix = import stylixSrc;
   hostIsTawa = nixosConfig != null && nixosConfig.networking.hostName == "Tawa";
   wallpaperFile =
     if hostIsTawa
@@ -32,7 +25,7 @@
     then "izar-utopia.png"
     else "stylix-wallpaper.png";
 in {
-  imports = [stylix.homeModules.stylix];
+  imports = [stylixModule];
 
   stylix = {
     enable = true;

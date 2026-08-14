@@ -34,7 +34,11 @@
     hyprpicker
     dunst
     fastfetch
-    helvum
+    (
+      if pkgs ? crosspipe
+      then pkgs.crosspipe
+      else pkgs.helvum
+    )
     hyprmon
     hyprshot
     jq

@@ -1,8 +1,10 @@
 # Shared NixOS module for all hosts. Per-machine: `hosts/<hostname>/` (hardware, host.nix, entry configuration.nix).
 {
   config,
+  inputs,
   pkgs,
   lib,
+  unstablePkgs,
   ...
 }: let
   # Plymouth: single TTF via FreeType — Nerd Fonts much smaller than Iosevka (~13 MiB → ~2.4 MiB).
@@ -32,19 +34,8 @@
     sed -i "s|^background=.*|background=${sddmLoginBg}|" $out/share/sddm/themes/breeze-login/theme.conf
   '';
 
-  # home-manager: release-25.11 matches NixOS 25.11; entry ../home.nix imports ./home/ — see MIGRATION.md
-  home-manager-src = builtins.fetchTarball {
-    url = "https://github.com/nix-community/home-manager/archive/release-25.11.tar.gz";
-    sha256 = "16mcnqpcgl3s2frq9if6vb8rpnfkmfxkz5kkkjwlf769wsqqg3i9";
-  };
-
-  # Slippi Launcher + Dolphin (AppImage wrappers): https://github.com/lytedev/slippi-nix
-  # Pin includes Slippi netplay 3.6.4 (launcher rejects older Nix-wrapped 3.6.3 and
-  # overwrites it with a stock AppImage, breaking the Sys/ symlink layout on NixOS).
-  slippi-nix-src = builtins.fetchTarball {
-    url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";
-    sha256 = "0hhh8idsjqvyknw96hw44s5d8zarfbxvzdp0969j205w0bqf8asd";
-  };
+  # Flake inputs are pinned in flake.lock.
+  slippi-nix-src = inputs.slippi-nix;
 
   # Slippi Dolphin AppImages prepend /usr/lib via linux-env.sh; default FHS libcurl
   # lacks CURL_OPENSSL_4. Shared by programs.appimage and environment.systemPackages.
@@ -53,7 +44,7 @@
   };
 in {
   imports = [
-    (import (home-manager-src + "/nixos"))
+    ./base.nix
     # Slippi NixOS module: udev/runtime tuning for official GameCube USB adapter input.
     "${slippi-nix-src}/modules/nixos/gamecube-controller-adapter.nix"
     ./vpn-vortix.nix
@@ -62,16 +53,7 @@ in {
   # Albert: release NixOS pins an older Albert without the bundled `firefox` Python plugin.
   # nixos-unstable ships Albert 34.x, which includes it (Python API 5.x). Only `albert` is taken from unstable.
   nixpkgs.overlays = [
-    (final: prev: let
-      nixpkgs-unstable = builtins.fetchTarball {
-        url = "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz";
-        sha256 = "0cnf0mc3nvj08p0x3amjfp3gf51i3afkhwzh8rsx9pzmwpybayhh";
-      };
-      unstablePkgs = import nixpkgs-unstable {
-        inherit (config.nixpkgs) config;
-        localSystem = prev.stdenv.hostPlatform;
-      };
-    in {
+    (final: prev: {
       albert = unstablePkgs.albert;
     })
   ];
@@ -99,12 +81,6 @@ in {
 
   # Enable networking
   networking.networkmanager.enable = true;
-
-  # Set your time zone.
-  time.timeZone = "America/Vancouver";
-
-  # Select internationalisation properties.
-  i18n.defaultLocale = "en_CA.UTF-8";
 
   # Fingerprint: SDDM uses `auth substack login` (see nixpkgs sddm module), so `login.fprintAuth`
   # gates graphical login too — not only `sddm.fprintAuth`. Keep login fingerprint off to avoid
@@ -180,7 +156,10 @@ in {
   home-manager = {
     useGlobalPkgs = true;
     backupFileExtension = "hm-backup";
-    extraSpecialArgs = {inherit slippi-nix-src;};
+    extraSpecialArgs = {
+      inherit slippi-nix-src;
+      stylixModule = inputs.stylix.homeModules.stylix;
+    };
     users.wiz = {
       imports = [
         ../home.nix
@@ -188,8 +167,6 @@ in {
       ];
     };
   };
-
-  nix.settings.experimental-features = ["nix-command" "flakes"];
 
   # Firefox: `ui.systemUsesDarkTheme=1` (NixOS `programs.firefox.preferences`) forces Gecko’s
   # built‑in dark chrome (e.g. tab strip ~#222D32), not Stylix GTK — tabs stay “wrong” vs Izar.
@@ -209,8 +186,6 @@ in {
   programs.zsh.enable = true;
   users.users.wiz.shell = pkgs.zsh;
   users.defaultUserShell = pkgs.zsh;
-
-  nixpkgs.config.allowUnfree = true;
 
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [];
@@ -262,7 +237,7 @@ in {
       pkgs.fuse
       pkgs.imagemagick
       pkgs.gimp-with-plugins
-      pkgs.nodejs_20
+      pkgs.nodejs_22
       python3
       godot
       libsForQt5.qtstyleplugin-kvantum
@@ -286,6 +261,4 @@ in {
       QT_QPA_PLATFORMTHEME = "kde";
     };
   };
-
-  system.stateVersion = "25.11";
 }

@@ -22,6 +22,8 @@
 in {
   wayland.windowManager.hyprland = {
     enable = true;
+    # Preserve the existing Hyprland syntax while home.stateVersion remains 25.11.
+    configType = "hyprlang";
     package = null;
     portalPackage = null;
     systemd.enable = true;
@@ -45,6 +47,10 @@ in {
       decoration = {
         rounding = 25;
         rounding_power = 1.2;
+      };
+      dwindle = {
+        # Keep the orientation chosen by `layoutmsg, togglesplit` when new windows open.
+        preserve_split = true;
       };
       input = {
         kb_layout = "us";
@@ -78,7 +84,7 @@ in {
         "$mod SHIFT, E, exit,"
         "$mod, F, fullscreen, 0"
         "$mod SHIFT, Space, togglefloating,"
-        "$mod, Y, togglesplit"
+        "$mod, Y, layoutmsg, togglesplit"
         "$mod SHIFT, P, pseudo"
         "$mod SHIFT, S, exec, ${lib.getExe hs.hyprScreenshotRegion}"
         "$mod, L, exec, ${lib.getExe hs.quickshellLock}"
@@ -107,17 +113,14 @@ in {
         "$mod, mouse:273, resizewindow"
       ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
-      windowrulev2 = [
+      windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
-        "noborder, class:^(steam_app_1888160)$"
-        "rounding 0, class:^(steam_app_1888160)$"
-        "noshadow, class:^(steam_app_1888160)$"
-        "float, title:^Pixel Composer.*"
-        "float, title:^Select files$"
-        "float, class:^(PixelComposer|pixelcomposer).*"
-        "float, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
-        "size 900 600, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
-        "move 100%-w-20 ${toString pavuWindowY}, class:^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$"
+        "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
+        "match:title ^Pixel Composer.*, float on"
+        "match:title ^Select files$, float on"
+        "match:class ^(PixelComposer|pixelcomposer).*, float on"
+        # `move` takes monitor-local math expressions; expressions may not contain spaces.
+        "match:class ^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$, float on, size 900 600, move (monitor_w-window_w-20) ${toString pavuWindowY}"
       ];
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"

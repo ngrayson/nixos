@@ -1,8 +1,8 @@
 # Entry module for host Theseus (Framework laptop). Build with:
-#   nix build '<nixpkgs/nixos>' --attr config.system.build.toplevel --no-link \
-#     --include nixos-config=/abs/path/to/hosts/Theseus/configuration.nix
+#   os-rebuild build --host Theseus
 # Before first deploy on real hardware, replace ./hardware-configuration.nix with
-# `nixos-generate-config` output (see file header there).
+# `nixos-generate-config` output (see file header there). Once its partition-backed
+# swapDevices entry is verified, add ./hibernate.nix to imports.
 {
   config,
   pkgs,
@@ -12,5 +12,6 @@
     ../../common/system.nix
     ./hardware-configuration.nix
     ./host.nix
+    # ./hibernate.nix
   ];
 }
