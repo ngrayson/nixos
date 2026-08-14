@@ -61,6 +61,10 @@
         nixos-hardware.nixosModules.framework-amd-ai-300-series
         ./hosts/Theseus/configuration.nix
       ];
+
+      Gcp = mkHost [
+        ./hosts/Gcp/configuration.nix
+      ];
     };
 
     formatter.${system} = nixpkgs.legacyPackages.${system}.alejandra;

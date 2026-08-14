@@ -1,0 +1,35 @@
+# Theseus: Framework AMD AI 300
+
+The flake imports `nixos-hardware.nixosModules.framework-amd-ai-300-series` for this host. The checked-in `hardware-configuration.nix` is deliberately a non-deployable placeholder.
+
+## Bring in the installed machine
+
+On Theseus, copy the installer-generated hardware file:
+
+```bash
+sudo cp /etc/nixos/hardware-configuration.nix \
+  ~/.config/nixos/hosts/Theseus/hardware-configuration.nix
+```
+
+Before building, inspect it and confirm:
+
+- `/` and `/boot` use Theseus's real UUIDs.
+- The LUKS mapping matches `lsblk -f`.
+- `swapDevices` names the partition created by “swap with hibernate”.
+- No all-zero placeholder UUID remains.
+
+Do not copy Tawa's hardware file or UUIDs.
+
+## Enable hibernation
+
+`hibernate.nix` derives `boot.resumeDevice` from exactly one partition-backed `swapDevices` entry and rejects swap files because those require a resume offset.
+
+After verifying the generated swap entry, uncomment `./hibernate.nix` in `configuration.nix`, then:
+
+```bash
+os-rebuild build --host Theseus
+os-rebuild dry-activate --host Theseus
+os-rebuild boot --host Theseus
+```
+
+Reboot only after reviewing the dry activation. After boot, test `systemctl hibernate` with nonessential applications closed. A normal boot remains the recovery path if resume fails.

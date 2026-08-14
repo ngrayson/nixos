@@ -1,6 +1,6 @@
 # New system setup (short)
 
-This repo is the NixOS + [Home Manager](https://nix-community.github.io/home-manager/) config for user **`wiz`**. NixOS **25.11** and Home Manager **`release-25.11`** are assumed (see [`common/system.nix`](./common/system.nix)).
+This repo is the NixOS + [Home Manager](https://nix-community.github.io/home-manager/) config for user **`wiz`**. Releases and external modules are pinned by [`flake.nix`](./flake.nix) and [`flake.lock`](./flake.lock); named hosts are exposed under `nixosConfigurations`.
 
 ## 1. Install NixOS on the hardware
 
@@ -8,30 +8,40 @@ This repo is the NixOS + [Home Manager](https://nix-community.github.io/home-man
 2. Run **`nixos-generate-config --root /mnt`**. That produces a **new** `hardware-configuration.nix` for **this** machine only.
 3. Clone this repository to your config path (e.g. `/mnt/etc/nixos` or `~/.config/nixos` after first boot). **Do not** copy an old `hardware-configuration.nix` from another PC; merge only deliberate bits (extra `kernelModules`, etc.) into the **new** generated file.
 
-## 2. Point the install at this config
+## 2. Add the named host
 
-If the live config is not `/etc/nixos`, use `NIXOS_CONFIG` or `-I nixos-config=…` (see [`BRANCHING.md`](./BRANCHING.md) if you use a non-default path).
+Create `hosts/<hostname>/configuration.nix`, `host.nix`, and the generated `hardware-configuration.nix`, then add the host to `nixosConfigurations` in [`flake.nix`](./flake.nix). The flake output name is case-sensitive and should match `networking.hostName`.
 
 ## 3. Machine-specific options: `hosts/<hostname>/`
 
 Under **`hosts/<hostname>/`** for **this** machine:
 
-- **`host.nix`**: **`networking.hostName`**, **`imports`** (`<nixos-hardware/…>`), **`boot.initrd.luks.devices`**, **`boot.kernelParams`**
+- **`host.nix`**: **`networking.hostName`**, host-only modules, **`boot.initrd.luks.devices`**, **`boot.kernelParams`**
 - **`hardware-configuration.nix`**: from **`nixos-generate-config`** for this host only
 - **`configuration.nix`**: imports **`../../common/system.nix`**, `./hardware-configuration.nix`, `./host.nix`
 
-Set **`NIXOS_CONFIG`** to **`…/hosts/<hostname>/configuration.nix`**, or edit the root [`configuration.nix`](./configuration.nix) import if this host is the repo default.
+Hardware modules from `nixos-hardware` belong in that host's module list in [`flake.nix`](./flake.nix), not in a channel-style `<nixos-hardware/...>` import.
 
 Shared **system** options live in **[`common/system.nix`](./common/system.nix)**. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.).
 
 ## 4. `system.stateVersion`
 
-Set **`system.stateVersion`** in [`common/system.nix`](./common/system.nix) to what the **installer** recommends for a **first** install on this machine; see the NixOS manual before changing it later.
+Set **`system.stateVersion`** in `hosts/<hostname>/host.nix` to the release used for that machine's **first** install. Do not bump it during routine NixOS upgrades.
 
 ## 5. Build and switch
 
+Use the guided helper:
+
 ```bash
-sudo nixos-rebuild switch
+os-rebuild build --host <hostname>
+os-rebuild dry-activate --host <hostname>
+os-rebuild switch --host <hostname>
+```
+
+For a machine that should activate only after reboot, replace `switch` with `boot`. The equivalent direct command is:
+
+```bash
+sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>
 ```
 
 Home Manager runs as part of that for **`wiz`** (no separate `home-manager switch` when using the NixOS HM module).
