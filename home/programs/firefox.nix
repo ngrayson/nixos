@@ -3,6 +3,8 @@
 {...}: {
   programs.firefox = {
     enable = true;
+    # Preserve the existing profile location while home.stateVersion remains 25.11.
+    configPath = ".mozilla/firefox";
     profiles.default = {
       id = 0;
       isDefault = true;

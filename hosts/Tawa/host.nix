@@ -11,6 +11,8 @@
   ];
 
   networking.hostName = "Tawa";
+  # Compatibility baseline from Tawa's original installation; do not bump with NixOS releases.
+  system.stateVersion = "25.11";
 
   # Discrete AMD (RX 6700 class): explicit X / XWayland DDX; see NixOS Steam wiki / gaming guides.
   services.xserver.videoDrivers = ["amdgpu"];

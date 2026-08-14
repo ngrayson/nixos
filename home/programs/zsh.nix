@@ -1,11 +1,14 @@
 # Interactive zsh; NixOS `programs.zsh.enable` stays in `common/system.nix` for login PATH.
 {
+  config,
   lib,
   pkgs,
   ...
 }: {
   programs.zsh = {
     enable = true;
+    # Keep the pre-26.05 location while home.stateVersion remains 25.11.
+    dotDir = config.home.homeDirectory;
     package = pkgs.zsh;
     autosuggestion.enable = true;
     syntaxHighlighting.enable = true;

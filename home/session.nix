@@ -34,7 +34,7 @@
     hyprpicker
     dunst
     fastfetch
-    helvum
+    crosspipe
     hyprmon
     hyprshot
     jq
