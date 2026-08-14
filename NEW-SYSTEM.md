@@ -33,12 +33,14 @@ Set **`system.stateVersion`** in `hosts/<hostname>/host.nix` to the release used
 Use the guided helper:
 
 ```bash
+os-rebuild explain --host <hostname>
+os-rebuild check --host <hostname>
 os-rebuild build --host <hostname>
 os-rebuild dry-activate --host <hostname>
 os-rebuild switch --host <hostname>
 ```
 
-For a machine that should activate only after reboot, replace `switch` with `boot`. The equivalent direct command is:
+The helper labels changed files as flake, shared base, Home Manager, host, or hardware scope and blocks untracked configuration files that Git flakes cannot see. For a machine that should activate only after reboot, replace `switch` with `boot`. The equivalent direct command is:
 
 ```bash
 sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>
