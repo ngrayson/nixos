@@ -11,7 +11,10 @@
   # Match Quickshell top bar height in ../quickshell/shell.qml (`topBarHeight`).
   quickshellTopBarPx = 32;
   pavuTopGutterPx = 20;
+  pavuRightGutterPx = 20;
   pavuWindowY = pavuTopGutterPx + quickshellTopBarPx;
+  pavuWindowW = 900;
+  pavuWindowH = 600;
   # Must match dirs in ../session.nix (`xdg.systemDirs.data`). Hypr subprocesses (`exec-once`),
   # including Albert, inherit the compositor env — SDDM/login does not reliably set these on NixOS.
   xdgDataDirsShare = lib.concatStringsSep ":" [
@@ -120,7 +123,9 @@ in {
         "match:title ^Select files$, float on"
         "match:class ^(PixelComposer|pixelcomposer).*, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
-        "match:class ^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$, float on, size 900 600, move (monitor_w-window_w-20) ${toString pavuWindowY}"
+        # Since 0.54 `move` reads the pre-`size` width, so `window_w` lands the window wrong
+        # (hyprwm/Hyprland#13409); offset by the known width instead.
+        "match:class ^(org\\.pulseaudio\\.pavucontrol|pavucontrol)$, float on, size ${toString pavuWindowW} ${toString pavuWindowH}, move (monitor_w-${toString (pavuWindowW + pavuRightGutterPx)}) ${toString pavuWindowY}"
       ];
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"
