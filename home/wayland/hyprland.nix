@@ -22,6 +22,8 @@
 in {
   wayland.windowManager.hyprland = {
     enable = true;
+    # Preserve the existing Hyprland syntax while home.stateVersion remains 25.11.
+    configType = "hyprlang";
     package = null;
     portalPackage = null;
     systemd.enable = true;

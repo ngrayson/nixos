@@ -2,21 +2,18 @@
   description = "NixOS configurations for Tawa, Theseus, and cloud hosts";
 
   inputs = {
-    # Phase 1 migration: prove flake wiring on the same package family as the
-    # running channel system before bumping to 26.05.
-    # Exact revision used by Tawa generation 144.
-    nixpkgs.url = "github:NixOS/nixpkgs/a4bf06618f0b";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.11";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     stylix = {
-      url = "github:nix-community/stylix/release-25.11";
+      url = "github:nix-community/stylix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
