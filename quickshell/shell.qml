@@ -310,9 +310,12 @@ ShellRoot {
 		return String.fromCodePoint(0xF00E0); // nf-md-brightness_7 (full sun)
 	}
 
+	// Without an explicit class, brightnessctl falls back to the first device it finds,
+	// which on hosts with no panel backlight (desktops) is a keyboard LED with max=1 —
+	// that reads as 0%/100% and toggles scrolllock instead of the screen.
 	function refreshBrightness(): void {
 		if (!readBrightness.running) {
-			readBrightness.command = ["brightnessctl", "-m"];
+			readBrightness.command = ["brightnessctl", "-c", "backlight", "-m"];
 			readBrightness.running = true;
 		}
 	}
@@ -320,7 +323,7 @@ ShellRoot {
 	function adjustBrightness(delta: int): void {
 		if (brightnessAction.running)
 			return;
-		brightnessAction.command = ["brightnessctl", "-q", "set", delta > 0 ? "+1%" : "1%-"];
+		brightnessAction.command = ["brightnessctl", "-c", "backlight", "-q", "set", delta > 0 ? "+1%" : "1%-"];
 		brightnessAction.running = true;
 	}
 
