@@ -7,7 +7,7 @@
   ...
 }: let
   hs = import ../hypr/scripts.nix {inherit config lib pkgs;};
-  hx = import ../lib/host-xdg.nix {inherit lib nixosConfig;};
+  hx = import ../lib/host-xdg.nix {inherit lib nixosConfig pkgs;};
   # Match Quickshell top bar height in ../quickshell/shell.qml (`topBarHeight`).
   quickshellTopBarPx = 32;
   pavuTopGutterPx = 20;

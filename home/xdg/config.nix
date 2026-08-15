@@ -7,7 +7,7 @@
   ...
 }: let
   hs = import ../hypr/scripts.nix {inherit config lib pkgs;};
-  hx = import ../lib/host-xdg.nix {inherit lib nixosConfig;};
+  hx = import ../lib/host-xdg.nix {inherit lib nixosConfig pkgs;};
 in {
   xdg.configFile =
     {
@@ -36,7 +36,7 @@ in {
         force = true;
       };
       "fastfetch/config.jsonc" = {
-        source = ../../fastfetch/config.jsonc;
+        source = hx.fastfetchConfig;
         force = true;
       };
       "fastfetch/izar-tsp.gif" = {

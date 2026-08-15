@@ -95,16 +95,37 @@ in {
   services.fwupd.enable = true;
   powerManagement.enable = true;
 
+  # An eDP panel can return from s2idle with its backlight stage still dark. The user
+  # session cannot write these sysfs nodes (root-owned, wiz is not in `video`), so
+  # re-assert power and re-apply the current level here, where resume runs as root.
+  powerManagement.resumeCommands = ''
+    for bl in /sys/class/backlight/*; do
+      [ -e "$bl/brightness" ] || continue
+      if [ -e "$bl/bl_power" ]; then
+        echo 0 > "$bl/bl_power" || true
+      fi
+      level="$(cat "$bl/brightness")" || continue
+      echo "$level" > "$bl/brightness" || true
+    done
+  '';
+
   services.logind.settings = {
     Login = {
       HandleLidSwitch = "suspend";
       HandleLidSwitchExternalPower = "suspend";
       HandleLidSwitchDocked = "ignore";
+      # Default short-press poweroff is easy to hit while probing a black screen after
+      # resume, which shuts the machine down mid-session. Require a deliberate hold.
+      HandlePowerKey = "ignore";
+      HandlePowerKeyLongPress = "poweroff";
     };
   };
 
   hardware.bluetooth.enable = true;
   hardware.bluetooth.powerOnBoot = true;
+  # GTK bluetooth manager for the quickshell bluetooth pill. The module (not just the package)
+  # is needed: pairing goes through blueman's root mechanism over system dbus + polkit.
+  services.blueman.enable = true;
 
   services.xserver.enable = true;
 
@@ -218,6 +239,7 @@ in {
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
       pkgs.vscode
+      pkgs.code-cursor
       nix-search-cli
       pkgs.xd
       libreoffice
@@ -230,6 +252,7 @@ in {
       glow
       chafa
       brave
+      pkgs.blender
       pkgs.mendeley
       astroterm
       kitty
