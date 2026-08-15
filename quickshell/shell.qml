@@ -1,3 +1,5 @@
+//@ pragma UseQApplication
+// Required for system tray context menus (QsMenuAnchor.open needs QApplication mode).
 // Quickshell: top bar (Hyprland workspaces + clock) + WlSessionLock (PAM password).
 // One bar per output via `Variants` + `Quickshell.screens` (not follow-focus on a single PanelWindow).
 // Lock: `quickshell ipc -p ~/.config/quickshell -n call lock activate` (see `quickshell-lock`).
@@ -16,6 +18,7 @@ import Quickshell.Networking
 import Quickshell.Bluetooth
 import Quickshell.Widgets
 import Quickshell.Services.Mpris
+import Quickshell.Services.Pipewire
 
 ShellRoot {
 	id: shellRoot
@@ -123,6 +126,49 @@ ShellRoot {
 		return players.length > 0 ? players[0] : null;
 	}
 	readonly property bool mediaPresent: mediaPlayer !== null
+
+	readonly property var micSource: Pipewire.defaultAudioSource
+	readonly property bool micPresent: micSource !== null && micSource.ready && micSource.audio !== null
+	readonly property bool micMuted: micPresent && micSource.audio.muted
+	readonly property bool micActive: micPresent && micLinkTracker.linkGroups.length > 0
+
+	PwObjectTracker {
+		// PwNode.audio properties are invalid until their parent node is bound.
+		objects: shellRoot.micSource ? [shellRoot.micSource] : []
+	}
+
+	PwNodeLinkTracker {
+		id: micLinkTracker
+		// Tracks capture streams attached to the default input, excluding monitors.
+		node: shellRoot.micSource
+	}
+
+	function micIcon(): string {
+		return String.fromCodePoint(micMuted ? 0xF036D : 0xF036C); // nf-md-microphone_{off,on}
+	}
+
+	function micColor(): string {
+		if (micMuted)
+			return "#6c7086";
+		if (micActive)
+			return "#f38ba8";
+		return "#cdd6f4";
+	}
+
+	// Wayland idle-inhibit: when true, hypridle (ignore_dbus_inhibit=false) will not
+	// lock/suspend. Bound to each bar PanelWindow below.
+	property bool idleInhibited: false
+
+	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
+	property bool trayCollapsed: false
+
+	function idleInhibitIcon(): string {
+		return String.fromCodePoint(0xEC15); // nf-cod-flame
+	}
+
+	function idleInhibitColor(): string {
+		return idleInhibited ? "#f9e2af" : "#6c7086";
+	}
 
 	function mediaIcon(): string {
 		// Pause glyph while playing (click will pause); play glyph otherwise.
@@ -569,6 +615,13 @@ ShellRoot {
 			implicitHeight: shellRoot.topBarHeight
 			color: "#1e1e2e"
 
+			// One inhibitor per output is fine; Hyprland treats a visible PanelWindow as
+			// important, so this blocks hypridle while enabled.
+			IdleInhibitor {
+				enabled: shellRoot.idleInhibited
+				window: barWindow
+			}
+
 			RowLayout {
 				anchors.fill: parent
 				anchors.leftMargin: 10
@@ -616,6 +669,60 @@ ShellRoot {
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
 				}
 
+				Rectangle {
+					visible: shellRoot.mediaPresent
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: mediaRow.implicitWidth + 16
+
+					RowLayout {
+						id: mediaRow
+						anchors.centerIn: parent
+						spacing: 4
+
+						Text {
+							color: shellRoot.mediaPlayer?.isPlaying ? "#a6e3a1" : "#cdd6f4"
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: shellRoot.mediaIcon()
+						}
+
+						Text {
+							color: "#cdd6f4"
+							font.pixelSize: 12
+							text: shellRoot.mediaLabel()
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+						scrollGestureEnabled: true
+						onClicked: mouse => {
+							const p = shellRoot.mediaPlayer;
+							if (!p)
+								return;
+							if (mouse.button === Qt.LeftButton && p.canTogglePlaying)
+								p.togglePlaying();
+							else if (mouse.button === Qt.RightButton && p.canGoNext)
+								p.next();
+							else if (mouse.button === Qt.MiddleButton && p.canGoPrevious)
+								p.previous();
+						}
+						onWheel: event => {
+							const p = shellRoot.mediaPlayer;
+							if (!p || !p.canSeek)
+								return;
+							// ±5s seek; position/length are seconds in Quickshell's MprisPlayer.
+							if (event.angleDelta.y > 0)
+								p.seek(5);
+							else if (event.angleDelta.y < 0)
+								p.seek(-5);
+						}
+					}
+				}
+
 				// StatusNotifier tray: collapses when empty so desktops without tray apps stay clean.
 				Rectangle {
 					visible: SystemTray.items.values.length > 0
@@ -630,8 +737,32 @@ ShellRoot {
 						anchors.centerIn: parent
 						spacing: 2
 
+						// Chevron: left when collapsed (icons tuck leftward), right when expanded.
+						MouseArea {
+							implicitWidth: 16
+							implicitHeight: 22
+							acceptedButtons: Qt.LeftButton
+							onClicked: shellRoot.trayCollapsed = !shellRoot.trayCollapsed
+
+							Text {
+								anchors.centerIn: parent
+								color: "#6c7086"
+								font.pixelSize: 12
+								font.family: "IosevkaTermSlab NF"
+								text: String.fromCodePoint(shellRoot.trayCollapsed ? 0xF0141 : 0xF0142)
+							}
+						}
+
+						Text {
+							visible: shellRoot.trayCollapsed
+							anchors.verticalCenter: parent.verticalCenter
+							color: "#6c7086"
+							font.pixelSize: 11
+							text: SystemTray.items.values.length
+						}
+
 						Repeater {
-							model: SystemTray.items
+							model: shellRoot.trayCollapsed ? null : SystemTray.items
 
 							delegate: MouseArea {
 								id: trayDelegate
@@ -831,55 +962,49 @@ ShellRoot {
 				}
 
 				Rectangle {
-					visible: shellRoot.mediaPresent
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
-					implicitWidth: mediaRow.implicitWidth + 16
+					implicitWidth: 30
 
-					RowLayout {
-						id: mediaRow
+					Text {
 						anchors.centerIn: parent
-						spacing: 4
-
-						Text {
-							color: shellRoot.mediaPlayer?.isPlaying ? "#a6e3a1" : "#cdd6f4"
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: shellRoot.mediaIcon()
-						}
-
-						Text {
-							color: "#cdd6f4"
-							font.pixelSize: 12
-							text: shellRoot.mediaLabel()
-						}
+						color: shellRoot.idleInhibitColor()
+						font.pixelSize: 14
+						font.family: "IosevkaTermSlab NF"
+						text: shellRoot.idleInhibitIcon()
 					}
 
 					MouseArea {
 						anchors.fill: parent
-						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-						scrollGestureEnabled: true
+						acceptedButtons: Qt.LeftButton
+						onClicked: shellRoot.idleInhibited = !shellRoot.idleInhibited
+					}
+				}
+
+				Rectangle {
+					visible: shellRoot.micPresent
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: 30
+
+					Text {
+						anchors.centerIn: parent
+						color: shellRoot.micColor()
+						font.pixelSize: 14
+						font.family: "IosevkaTermSlab NF"
+						text: shellRoot.micIcon()
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton
 						onClicked: mouse => {
-							const p = shellRoot.mediaPlayer;
-							if (!p)
-								return;
-							if (mouse.button === Qt.LeftButton && p.canTogglePlaying)
-								p.togglePlaying();
-							else if (mouse.button === Qt.RightButton && p.canGoNext)
-								p.next();
-							else if (mouse.button === Qt.MiddleButton && p.canGoPrevious)
-								p.previous();
-						}
-						onWheel: event => {
-							const p = shellRoot.mediaPlayer;
-							if (!p || !p.canSeek)
-								return;
-							// ±5s seek; position/length are seconds in Quickshell's MprisPlayer.
-							if (event.angleDelta.y > 0)
-								p.seek(5);
-							else if (event.angleDelta.y < 0)
-								p.seek(-5);
+							if (mouse.button === Qt.LeftButton && shellRoot.micPresent)
+								shellRoot.micSource.audio.muted = !shellRoot.micSource.audio.muted;
+							else if (mouse.button === Qt.RightButton)
+								Hyprland.dispatch("exec pavucontrol --tab=4");
 						}
 					}
 				}
