@@ -268,7 +268,9 @@ ShellRoot {
 						anchors.fill: parent
 						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton | Qt.RightButton
-						scrollGestureEnabled: false
+						// Must stay true: when false, onWheel only fires for physical
+						// mouse wheels, so touchpad two-finger scroll (Theseus) is dropped.
+						scrollGestureEnabled: true
 						onClicked: mouse => {
 							if (mouse.button === Qt.LeftButton)
 								shellRoot.runAudioAction("pavu-toggle", false);
