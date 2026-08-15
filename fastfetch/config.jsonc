@@ -142,7 +142,7 @@
 		},
 		{
 			"type": "uptime",
-			"key": "\u001b[32m└\u001b[36m \u001b[32mUp for",
+			"key": "\u001b[32m└\u001b[36m  \u001b[32mUp for",
 			"keyColor": "cyan",
 		},
 		"break",
