@@ -278,10 +278,12 @@ ShellRoot {
 								shellRoot.runAudioAction("pamixer -t", true);
 						}
 						onWheel: event => {
+							// 1% per event: touchpad scroll fires many ticks; 5% felt too coarse.
+							// Keyboard XF86 bindings stay at 5% (home/wayland/hyprland.nix).
 							if (event.angleDelta.y > 0)
-								shellRoot.runAudioAction("pamixer -i 5", true);
+								shellRoot.runAudioAction("pamixer -i 1", true);
 							else if (event.angleDelta.y < 0)
-								shellRoot.runAudioAction("pamixer -d 5", true);
+								shellRoot.runAudioAction("pamixer -d 1", true);
 						}
 					}
 				}
