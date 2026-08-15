@@ -49,6 +49,8 @@
     # Framework panel backlight control; quickshell brightness pill scrolls in 1% steps.
     brightnessctl
     pamixer
+    # CLI MPRIS control for spotifyd (play/pause/next without Spotify Web API).
+    playerctl
     pavucontrol
     qpwgraph
     quickshell
