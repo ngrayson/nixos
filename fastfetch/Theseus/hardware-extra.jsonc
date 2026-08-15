@@ -1,0 +1,11 @@
+		// Laptop battery: capacity bar + percentage, charge state, and remaining time when
+		// the driver reports it (absent while charging on some firmware, hence the {?} guard).
+		{
+			"type": "battery",
+			"key": "   └  ",
+			"keyColor": "dim_cyan",
+			"format": "{capacity-bar} {capacity} ({status}{?time-formatted}, {time-formatted} left{?})",
+			"percent": {
+				"type": ["num", "bar"]
+			}
+		},

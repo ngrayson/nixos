@@ -83,15 +83,10 @@
 				"type": ["num", "bar"]
 			}
 		},
-		//{
-		//	"type": "battery",
-		//	"key": "   └  ",
-		//	"keyColor": "dim_cyan",
-		//	"format": "{capacity-bar} ({4}) {time-hours}h{time-minutes}m {5}",
-		//	"percent": {
-		//		"type": ["num", "bar"]
-		//	}
-		//},
+		// Host-specific hardware modules (battery on laptops) are spliced in below from
+		// fastfetch/<hostname>/hardware-extra.jsonc; see home/lib/host-xdg.nix. Battery stays
+		// out of this shared file: showErrors renders "No batteries found" on desktop hosts.
+		//@hardware-extra@
 		"break",
 		{
 			"type": "custom",
