@@ -240,6 +240,7 @@ in {
       pkgs.nodejs_22
       python3
       godot
+      prismlauncher
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum
       # pkgs.nwg-look
