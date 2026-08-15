@@ -218,6 +218,7 @@ in {
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
       pkgs.vscode
+      pkgs.code-cursor
       nix-search-cli
       pkgs.xd
       libreoffice
@@ -230,6 +231,7 @@ in {
       glow
       chafa
       brave
+      pkgs.blender
       pkgs.mendeley
       astroterm
       kitty
