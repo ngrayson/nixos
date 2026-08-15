@@ -4,14 +4,18 @@
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
 // Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Services.UPower
+import Quickshell.Services.SystemTray
 import Quickshell.Networking
 import Quickshell.Bluetooth
+import Quickshell.Widgets
+import Quickshell.Services.Mpris
 
 ShellRoot {
 	id: shellRoot
@@ -21,6 +25,15 @@ ShellRoot {
 	property bool debugAudio: false
 	property string audioDebugRaw: ""
 	property int audioLastExitCode: -999
+	property bool brightnessPresent: false
+	property int brightnessPercent: 0
+	// Framework EC keyboard backlight (chromeos::kbd_backlight). Left-click on the
+	// brightness pill cycles off → 33% → 100%; the pill briefly shows the kbd level.
+	property bool kbdBrightnessPresent: false
+	property int kbdBrightnessPercent: 0
+	property bool brightnessShowingKbd: false
+	// Set before a user-initiated kbd read so the startup/silent read does not flash the pill.
+	property bool kbdFeedbackPending: false
 	readonly property int topBarHeight: 32
 
 	// Desktops still expose a DisplayDevice, it just is not a laptop battery, so the pill hides
@@ -74,7 +87,7 @@ ShellRoot {
 			return "off";
 		return "disconnected";
 	}
-	readonly property int networkSignal: Math.round(netWifiNetwork?.signalStrength ?? 0)
+	readonly property int networkSignal: Math.round((netWifiNetwork?.signalStrength ?? 0) * 100)
 	readonly property bool networkBusy: {
 		const d = netWifiDevice ?? netWiredDevice;
 		if (!d)
@@ -98,6 +111,30 @@ ShellRoot {
 				n++;
 		}
 		return n;
+	}
+
+	// Prefer a currently-playing MPRIS player; otherwise the first registered one.
+	readonly property var mediaPlayer: {
+		const players = Mpris.players.values;
+		for (let i = 0; i < players.length; ++i) {
+			if (players[i].isPlaying)
+				return players[i];
+		}
+		return players.length > 0 ? players[0] : null;
+	}
+	readonly property bool mediaPresent: mediaPlayer !== null
+
+	function mediaIcon(): string {
+		// Pause glyph while playing (click will pause); play glyph otherwise.
+		if (mediaPlayer?.isPlaying)
+			return String.fromCodePoint(0xF03E4); // nf-md-pause
+		return String.fromCodePoint(0xF040A); // nf-md-play
+	}
+
+	function mediaLabel(): string {
+		const t = (mediaPlayer?.trackTitle || "").trim();
+		const label = t || (mediaPlayer?.identity || "Media");
+		return label.length > 28 ? label.slice(0, 27) + "…" : label;
 	}
 
 	function audioIcon(): string {
@@ -166,8 +203,9 @@ ShellRoot {
 		if (networkKind === "off")
 			return String.fromCodePoint(0xF05AA); // nf-md-wifi_off
 		if (networkKind === "wifi") {
+			// WifiNetwork.signalStrength is 0.0-1.0 (already scaled into networkSignal 0-100).
+			// nf-md-wifi_strength_{1..4}: F091F / F0922 / F0925 / F0928.
 			const s = networkSignal;
-			// nf-md-wifi_strength_{1..4}: F091F / F0922 / F0925 / F0928 (F05A6..A8 are unrelated glyphs).
 			if (s >= 75)
 				return String.fromCodePoint(0xF0928);
 			if (s >= 50)
@@ -204,6 +242,67 @@ ShellRoot {
 		if (btConnectedCount > 0)
 			return "#89b4fa";
 		return "#cdd6f4";
+	}
+
+	function brightnessIcon(): string {
+		// MDI brightness_1 is a solid disk (reads as a full moon), so low levels use the
+		// moon-phase set. Sun glyphs are not ordered by fill in the font, so pick them
+		// explicitly: empty → half → crescent → full.
+		const p = brightnessPercent;
+		if (p < 15)
+			return String.fromCodePoint(0xF0F64); // nf-md-moon_new
+		if (p < 30)
+			return String.fromCodePoint(0xF0F67); // nf-md-moon_waxing_crescent
+		if (p < 45)
+			return String.fromCodePoint(0xF00DB); // nf-md-brightness_2 (thick crescent)
+		if (p < 60)
+			return String.fromCodePoint(0xF00DE); // nf-md-brightness_5 (empty sun)
+		if (p < 75)
+			return String.fromCodePoint(0xF00DF); // nf-md-brightness_6 (half sun)
+		if (p < 90)
+			return String.fromCodePoint(0xF00DD); // nf-md-brightness_4 (crescent sun)
+		return String.fromCodePoint(0xF00E0); // nf-md-brightness_7 (full sun)
+	}
+
+	function refreshBrightness(): void {
+		if (!readBrightness.running) {
+			readBrightness.command = ["brightnessctl", "-m"];
+			readBrightness.running = true;
+		}
+	}
+
+	function adjustBrightness(delta: int): void {
+		if (brightnessAction.running)
+			return;
+		brightnessAction.command = ["brightnessctl", "-q", "set", delta > 0 ? "+1%" : "1%-"];
+		brightnessAction.running = true;
+	}
+
+	function kbdBrightnessIcon(): string {
+		return String.fromCodePoint(0xF030C); // nf-md-keyboard
+	}
+
+	function refreshKbdBrightness(): void {
+		if (!readKbdBrightness.running) {
+			readKbdBrightness.command = ["brightnessctl", "-m", "-d", "chromeos::kbd_backlight"];
+			readKbdBrightness.running = true;
+		}
+	}
+
+	// Mirrors the Framework hardware key: off -> dim -> full.
+	function cycleKbdBrightness(): void {
+		if (kbdAction.running)
+			return;
+		const p = kbdBrightnessPercent;
+		const next = p === 0 ? 33 : (p < 67 ? 100 : 0);
+		kbdFeedbackPending = true;
+		kbdAction.command = ["brightnessctl", "-q", "-d", "chromeos::kbd_backlight", "set", next + "%"];
+		kbdAction.running = true;
+	}
+
+	function showKbdBrightnessFeedback(): void {
+		brightnessShowingKbd = true;
+		kbdFeedbackTimer.restart();
 	}
 
 	function refreshAudio(): void {
@@ -362,6 +461,92 @@ ShellRoot {
 		running: false
 	}
 
+	Process {
+		id: readBrightness
+		running: false
+
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const raw = this.text.trim();
+				if (!raw) {
+					shellRoot.brightnessPresent = false;
+					return;
+				}
+				// brightnessctl -m: device,class,current,percent,max
+				const fields = raw.split(/\r?\n/, 1)[0].split(",");
+				const percent = parseInt((fields[3] ?? "").replace("%", ""), 10);
+				if (!Number.isNaN(percent)) {
+					shellRoot.brightnessPercent = Math.max(0, Math.min(100, percent));
+					shellRoot.brightnessPresent = true;
+				}
+			}
+		}
+
+		onExited: exitCode => {
+			if (exitCode !== 0)
+				shellRoot.brightnessPresent = false;
+		}
+	}
+
+	Process {
+		id: brightnessAction
+		running: false
+		onExited: _ => shellRoot.refreshBrightness()
+	}
+
+	Process {
+		id: readKbdBrightness
+		running: false
+
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const raw = this.text.trim();
+				if (!raw) {
+					shellRoot.kbdBrightnessPresent = false;
+					return;
+				}
+				const fields = raw.split(/\r?\n/, 1)[0].split(",");
+				const percent = parseInt((fields[3] ?? "").replace("%", ""), 10);
+				if (!Number.isNaN(percent)) {
+					shellRoot.kbdBrightnessPercent = Math.max(0, Math.min(100, percent));
+					shellRoot.kbdBrightnessPresent = true;
+					if (shellRoot.kbdFeedbackPending) {
+						shellRoot.kbdFeedbackPending = false;
+						shellRoot.showKbdBrightnessFeedback();
+					}
+				}
+			}
+		}
+
+		onExited: exitCode => {
+			if (exitCode !== 0)
+				shellRoot.kbdBrightnessPresent = false;
+		}
+	}
+
+	Process {
+		id: kbdAction
+		running: false
+		onExited: exitCode => {
+			if (exitCode === 0)
+				shellRoot.refreshKbdBrightness();
+		}
+	}
+
+	Timer {
+		interval: 2000
+		running: true
+		repeat: true
+		onTriggered: shellRoot.refreshBrightness()
+	}
+
+	Timer {
+		id: kbdFeedbackTimer
+		interval: 1500
+		repeat: false
+		onTriggered: shellRoot.brightnessShowingKbd = false
+	}
+
 	Timer {
 		id: osdHideTimer
 		interval: 1200
@@ -373,6 +558,7 @@ ShellRoot {
 		model: Quickshell.screens
 
 		PanelWindow {
+			id: barWindow
 			required property var modelData
 
 			screen: modelData
@@ -430,6 +616,82 @@ ShellRoot {
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
 				}
 
+				// StatusNotifier tray: collapses when empty so desktops without tray apps stay clean.
+				Rectangle {
+					visible: SystemTray.items.values.length > 0
+					Layout.alignment: Qt.AlignVCenter
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: trayRow.implicitWidth + 12
+
+					Row {
+						id: trayRow
+						anchors.centerIn: parent
+						spacing: 2
+
+						Repeater {
+							model: SystemTray.items
+
+							delegate: MouseArea {
+								id: trayDelegate
+								required property var modelData
+
+								implicitWidth: 22
+								implicitHeight: 22
+								acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+								hoverEnabled: true
+								scrollGestureEnabled: true
+
+								onClicked: mouse => {
+									if (mouse.button === Qt.LeftButton) {
+										if (modelData.onlyMenu)
+											trayMenu.open();
+										else
+											modelData.activate();
+									} else if (mouse.button === Qt.RightButton) {
+										trayMenu.open();
+									} else if (mouse.button === Qt.MiddleButton) {
+										modelData.secondaryActivate();
+									}
+								}
+								onWheel: event => {
+									modelData.scroll(event.angleDelta.y, false);
+								}
+
+								// Rendered through MultiEffect, so the icon itself stays hidden and only
+								// the desaturated/tinted copy is drawn (Qt texture provider pattern).
+								IconImage {
+									id: trayIcon
+									anchors.centerIn: parent
+									source: trayDelegate.modelData.icon
+									implicitSize: 16
+									visible: false
+								}
+
+								MultiEffect {
+									anchors.fill: trayIcon
+									source: trayIcon
+									// Mild: colorful brand icons stay recognizable, symbolic ones blend
+									// into the bar foreground.
+									saturation: -0.8
+									colorization: 0.6
+									colorizationColor: "#cdd6f4"
+								}
+
+								QsMenuAnchor {
+									id: trayMenu
+									menu: trayDelegate.modelData.menu
+									anchor.window: barWindow
+									anchor.item: trayDelegate
+									anchor.edges: Edges.Bottom
+									anchor.gravity: Edges.Bottom
+								}
+							}
+						}
+					}
+				}
+
 				Rectangle {
 					radius: 8
 					color: "#313244"
@@ -484,6 +746,50 @@ ShellRoot {
 				}
 
 				Rectangle {
+					visible: shellRoot.brightnessPresent
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: brightnessRow.implicitWidth + 16
+
+					RowLayout {
+						id: brightnessRow
+						anchors.centerIn: parent
+						spacing: 4
+
+						Text {
+							color: "#f9e2af"
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: shellRoot.brightnessShowingKbd ? shellRoot.kbdBrightnessIcon() : shellRoot.brightnessIcon()
+						}
+
+						Text {
+							color: "#cdd6f4"
+							font.pixelSize: 12
+							text: (shellRoot.brightnessShowingKbd ? shellRoot.kbdBrightnessPercent : shellRoot.brightnessPercent) + "%"
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton
+						scrollGestureEnabled: true
+						// Left-click cycles keyboard backlight (off → 33% → 100%). Panel
+						// brightness stays on scroll. Shift+scroll cannot be detected here:
+						// layer-shell bars never receive keyboard focus, so WheelEvent.modifiers
+						// is always 0 (confirmed in logs).
+						onClicked: shellRoot.cycleKbdBrightness()
+						onWheel: event => {
+							if (event.angleDelta.y > 0)
+								shellRoot.adjustBrightness(1);
+							else if (event.angleDelta.y < 0)
+								shellRoot.adjustBrightness(-1);
+						}
+					}
+				}
+
+				Rectangle {
 					visible: shellRoot.batteryPresent
 					radius: 8
 					color: "#313244"
@@ -521,6 +827,60 @@ ShellRoot {
 						anchors.fill: parent
 						acceptedButtons: Qt.LeftButton
 						onClicked: shellRoot.cyclePowerProfile()
+					}
+				}
+
+				Rectangle {
+					visible: shellRoot.mediaPresent
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: mediaRow.implicitWidth + 16
+
+					RowLayout {
+						id: mediaRow
+						anchors.centerIn: parent
+						spacing: 4
+
+						Text {
+							color: shellRoot.mediaPlayer?.isPlaying ? "#a6e3a1" : "#cdd6f4"
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: shellRoot.mediaIcon()
+						}
+
+						Text {
+							color: "#cdd6f4"
+							font.pixelSize: 12
+							text: shellRoot.mediaLabel()
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+						scrollGestureEnabled: true
+						onClicked: mouse => {
+							const p = shellRoot.mediaPlayer;
+							if (!p)
+								return;
+							if (mouse.button === Qt.LeftButton && p.canTogglePlaying)
+								p.togglePlaying();
+							else if (mouse.button === Qt.RightButton && p.canGoNext)
+								p.next();
+							else if (mouse.button === Qt.MiddleButton && p.canGoPrevious)
+								p.previous();
+						}
+						onWheel: event => {
+							const p = shellRoot.mediaPlayer;
+							if (!p || !p.canSeek)
+								return;
+							// ±5s seek; position/length are seconds in Quickshell's MprisPlayer.
+							if (event.angleDelta.y > 0)
+								p.seek(5);
+							else if (event.angleDelta.y < 0)
+								p.seek(-5);
+						}
 					}
 				}
 
@@ -588,6 +948,12 @@ ShellRoot {
 				Component.onCompleted: shellRoot.refreshAudio()
 			}
 		}
+	}
+
+	Component.onCompleted: {
+		shellRoot.refreshBrightness();
+		// Silent (no pill flash) so the first click cycles from the real level.
+		shellRoot.refreshKbdBrightness();
 	}
 
 	Variants {
