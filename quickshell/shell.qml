@@ -9,6 +9,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Wayland
+import Quickshell.Services.UPower
 
 ShellRoot {
 	id: shellRoot
@@ -20,6 +21,17 @@ ShellRoot {
 	property int audioLastExitCode: -999
 	readonly property int topBarHeight: 32
 
+	// Desktops still expose a DisplayDevice, it just is not a laptop battery, so the pill hides
+	// itself at runtime and this file stays host-agnostic (unlike the fastfetch battery fragment).
+	readonly property var battery: UPower.displayDevice
+	readonly property bool batteryPresent: battery?.isLaptopBattery ?? false
+	// UPowerDevice.percentage is energy/energyCapacity, i.e. 0.0-1.0, not 0-100.
+	readonly property int batteryPercent: Math.round((battery?.percentage ?? 0) * 100)
+	readonly property bool batteryCharging: battery?.state === UPowerDeviceState.Charging
+	readonly property bool batteryLow: batteryPresent && !batteryCharging && batteryPercent <= 15
+	readonly property int powerProfile: PowerProfiles.profile
+	readonly property bool powerProfileMarked: powerProfile !== PowerProfile.Balanced
+
 	function audioIcon(): string {
 		if (audioMuted)
 			return "󰖁";
@@ -28,6 +40,56 @@ ShellRoot {
 		if (audioPercent < 67)
 			return "󰖀";
 		return "󰕾";
+	}
+
+	function batteryIcon(): string {
+		// Codepoints (not literal PUA glyphs): editing tools mangle nf-md private-use chars.
+		if (batteryCharging)
+			return String.fromCodePoint(0xF0084); // nf-md-battery_charging
+		if (batteryPercent >= 95)
+			return String.fromCodePoint(0xF0079); // nf-md-battery (full)
+		if (batteryPercent < 10)
+			return String.fromCodePoint(0xF008E); // nf-md-battery_outline (empty)
+		// nf-md-battery_10 .. battery_90 are contiguous from F007A.
+		return String.fromCodePoint(0xF007A + Math.min(8, Math.floor(batteryPercent / 10) - 1));
+	}
+
+	function powerProfileIcon(): string {
+		if (powerProfile === PowerProfile.PowerSaver)
+			return String.fromCodePoint(0xF06A5); // nf-md-leaf
+		if (powerProfile === PowerProfile.Performance)
+			return String.fromCodePoint(0xF0A0D); // nf-md-speedometer
+		return "";
+	}
+
+	function powerProfileLabel(): string {
+		if (powerProfile === PowerProfile.PowerSaver)
+			return "Power Saver";
+		if (powerProfile === PowerProfile.Performance)
+			return "Performance";
+		return "Balanced";
+	}
+
+	function cyclePowerProfile(): void {
+		const cur = PowerProfiles.profile;
+		let next = PowerProfile.PowerSaver;
+		if (cur === PowerProfile.PowerSaver)
+			next = PowerProfile.Balanced;
+		else if (cur === PowerProfile.Balanced)
+			next = PowerProfiles.hasPerformanceProfile ? PowerProfile.Performance : PowerProfile.PowerSaver;
+		// Performance (or unknown) -> PowerSaver
+		PowerProfiles.profile = next;
+		notifyPowerProfile();
+	}
+
+	function notifyPowerProfile(): void {
+		// Stack-tag replaces prior profile toasts so rapid cycling does not pile up.
+		profileNotify.command = [
+			"notify-send", "-e", "-a", "Power Profile",
+			"-h", "string:x-dunst-stack-tag:qs-power-profile",
+			"Power Profile", powerProfileLabel()
+		];
+		profileNotify.running = true;
 	}
 
 	function refreshAudio(): void {
@@ -181,6 +243,11 @@ ShellRoot {
 		}
 	}
 
+	Process {
+		id: profileNotify
+		running: false
+	}
+
 	Timer {
 		id: osdHideTimer
 		interval: 1200
@@ -247,6 +314,47 @@ ShellRoot {
 					color: "#fab387"
 					font.pixelSize: 9
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
+				}
+
+				Rectangle {
+					visible: shellRoot.batteryPresent
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: batteryRow.implicitWidth + 16
+
+					RowLayout {
+						id: batteryRow
+						anchors.centerIn: parent
+						spacing: 4
+
+						Text {
+							color: shellRoot.batteryLow ? "#f38ba8" : (shellRoot.batteryCharging ? "#a6e3a1" : "#cdd6f4")
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: shellRoot.batteryIcon()
+						}
+
+						Text {
+							color: shellRoot.batteryLow ? "#f38ba8" : "#cdd6f4"
+							font.pixelSize: 12
+							text: shellRoot.batteryPercent + "%"
+						}
+
+						Text {
+							visible: shellRoot.powerProfileMarked
+							color: shellRoot.powerProfile === PowerProfile.PowerSaver ? "#a6e3a1" : "#fab387"
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: shellRoot.powerProfileIcon()
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton
+						onClicked: shellRoot.cyclePowerProfile()
+					}
 				}
 
 				Rectangle {
