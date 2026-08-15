@@ -42,10 +42,10 @@
 			"format": "\u001b[32m┌───────────────┤│ Hardware │├─────────────────────┐",
 		},
 		{
-			"type": "Board",
+			"type": "command",
 			"key": "\u001b[32m└\u001b[36m󰷜 \u001b[32m┬ PC",
 			"keyColor": "bright_cyan",
-			"format": "Framework 13"
+			"text": "printf '%s · %s' \"$(hostname)\" \"$(cat /sys/class/dmi/id/product_name 2>/dev/null | tr -d '\\n' || echo unknown)\""
 		},
 		{
 			"type": "cpu",

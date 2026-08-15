@@ -32,7 +32,8 @@ Options:
   --format                Run the flake formatter before validation
   --yes                   Skip the rebuild confirmation
   --allow-host-mismatch   Permit activation for a host other than this machine
-  --commit                Offer to commit all changes after success
+  --commit                After success, commit dirty changes (default)
+  --no-commit             Do not commit after a successful rebuild
   -h, --help              Show this help
 
 Environment:
@@ -204,7 +205,7 @@ show_change_scope() {
   ))
 
   if ((total == 0)); then
-    printf "  Working tree is clean. The build uses committed flake content.\n"
+    printf "  Working tree is clean. The build uses the committed flake revision.\n"
     return 0
   fi
 
@@ -255,26 +256,32 @@ show_change_scope() {
   fi
 }
 
-show_repository_diff() {
-  command_exists git || return 0
-  git -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+repo_is_dirty() {
+  command_exists git || return 1
+  git -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  [[ -n "$(git -C "$NIXOS_DIR" status --porcelain)" ]]
+}
 
-  if [[ -z "$(git -C "$NIXOS_DIR" status --porcelain)" ]]; then
-    return 0
-  fi
+show_repository_diff() {
+  repo_is_dirty || return 0
 
   heading "Repository diff"
   git -C "$NIXOS_DIR" --no-pager status --short
   printf "\n"
   git -C "$NIXOS_DIR" --no-pager diff --stat HEAD
   printf "\n"
-  # Staged + unstaged content vs HEAD (what a Git-backed flake build will see
-  # once untracked inputs are staged or committed).
+  # Staged + unstaged content vs HEAD. Nix git flakes include dirty *tracked*
+  # files in the build; untracked files are omitted until `git add`.
   git -C "$NIXOS_DIR" --no-pager diff HEAD
   if [[ -n "$(git -C "$NIXOS_DIR" ls-files --others --exclude-standard)" ]]; then
     printf "\n"
-    warn "Untracked files have no diff until staged; list above under Configuration scope."
+    warn "Untracked files are shown above but are NOT in the flake build until staged."
   fi
+
+  heading "Build vs commit"
+  printf "  - Tracked dirty files in the diff ARE included in this rebuild (dirty git flake).\n"
+  printf "  - After a successful rebuild, dirty changes are committed by default.\n"
+  printf "  - Pass --no-commit to leave the working tree dirty.\n"
 }
 
 show_guidance() {
@@ -408,7 +415,7 @@ main() {
   NO_PROMPT="${OS_REBUILD_NO_PROMPT:-0}"
   EDIT_SCOPE=""
   FORMAT=0
-  COMMIT=0
+  COMMIT=1
   ALLOW_HOST_MISMATCH=0
 
   while (($#)); do
@@ -441,6 +448,9 @@ main() {
         ;;
       --commit)
         COMMIT=1
+        ;;
+      --no-commit)
+        COMMIT=0
         ;;
       -h | --help)
         usage
@@ -596,13 +606,24 @@ main() {
       ;;
   esac
 
-  if ((COMMIT)) && command_exists git &&
-    git -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    if [[ -n "$(git -C "$NIXOS_DIR" status --porcelain)" ]]; then
-      warn "--commit stages every repository change, including unrelated files."
-      if prompt_confirm "Commit all current repository changes?" "no"; then
+  if repo_is_dirty; then
+    if ((COMMIT == 0)); then
+      info "Leaving working tree dirty (--no-commit)."
+    else
+      warn "Working tree is dirty after the rebuild; committing records what was just built."
+      printf "  This stages every repository change, including unrelated files.\n"
+      local do_commit=0
+      if [[ "$NO_PROMPT" == "1" ]]; then
+        do_commit=1
+      elif prompt_confirm "Commit all current repository changes?" "yes"; then
+        do_commit=1
+      fi
+      if ((do_commit)); then
         git -C "$NIXOS_DIR" add -A
         git -C "$NIXOS_DIR" commit -m "NixOS $NIXOS_HOST $ACTION"
+        ok "Committed repository changes"
+      else
+        info "Skipped commit; pass --no-commit next time to silence this prompt."
       fi
     fi
   fi
