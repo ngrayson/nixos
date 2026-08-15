@@ -1,7 +1,5 @@
 # Entry module for host Tawa. Build with:
-#   nix build '<nixpkgs/nixos>' --attr config.system.build.toplevel --no-link \
-#     --include nixos-config=/abs/path/to/hosts/Tawa/configuration.nix
-# Or use repo root configuration.nix (imports this file) with the same nixos-config path.
+#   os-rebuild build --host Tawa
 {
   config,
   pkgs,

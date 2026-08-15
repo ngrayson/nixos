@@ -2,18 +2,26 @@
 
 | Branch | Purpose |
 |--------|---------|
-| **`main`** | Desktop **Tawa** (`hosts/Tawa/`) is the default root import; **Theseus** (`hosts/Theseus/`) is the Framework laptop entry — set **`NIXOS_CONFIG`** to that path on the laptop. |
+| **`main`** | All hosts as named flake outputs: **Tawa** (desktop), **Theseus** (Framework laptop), **Gcp** (cloud). Each machine builds its own `nixosConfigurations.<hostname>`. |
 | **`legacy/previous-machine`** | Snapshot of **GitHub `main` before 2026-04** (prior NixOS install history). |
 
 Remote: **`https://github.com/ngrayson/nixos.git`** (`git remote rename nixos origin` if you prefer the usual name).
 
 To compare against the old tree: `git log legacy/previous-machine --oneline` (after `git fetch`).
 
-## `nixos-rebuild` from this directory
+## Rebuilding from this directory
 
-`-I` must set the **`nixos-config`** search path, not a bare file path. Examples:
+Use the guided helper (zsh alias `os-rebuild`):
 
-- `NIXOS_CONFIG=$HOME/.config/nixos/configuration.nix nixos-rebuild dry-build`
-- `nixos-rebuild dry-build -I nixos-config=$HOME/.config/nixos/configuration.nix`
+```bash
+os-rebuild switch                     # current hostname
+os-rebuild build --host Theseus       # another host, build only
+```
 
-Using **`-I ~/.config/nixos/configuration.nix`** without the **`nixos-config=`** prefix fails with `file 'nixos-config' was not found in the Nix search path`.
+Direct equivalent:
+
+```bash
+sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>
+```
+
+The flake is Git-backed: tracked dirty files are included in builds; untracked files are invisible until `git add`.

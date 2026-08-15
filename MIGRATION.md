@@ -12,15 +12,15 @@ This repo is the source of truth for system configuration. Use this list when re
 
 1. Boot the **NixOS installer** ISO.
 2. Partition, encrypt (LUKS) if you use it, format, mount. Run **`nixos-generate-config --root /mnt`**.
-3. Clone this repository (or copy in `configuration.nix` and assets) under `/mnt/etc/nixos` or your chosen `NIXOS_CONFIG` location.
-4. **Do not** blindly reuse the old **`hardware-configuration.nix`**. On a new host, create **`hosts/<hostname>/`**, copy the installer’s `hardware-configuration.nix` there, add **`host.nix`** (`networking.hostName`, nixos-hardware, LUKS, `kernelParams`), and **`configuration.nix`** that imports `../../common/system.nix`, `./hardware-configuration.nix`, and `./host.nix`. Then set **`NIXOS_CONFIG`** to **`…/hosts/<hostname>/configuration.nix`** (or change the root [`configuration.nix`](./configuration.nix) import if this machine is the default in git). Start from the **new** `nixos-generate-config` output, then **merge** intentional settings from the previous machine:
+3. Clone this repository (e.g. to `~/.config/nixos` after first boot).
+4. **Do not** blindly reuse the old **`hardware-configuration.nix`**. On a new host, create **`hosts/<hostname>/`**, copy the installer’s `hardware-configuration.nix` there, add **`host.nix`** (`networking.hostName`, LUKS, `kernelParams`), and **`configuration.nix`** that imports `../../common/system.nix`, `./hardware-configuration.nix`, and `./host.nix`. Add the host to `nixosConfigurations` in [`flake.nix`](./flake.nix) (nixos-hardware modules go in its module list there). Start from the **new** `nixos-generate-config` output, then **merge** intentional settings from the previous machine:
    - `fileSystems` and **`boot.initrd.luks.devices`** (names and **UUIDs will change** with new disks/partitions)
    - `boot.initrd.availableKernelModules` / `kernelModules` as needed
    - `swapDevices` if applicable
-5. This repo includes **Home Manager** (entry [`home.nix`](./home.nix) imports the modular **[`./home/`](./home/)** tree; HM is pinned in [`common/system.nix`](./common/system.nix) via `fetchTarball` on the `release-25.11` branch). It activates with **`sudo nixos-rebuild switch`** the same as the rest of the system. On a fresh clone, no extra `home-manager` install step is required. **User session env** lives in [`home/session.nix`](./home/session.nix) (`home.sessionVariables`; see log below). **Dotfiles for user `wiz` are Home Manager only** — this repo does not use chezmoi.
+5. This repo includes **Home Manager** (entry [`home.nix`](./home.nix) imports the modular **[`./home/`](./home/)** tree; HM is a pinned flake input in [`flake.nix`](./flake.nix), wired in via [`common/system.nix`](./common/system.nix)). It activates with **`os-rebuild switch`** the same as the rest of the system. On a fresh clone, no extra `home-manager` install step is required. **User session env** lives in [`home/session.nix`](./home/session.nix) (`home.sessionVariables`; see log below). **Dotfiles for user `wiz` are Home Manager only** — this repo does not use chezmoi.
 6. **Shared** system options live in **[`common/system.nix`](./common/system.nix)**. Per-machine options live under **`hosts/<hostname>/`** (see **`host.nix`** for **`networking.hostName`**, **`<nixos-hardware/...>`**, **LUKS**, **`boot.kernelParams`**).
 7. Set **`system.stateVersion`** to match your *first* NixOS install on the new box if the installer suggests a new default; do not advance casually (see NixOS manual).
-8. Run **`sudo nixos-rebuild switch`** (or the flake equivalent) and reboot. That also runs **Home Manager** for user `wiz` (systemd `home-manager-wiz.service` or equivalent on your NixOS version).
+8. Run **`os-rebuild switch --host <hostname>`** (or `sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>`) and reboot. That also runs **Home Manager** for user `wiz` (systemd `home-manager-wiz.service` or equivalent on your NixOS version).
 9. Install Cursor + Cursor CLI in a way that matches this repo: see [`CURSOR_SETUP.md`](./CURSOR_SETUP.md).
 
 ## After first successful boot
@@ -56,7 +56,7 @@ Use **one owner per path** — Home Manager for user config tracked in this repo
 | `~/.config/newsboat` (URLs) | Runtime / user | Still imperative unless you add `xdg` or HM later. |
 | `~/.local/share/applications/*.desktop` (custom) | [`desktop/applications/`](./desktop/applications/) → HM **`xdg.dataFile`** via [`home/xdg/data.nix`](./home/xdg/data.nix) + [`home/lib/desktop-data.nix`](./home/lib/desktop-data.nix) | Drop `*.desktop` in that dir; see [`README`](./desktop/applications/README.md). |
 | `~/.config/Kvantum/` (Qt style) | [`kvantum/<hostname>/`](./kvantum/README.md) → HM **`xdg.configFile`** ([`home/lib/host-xdg.nix`](./home/lib/host-xdg.nix) + [`home/xdg/config.nix`](./home/xdg/config.nix)) | Per-host dir named like `networking.hostName`; see [`kvantum/README.md`](./kvantum/README.md). |
-| GTK / Hyprland colors / wallpaper / session fonts | **[`home/stylix.nix`](./home/stylix.nix)** (Home Manager only; [`home/default.nix`](./home/default.nix)) | Stylix: **`builtins.fetchTarball`** on **`release-25.11`** (matches HM; [install docs](https://nix-community.github.io/stylix/installation.html) show `fetchFromGitHub` / flake — same idea, tarball avoids HM `pkgs` recursion in `imports`). NixOS **`programs.dconf.enable`** in [`common/system.nix`](./common/system.nix). Palette: **`purpledream`**; wallpaper: **`login-bg.png`**. **`stylix.targets.kitty.enable = false`** — Kitty stays [`home/xdg/config.nix`](./home/xdg/config.nix). |
+| GTK / Hyprland colors / wallpaper / session fonts | **[`home/stylix.nix`](./home/stylix.nix)** (Home Manager only; [`home/default.nix`](./home/default.nix)) | Stylix is a pinned **flake input** (`flake.nix` → `inputs.stylix`, `release-26.05`), passed to HM as `stylixModule` via `extraSpecialArgs` in [`common/system.nix`](./common/system.nix). NixOS **`programs.dconf.enable`** in [`common/system.nix`](./common/system.nix). Palette: **Izar** (`themes/izar-base16.yaml`); wallpaper per host in [`home/stylix.nix`](./home/stylix.nix). **`stylix.targets.kitty.enable = false`** — Kitty stays [`home/xdg/config.nix`](./home/xdg/config.nix). |
 
 ### Home Manager migration log
 
@@ -71,7 +71,7 @@ Iterative: **one** logical change per rebuild; **verify** before the next (optio
 - **2026-04-26 — Step 6 (fastfetch + user CLIs):** [`./fastfetch/config.jsonc`](./fastfetch/config.jsonc) + [`./fastfetch/izar-tsp.gif`](./fastfetch/izar-tsp.gif) vendored; `xdg.configFile` in **[`home/xdg/config.nix`](./home/xdg/config.nix)**. **`tmux`**, **`tmuxifier`**, **`newsboat`** moved from `environment.systemPackages` to `home.packages` in **[`home/session.nix`](./home/session.nix)** (with **`fastfetch`**). Rebuild: `sudo nixos-rebuild switch`. **Verify:** `command -v tmux fastfetch newsboat`, **`fastfetch`** shows logo; remove obsolete **`~/.config/izar-tsp.gif`** if present.
 - **2026-04-26 — `hosts/Theseus/` (Framework laptop):** Entrypoint mirrors **Tawa**; **`hardware-configuration.nix`** is a **stub** (placeholder UUIDs) so `nix build -I nixos-config=…/hosts/Theseus/configuration.nix` evaluates from any machine. On the laptop, replace that file with **`nixos-generate-config`** output before **`nixos-rebuild switch`**. **`kvantum/Theseus/`** copies the Tawa theme layout until you customize on-device.
 - **2026-04-27 — `hostname.nix`:** (superseded) Previously per-host settings lived in `./hostname.nix`.
-- **2026-04-27 — `hosts/<hostname>/`:** Per-host **`networking.hostName`**, **`<nixos-hardware/...>`**, **LUKS**, **`boot.kernelParams`** live in **`hosts/<hostname>/host.nix`**; disk layout in **`hosts/<hostname>/hardware-configuration.nix`**; entry **`hosts/<hostname>/configuration.nix`**. Shared NixOS + HM pin in **[`common/system.nix`](./common/system.nix)**. Root [`configuration.nix`](./configuration.nix) imports **`./hosts/Tawa/configuration.nix`** for this desktop; other machines set **`NIXOS_CONFIG`** to their host entry (or change the root import on a branch).
+- **2026-04-27 — `hosts/<hostname>/`:** Per-host **`networking.hostName`**, **`<nixos-hardware/...>`**, **LUKS**, **`boot.kernelParams`** live in **`hosts/<hostname>/host.nix`**; disk layout in **`hosts/<hostname>/hardware-configuration.nix`**; entry **`hosts/<hostname>/configuration.nix`**. Shared NixOS + HM pin in **[`common/system.nix`](./common/system.nix)**. Root `configuration.nix` imported **`./hosts/Tawa/configuration.nix`** for this desktop; other machines set **`NIXOS_CONFIG`** to their host entry. *(Superseded 2026-08: the root entrypoint was removed; hosts are named flake outputs.)*
 - **2026-04-28 — Custom `.desktop` files:** Each `*.desktop` in [`./desktop/applications/`](./desktop/applications/) is installed to **`~/.local/share/applications/`** via **`xdg.dataFile`** in **[`home/xdg/data.nix`](./home/xdg/data.nix)** ([`home/lib/desktop-data.nix`](./home/lib/desktop-data.nix); no need to list files in Nix; `readDir` picks them up). Rebuild: `sudo nixos-rebuild switch`.
 - **2026-04-29 — Kvantum (per host):** Theme + `kvantum.kvconfig` from [`./kvantum/<hostname>/`](./kvantum/README.md) (hostname = **`networking.hostName`**, e.g. **Tawa**) via **`nixosConfig.networking.hostName`** in **[`home/lib/host-xdg.nix`](./home/lib/host-xdg.nix)** (merged in **[`home/xdg/config.nix`](./home/xdg/config.nix)**). Rebuild: `sudo nixos-rebuild switch`. Add new `xdg.configFile` paths in **`host-xdg.nix` / `config.nix`** if a host’s theme adds files not wired there yet.
 - **2026-04-26 — Modular Home Manager:** User config is split under **[`./home/`](./home/)** (e.g. `programs/`, `wayland/`, `xdg/`); root **[`home.nix`](./home.nix)** only re-exports `imports = [ ./home ];`. **`hyprctl` from hypridle** often has no `HYPRLAND_INSTANCE_SIGNATURE`; helper scripts use **`hyprctl -i 0`** so `dispatch dpms` works. Rebuild: `sudo nixos-rebuild switch`.
@@ -83,33 +83,33 @@ Iterative: **one** logical change per rebuild; **verify** before the next (optio
 
 A **gitignored** `local.nix` is still an option for secrets you do not want in git. Host identity and disk UUIDs belong under **`hosts/<hostname>/`** (`host.nix` / `hardware-configuration.nix`).
 
-## Flakes (optional)
+## Flakes (current)
 
-If you move to a **flake** + **`flake.lock`**, record that in a short “build command” note here (e.g. `nixos-rebuild switch --flake .#hostname`).
+This repo **is** a flake: hosts are named outputs in [`flake.nix`](./flake.nix), inputs are pinned in `flake.lock`. Build with the guided helper (`os-rebuild switch --host <hostname>`) or directly:
+
+```bash
+sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>
+```
+
+There is no root `configuration.nix` entrypoint anymore; each machine builds its own `nixosConfigurations.<hostname>` output.
 
 ## Keeping `slippi-nix` in sync with `main`
 
-`slippi-nix` is pinned in [`common/system.nix`](./common/system.nix) via:
+`slippi-nix` is a pinned flake input (`flake.nix` → `inputs.slippi-nix`, `flake = false`). To pull the latest launcher / Dolphin versions from upstream `main`:
 
-- `url = "https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz";`
-- `sha256 = "…";`
-
-When you want latest launcher / Dolphin versions from upstream `main`:
-
-1. Prefetch the new tarball hash:
+1. Update the pinned input:
    ```bash
-   nix-prefetch-url --unpack https://github.com/lytedev/slippi-nix/archive/refs/heads/main.tar.gz
+   nix flake update slippi-nix
    ```
-2. Replace `slippi-nix-src.sha256` in [`common/system.nix`](./common/system.nix) with the returned hash.
-3. Rebuild for the target host:
+2. Rebuild for the target host:
    ```bash
-   sudo nixos-rebuild switch -I nixos-config=/home/wiz/.config/nixos/hosts/<hostname>/configuration.nix
+   os-rebuild switch --host <hostname>
    ```
-4. Optional check (without switching): build first with `nix-build '<nixpkgs/nixos>' -A config.system.build.toplevel -I nixos-config=... --no-out-link`.
+3. Optional check (without switching): `os-rebuild build --host <hostname>` first.
 
 Notes:
 
-- Because `main` is moving, hash mismatches are expected; prefetching is the normal update step.
+- Because `main` is moving, `nix flake update slippi-nix` is the normal update step; the new revision lands in `flake.lock`.
 - Slippi launcher auto-update is intentionally disabled by the HM module, so updates should come from this Nix pin.
 - Upstream reference: [lytedev/slippi-nix](https://github.com/lytedev/slippi-nix).
 
@@ -145,6 +145,6 @@ How to tune:
 - Change Slippi detection logic or guard behavior in [`home/hypr/scripts.nix`](./home/hypr/scripts.nix).
 - Apply with:
   ```bash
-  sudo nixos-rebuild switch -I nixos-config=/home/wiz/.config/nixos/hosts/<hostname>/configuration.nix
+  os-rebuild switch --host <hostname>
   systemctl --user restart hypridle
   ```
