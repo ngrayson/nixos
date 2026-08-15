@@ -123,6 +123,9 @@ in {
 
   hardware.bluetooth.enable = true;
   hardware.bluetooth.powerOnBoot = true;
+  # GTK bluetooth manager for the quickshell bluetooth pill. The module (not just the package)
+  # is needed: pairing goes through blueman's root mechanism over system dbus + polkit.
+  services.blueman.enable = true;
 
   services.xserver.enable = true;
 

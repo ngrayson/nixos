@@ -44,6 +44,8 @@
     jq
     newsboat
     nerd-fonts.iosevka-term-slab
+    # GTK4 wifi scan/connect UI; left-click on the quickshell network pill (right-click runs nmtui).
+    nmgui
     pamixer
     pavucontrol
     qpwgraph

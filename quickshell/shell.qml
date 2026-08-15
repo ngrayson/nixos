@@ -10,6 +10,8 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Services.UPower
+import Quickshell.Networking
+import Quickshell.Bluetooth
 
 ShellRoot {
 	id: shellRoot
@@ -31,6 +33,72 @@ ShellRoot {
 	readonly property bool batteryLow: batteryPresent && !batteryCharging && batteryPercent <= 15
 	readonly property int powerProfile: PowerProfiles.profile
 	readonly property bool powerProfileMarked: powerProfile !== PowerProfile.Balanced
+
+	readonly property var netWifiDevice: {
+		const devices = Networking.devices.values;
+		for (let i = 0; i < devices.length; ++i) {
+			const d = devices[i];
+			if (d.type === DeviceType.Wifi && d.connected)
+				return d;
+		}
+		return null;
+	}
+	readonly property var netWifiNetwork: {
+		const d = netWifiDevice;
+		if (!d)
+			return null;
+		const nets = d.networks.values;
+		for (let i = 0; i < nets.length; ++i) {
+			if (nets[i].connected)
+				return nets[i];
+		}
+		return null;
+	}
+	readonly property var netWiredDevice: {
+		const devices = Networking.devices.values;
+		for (let i = 0; i < devices.length; ++i) {
+			const d = devices[i];
+			if (d.type === DeviceType.Wired && d.connected)
+				return d;
+		}
+		return null;
+	}
+	readonly property bool networkRadioOff: !Networking.wifiEnabled || !Networking.wifiHardwareEnabled
+	// Prefer wifi, else wired, else off / disconnected.
+	readonly property string networkKind: {
+		if (netWifiDevice)
+			return "wifi";
+		if (netWiredDevice)
+			return "wired";
+		if (networkRadioOff)
+			return "off";
+		return "disconnected";
+	}
+	readonly property int networkSignal: Math.round(netWifiNetwork?.signalStrength ?? 0)
+	readonly property bool networkBusy: {
+		const d = netWifiDevice ?? netWiredDevice;
+		if (!d)
+			return false;
+		return d.state === ConnectionState.Connecting || d.state === ConnectionState.Disconnecting;
+	}
+
+	readonly property var btAdapter: Bluetooth.defaultAdapter
+	readonly property bool btPresent: btAdapter !== null
+	readonly property bool btEnabled: btAdapter?.enabled ?? false
+	readonly property bool btBusy: {
+		const s = btAdapter?.state;
+		return s === BluetoothAdapterState.Enabling || s === BluetoothAdapterState.Disabling;
+	}
+	readonly property bool btBlocked: btAdapter?.state === BluetoothAdapterState.Blocked
+	readonly property int btConnectedCount: {
+		const devices = Bluetooth.devices.values;
+		let n = 0;
+		for (let i = 0; i < devices.length; ++i) {
+			if (devices[i].connected)
+				n++;
+		}
+		return n;
+	}
 
 	function audioIcon(): string {
 		if (audioMuted)
@@ -90,6 +158,52 @@ ShellRoot {
 			"Power Profile", powerProfileLabel()
 		];
 		profileNotify.running = true;
+	}
+
+	function networkIcon(): string {
+		if (networkKind === "wired")
+			return String.fromCodePoint(0xF0200); // nf-md-ethernet
+		if (networkKind === "off")
+			return String.fromCodePoint(0xF05AA); // nf-md-wifi_off
+		if (networkKind === "wifi") {
+			const s = networkSignal;
+			// nf-md-wifi_strength_{1..4}: F091F / F0922 / F0925 / F0928 (F05A6..A8 are unrelated glyphs).
+			if (s >= 75)
+				return String.fromCodePoint(0xF0928);
+			if (s >= 50)
+				return String.fromCodePoint(0xF0925);
+			if (s >= 25)
+				return String.fromCodePoint(0xF0922);
+			if (s >= 1)
+				return String.fromCodePoint(0xF091F);
+		}
+		return String.fromCodePoint(0xF05A9); // nf-md-wifi (disconnected / fallback)
+	}
+
+	function networkColor(): string {
+		if (networkBusy)
+			return "#fab387";
+		if (networkKind === "disconnected" || networkKind === "off")
+			return "#6c7086";
+		return "#cdd6f4";
+	}
+
+	function bluetoothIcon(): string {
+		if (!btEnabled || btBlocked)
+			return String.fromCodePoint(0xF00B2); // nf-md-bluetooth_off
+		if (btConnectedCount > 0)
+			return String.fromCodePoint(0xF00B1); // nf-md-bluetooth_connect
+		return String.fromCodePoint(0xF00AF); // nf-md-bluetooth
+	}
+
+	function bluetoothColor(): string {
+		if (btBusy)
+			return "#fab387";
+		if (!btEnabled || btBlocked)
+			return "#6c7086";
+		if (btConnectedCount > 0)
+			return "#89b4fa";
+		return "#cdd6f4";
 	}
 
 	function refreshAudio(): void {
@@ -314,6 +428,59 @@ ShellRoot {
 					color: "#fab387"
 					font.pixelSize: 9
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
+				}
+
+				Rectangle {
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: 30
+
+					Text {
+						anchors.centerIn: parent
+						color: shellRoot.networkColor()
+						font.pixelSize: 14
+						font.family: "IosevkaTermSlab NF"
+						text: shellRoot.networkIcon()
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton
+						onClicked: mouse => {
+							if (mouse.button === Qt.LeftButton)
+								Hyprland.dispatch("exec nmgui");
+							else if (mouse.button === Qt.RightButton)
+								Hyprland.dispatch("exec kitty --title nmtui nmtui");
+						}
+					}
+				}
+
+				Rectangle {
+					visible: shellRoot.btPresent
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: 30
+
+					Text {
+						anchors.centerIn: parent
+						color: shellRoot.bluetoothColor()
+						font.pixelSize: 14
+						font.family: "IosevkaTermSlab NF"
+						text: shellRoot.bluetoothIcon()
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton
+						onClicked: mouse => {
+							if (mouse.button === Qt.LeftButton)
+								Hyprland.dispatch("exec blueman-manager");
+							else if (mouse.button === Qt.RightButton && shellRoot.btAdapter)
+								shellRoot.btAdapter.enabled = !shellRoot.btAdapter.enabled;
+						}
+					}
 				}
 
 				Rectangle {
