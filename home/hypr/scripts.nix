@@ -102,24 +102,73 @@ in rec {
     exec ${lib.getExe' pkgs.systemd "systemctl"} suspend
   '';
 
-  # Lock then blank outputs before systemd suspend (quickshell-lock uses exec and cannot be chained).
+  # Lock, then re-enable outputs before systemd suspends (quickshell-lock uses exec and
+  # cannot be chained). Suspending while the 600s idle listener has DPMS off leaves this
+  # eDP panel dark on resume: `dispatch dpms on` then returns ok without lighting it.
+  # Cost of waking outputs first is a brief flash before the machine goes down.
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     QS="''${HOME}/.config/quickshell"
     env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
       ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
-    sleep 1
-    ${lib.getExe hyprDpmsAllOff}
+    ${lib.getExe' pkgs.coreutils "sleep"} 1
+    ${lib.getExe hyprDpmsAllOn} || true
   '';
 
+  # Verify instead of trusting `dispatch dpms on`: after s2idle it can report ok while
+  # the panel stays black. Poll until Hyprland answers IPC, turn every output on by name,
+  # then escalate to an off -> on cycle, which forces amdgpu to redo the modeset.
   hyprDpmsAllOn = pkgs.writeShellScriptBin "hypr-dpms-all-on" ''
-    set -euo pipefail
+    set -uo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
-    "$H" -i 0 dispatch dpms on || true
-    sleep 1
-    "$H" -i 0 dispatch dpms on || true
+    J="${lib.getExe pkgs.jq}"
+    SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
+
+    monitorsJson() {
+      "$H" -i 0 monitors -j 2>/dev/null
+    }
+
+    dpmsOnAll() {
+      "$H" -i 0 dispatch dpms on || true
+      local name
+      while IFS= read -r name; do
+        [ -n "$name" ] || continue
+        "$H" -i 0 dispatch dpms on "$name" || true
+      done < <(monitorsJson | "$J" -r '.[].name' 2>/dev/null)
+    }
+
+    allAwake() {
+      local json dark
+      json="$(monitorsJson)" || return 1
+      case "$json" in
+        \[*) ;;
+        *) return 1 ;;
+      esac
+      dark="$("$J" -r '[.[] | select((.dpmsStatus // false) != true or (.disabled // false) == true)] | length' <<<"$json" 2>/dev/null)" || return 1
+      [ "''${dark:-1}" = "0" ]
+    }
+
+    tries=0
+    while [ "$tries" -lt 20 ]; do
+      monitorsJson | "$J" -e 'length > 0' >/dev/null 2>&1 && break
+      "$SLEEP" 0.25
+      tries=$((tries + 1))
+    done
+
+    attempt=0
+    while [ "$attempt" -lt 3 ]; do
+      dpmsOnAll
+      "$SLEEP" 1
+      allAwake && exit 0
+      "$H" -i 0 dispatch dpms off || true
+      "$SLEEP" 1
+      attempt=$((attempt + 1))
+    done
+
+    dpmsOnAll
+    exit 0
   '';
 
   # Toggle PulseAudio UI: used by Quickshell bar (PATH) and matches Hyprland `pavucontrol` window rules.
