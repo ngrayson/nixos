@@ -79,6 +79,13 @@ Iterative: **one** logical change per rebuild; **verify** before the next (optio
 
 - **2026-04-27 — Wallust reverted:** An experimental Wallust + `theme.dynamic` setup was removed; theming is **Stylix-only** again (GTK, Hyprland, Hyprpaper in [`home/stylix.nix`](./home/stylix.nix)).
 
+- **2026-08-16 — Dark system appearance:** **`gtk.colorScheme = "dark"`** added in [`home/stylix.nix`](./home/stylix.nix). Stylix `polarity = "dark"` only drives its own targets; the `gtk` target never sets **`org.gnome.desktop.interface color-scheme`**, so a stale **`prefer-light`** in the user dconf db (written by an earlier Plasma session) made apps that follow the *system* setting render light — Electron/Chromium (Cursor), Firefox “System theme”, libadwaita. HM turns this option into dconf **`prefer-dark`** plus **`gtk-application-prefer-dark-theme`** / **`gtk-interface-color-scheme`** in both `gtk-3.0` / `gtk-4.0` `settings.ini`. Rebuild: `sudo nixos-rebuild switch`. **Verify:** `dconf read /org/gnome/desktop/interface/color-scheme` → `'prefer-dark'`, and the portal (what apps actually read) → `1`:
+  ```bash
+  busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop \
+    org.freedesktop.portal.Settings Read ss org.freedesktop.appearance color-scheme
+  ```
+  Qt/KF6 apps do **not** use this key — they follow `kdeglobals` `ColorScheme=Izar` from [`home/programs/qt-palette.nix`](./home/programs/qt-palette.nix) (already dark).
+
 ## Optional: per-machine Nix
 
 A **gitignored** `local.nix` is still an option for secrets you do not want in git. Host identity and disk UUIDs belong under **`hosts/<hostname>/`** (`host.nix` / `hardware-configuration.nix`).

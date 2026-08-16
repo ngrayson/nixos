@@ -81,6 +81,13 @@ in {
     };
   };
 
+  # Stylix's `gtk` target only writes the theme + Base16 `gtk.css`; it never sets the freedesktop
+  # appearance preference. Apps that follow the *system* setting (Electron/Chromium, Firefox "System
+  # theme", libadwaita) read `org.gnome.desktop.interface color-scheme` through the settings portal, so
+  # without this they render light on an otherwise dark desktop. HM maps this to dconf `prefer-dark`
+  # plus `gtk-application-prefer-dark-theme` / `gtk-interface-color-scheme` in both settings.ini files.
+  gtk.colorScheme = "dark";
+
   # Leftover files from the reverted Wallust experiment; not referenced by Stylix HM `gtk.css` but confuse
   # inspection and could interact badly if GTK ever loads them from the config dir.
   home.activation.stylixRemoveStaleGtkCss = lib.hm.dag.entryAfter ["writeBoundary"] ''
