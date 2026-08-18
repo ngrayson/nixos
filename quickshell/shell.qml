@@ -177,6 +177,18 @@ ShellRoot {
 		readNixosStatus.running = true;
 	}
 
+	function nixosTooltipText(): string {
+		const lines = [];
+		if (nixosRebuildPending)
+			lines.push("Wrench: local config is not the running system");
+		if (nixosUpdates > 0)
+			lines.push("Updates: " + nixosUpdates + " flake input" + (nixosUpdates === 1 ? "" : "s") + " newer than flake.lock");
+		lines.push("Left-click: rebuild (os-rebuild switch)");
+		lines.push("Right-click: update flake inputs");
+		lines.push("Middle-click: refresh this status");
+		return lines.join("\n");
+	}
+
 	function idleInhibitIcon(): string {
 		return String.fromCodePoint(0xEC15); // nf-cod-flame
 	}
@@ -711,11 +723,13 @@ ShellRoot {
 				}
 
 				Rectangle {
+					id: nixosPill
 					visible: shellRoot.nixosStatusVisible()
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
 					implicitWidth: nixosRow.implicitWidth + 16
+					property bool tipVisible: false
 
 					RowLayout {
 						id: nixosRow
@@ -747,9 +761,13 @@ ShellRoot {
 					}
 
 					MouseArea {
+						id: nixosHover
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 						onClicked: mouse => {
+							nixosPill.tipVisible = false;
+							nixosTipDelay.stop();
 							if (mouse.button === Qt.LeftButton)
 								Hyprland.dispatch("exec qs-nixos-term rebuild");
 							else if (mouse.button === Qt.RightButton)
@@ -757,6 +775,18 @@ ShellRoot {
 							else if (mouse.button === Qt.MiddleButton)
 								shellRoot.refreshNixosStatus(true);
 						}
+						onEntered: nixosTipDelay.restart()
+						onExited: {
+							nixosTipDelay.stop();
+							nixosPill.tipVisible = false;
+						}
+					}
+
+					Timer {
+						id: nixosTipDelay
+						interval: 400
+						repeat: false
+						onTriggered: nixosPill.tipVisible = true
 					}
 				}
 
@@ -1175,6 +1205,34 @@ ShellRoot {
 				}
 
 				Component.onCompleted: shellRoot.refreshAudio()
+			}
+
+			PopupWindow {
+				visible: nixosPill.visible && nixosPill.tipVisible
+				grabFocus: false
+				color: "transparent"
+				implicitWidth: nixosTipText.implicitWidth + 16
+				implicitHeight: nixosTipText.implicitHeight + 12
+				anchor.window: barWindow
+				anchor.item: nixosPill
+				anchor.edges: Edges.Bottom
+				anchor.gravity: Edges.Bottom
+
+				Rectangle {
+					anchors.fill: parent
+					color: "#181825"
+					radius: 8
+					border.width: 1
+					border.color: "#313244"
+
+					Text {
+						id: nixosTipText
+						anchors.centerIn: parent
+						color: "#cdd6f4"
+						font.pixelSize: 12
+						text: shellRoot.nixosTooltipText()
+					}
+				}
 			}
 		}
 	}
