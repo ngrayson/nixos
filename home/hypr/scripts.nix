@@ -9,10 +9,26 @@
     cp ${../../quickshell/shell.qml} $out/shell.qml
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
+    cp ${../../quickshell/Theme.qml} $out/Theme.qml
+    cp ${../../quickshell/qmldir} $out/qmldir
     cp ${../../quickshell/pam/password.conf} $out/pam/password.conf
   '';
 
   quickshellConfigDir = "${config.home.homeDirectory}/.config/quickshell";
+  qsBin = lib.getExe pkgs.quickshell;
+  # Live QML reload (`qs-quickshell-reload`) runs `-p ~/.config/nixos/quickshell`.
+  # A normal session `exec-once` uses HM `~/.config/quickshell`. IPC must follow the live process.
+  qsLiveDirSnippet = ''
+    qs_live_dir() {
+      local nixos="''${HOME}/.config/nixos/quickshell"
+      local hm="''${HOME}/.config/quickshell"
+      if ${qsBin} ipc -p "$nixos" show >/dev/null 2>&1; then
+        printf '%s\n' "$nixos"
+      else
+        printf '%s\n' "$hm"
+      fi
+    }
+  '';
 in rec {
   inherit quickshellBundled quickshellConfigDir;
 
@@ -25,9 +41,20 @@ in rec {
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    QS="''${HOME}/.config/quickshell"
+    ${qsLiveDirSnippet}
+    QS="$(qs_live_dir)"
     exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
-      ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
+      ${qsBin} ipc -p "$QS" -n call lock activate
+  '';
+
+  # Overlay preview of the lock UI. Esc dismisses; does not take ext-session-lock.
+  quickshellLockPreview = pkgs.writeShellScriptBin "quickshell-lock-preview" ''
+    set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    ${qsLiveDirSnippet}
+    QS="$(qs_live_dir)"
+    exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${qsBin} ipc -p "$QS" -n call lock preview
   '';
 
   # True when Slippi Dolphin netplay is actively emulating (launcher-only should not match).
@@ -109,9 +136,10 @@ in rec {
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    QS="''${HOME}/.config/quickshell"
+    ${qsLiveDirSnippet}
+    QS="$(qs_live_dir)"
     env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
-      ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
+      ${qsBin} ipc -p "$QS" -n call lock activate
     ${lib.getExe' pkgs.coreutils "sleep"} 1
     ${lib.getExe hyprDpmsAllOn} || true
   '';

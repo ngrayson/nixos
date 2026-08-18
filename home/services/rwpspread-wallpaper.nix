@@ -1,20 +1,18 @@
-# Tawa: span `izar-utopia.png` across monitors via rwpspread (`-b hyprpaper`). Stylix Hyprpaper is off —
-# see `home/stylix.nix` (`hyprpaper.enable = false` when `hostIsTawa`).
+# Tawa (and any host with `spanMonitors`): span `config.theme.wallpaper` via rwpspread
+# (`-b hyprpaper`). Stylix Hyprpaper is off when `theme.spanMonitors` is true.
 {
   config,
   lib,
-  nixosConfig ? null,
   pkgs,
   ...
 }: let
-  hostIsTawa = nixosConfig != null && nixosConfig.networking.hostName == "Tawa";
   wallpaper = builtins.path {
-    path = ../../izar-utopia.png;
-    name = "izar-utopia.png";
+    path = config.theme.wallpaper;
+    name = config.theme.wallpaperName;
   };
   outDir = "${config.home.homeDirectory}/.cache/rwpspread";
 in
-  lib.mkIf (hostIsTawa && config.wayland.windowManager.hyprland.enable) {
+  lib.mkIf (config.theme.spanMonitors && config.wayland.windowManager.hyprland.enable) {
     services.hyprpaper = {
       enable = true;
       settings = {

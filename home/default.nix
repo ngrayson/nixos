@@ -1,6 +1,7 @@
 # Home Manager module bundle (imported from ../home.nix). Per-topic files live under this directory.
 {...}: {
   imports = [
+    ./theme
     ./programs/photogimp.nix
     ./programs/firefox.nix
     ./stylix.nix

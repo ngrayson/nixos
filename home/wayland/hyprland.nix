@@ -43,9 +43,9 @@ in {
         gaps_in = 10;
         gaps_out = 15;
         border_size = 2;
-        # Izar (chromamancer themes/izar): overrides Stylix Hyprland `col.*`
-        "col.active_border" = lib.mkForce "rgba(6abab5ff)";
-        "col.inactive_border" = lib.mkForce "rgba(302947ff)";
+        # Active scheme (home/theme/hosts.nix): overrides Stylix Hyprland `col.*`
+        "col.active_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.accent}ff)";
+        "col.inactive_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.surface}ff)";
       };
       decoration = {
         rounding = 25;
@@ -99,6 +99,7 @@ in {
         "$mod SHIFT, P, pseudo"
         "$mod SHIFT, S, exec, ${lib.getExe hs.hyprScreenshotRegion}"
         "$mod, L, exec, ${lib.getExe hs.quickshellLock}"
+        "$mod SHIFT, L, exec, ${lib.getExe hs.quickshellLockPreview}"
         "$mod, B, exec, ${lib.getExe pkgs.firefox}"
         "$mod SHIFT, C, exec, ${lib.getExe pkgs.hyprpicker} -a -n"
         "$mod, D, exec, ${lib.getExe pkgs.discord}"

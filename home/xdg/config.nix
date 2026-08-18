@@ -23,12 +23,16 @@ in {
         source = "${hs.quickshellBundled}/LockSurface.qml";
         force = true;
       };
-      "quickshell/pam/password.conf" = {
-        source = "${hs.quickshellBundled}/pam/password.conf";
+      "quickshell/Theme.qml" = {
+        source = "${hs.quickshellBundled}/Theme.qml";
         force = true;
       };
-      "kitty/izar.conf" = {
-        source = ../../kitty/izar.conf;
+      "quickshell/qmldir" = {
+        source = "${hs.quickshellBundled}/qmldir";
+        force = true;
+      };
+      "quickshell/pam/password.conf" = {
+        source = "${hs.quickshellBundled}/pam/password.conf";
         force = true;
       };
       "kitty/kitty.conf" = {

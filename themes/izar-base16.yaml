@@ -1,5 +1,5 @@
-# Base16 palette for Stylix — derived from chromamancer `themes/izar/theme.jsonc` tokens.
-# Slots follow typical Base16 roles so Stylix GTK/Firefox align with Hyprland + Kitty (Izar).
+# Unused: Stylix now reads a generated YAML from `home/theme` (see hosts.nix + schemes/).
+# Kept so older notes/links still resolve.
 system: "base16"
 name: "Izar"
 author: "chromamancer (tokens: void, depth, purple, plum, blue, lavender, mint, mauve, teal, sage)"

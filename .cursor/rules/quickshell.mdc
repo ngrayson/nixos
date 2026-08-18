@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Quickshell
 
-Bar source: `quickshell/shell.qml`. Catppuccin Mocha. Icons: `IosevkaTermSlab NF` via `String.fromCodePoint(0xF…)`, never paste PUA glyphs (editors mangle them).
+Bar source: `quickshell/shell.qml`. Colors come from `Theme.qml` / `~/.config/quickshell/theme.json` (home/theme). Icons: `IosevkaTermSlab NF` via `String.fromCodePoint(0xF…)`, never paste PUA glyphs (editors mangle them).
 
 **Layout (right side):** media pill | tray pill | **one status cluster** | clock. Cluster order: updates, qs-reload (only if `quickshell/*.qml` changed since last start), wifi, bluetooth, brightness, battery, keep-awake, mic, volume. Keep click/scroll/tooltip behavior per icon; do not split those back into separate pills.
 

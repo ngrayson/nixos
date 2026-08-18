@@ -1,10 +1,8 @@
-# Izar palette for Qt/KDE: Home Manager `qt` uses KDE platform theme + Breeze so Dolphin, Kate,
-# and other KF6 apps use KColorScheme (~/.local/share/color-schemes/Izar.colors + kdeglobals).
-# Stylix targets.qt is off.
+# Qt/KDE palette from `config.theme`. Home Manager `qt` uses KDE platform theme + Breeze
+# so Dolphin, Kate, and other KF6 apps use KColorScheme + kdeglobals.
 #
 # Do not use QT_QPA_PLATFORMTHEME=qt5ct with Dolphin — it clashes with KDE’s integration and
 # looks “unthemed”. Generic Qt apps follow the same kdeglobals ColorScheme via plasma-integration.
-# Chromamancer reference: themes/izar + targets/qt/mapping.jsonc
 {
   config,
   lib,
@@ -15,19 +13,21 @@
   kwrite = "${pkgs.kdePackages.kconfig}/bin/kwriteconfig6";
   kdglobals = "${h}/.config/kdeglobals";
   dolphinrc = "${h}/.config/dolphinrc";
+  name = config.theme.name;
+  rgb = config.theme.rgb;
 
-  voidRgb = "1,2,18";
-  depthRgb = "11,10,28";
-  purpleRgb = "32,38,97";
-  plumRgb = "48,41,71";
-  blueRgb = "64,84,149";
-  lavenderRgb = "215,202,220";
-  mintRgb = "220,245,225";
-  mauveRgb = "164,129,204";
-  tealRgb = "106,186,181";
+  voidRgb = rgb.void;
+  depthRgb = rgb.depth;
+  purpleRgb = rgb.chrome;
+  plumRgb = rgb.surface;
+  blueRgb = rgb.border;
+  lavenderRgb = rgb.text;
+  mintRgb = rgb.bright;
+  mauveRgb = rgb.mauve;
+  tealRgb = rgb.accent;
+  sageRgb = rgb.sage;
 
-  # BreezeDark-shaped scheme; roles mapped to Izar tokens
-  izarKdeColors = ''
+  kdeColors = ''
     [ColorEffects:Disabled]
     Color=56,56,56
     ColorAmount=0
@@ -59,7 +59,7 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [Colors:Complementary]
@@ -73,7 +73,7 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [Colors:Header]
@@ -87,7 +87,7 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [Colors:Header][Inactive]
@@ -101,7 +101,7 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [Colors:Selection]
@@ -129,7 +129,7 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [Colors:View]
@@ -143,7 +143,7 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [Colors:Window]
@@ -157,12 +157,12 @@
     ForegroundNegative=218,68,83
     ForegroundNeutral=246,116,0
     ForegroundNormal=${lavenderRgb}
-    ForegroundPositive=39,174,96
+    ForegroundPositive=${sageRgb}
     ForegroundVisited=${mauveRgb}
 
     [General]
-    ColorScheme=Izar
-    Name=Izar
+    ColorScheme=${name}
+    Name=${name}
     shadeSortColumn=true
 
     [KDE]
@@ -183,10 +183,10 @@ in {
     style.name = "breeze";
   };
 
-  xdg.dataFile."color-schemes/Izar.colors".text = izarKdeColors;
+  xdg.dataFile."color-schemes/${name}.colors".text = kdeColors;
 
-  home.activation.kdeIzarPalette = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group General --key ColorScheme Izar
+  home.activation.kdeColorScheme = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group General --key ColorScheme ${lib.escapeShellArg name}
     $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group KDE --key widgetStyle breeze
     $DRY_RUN_CMD ${kwrite} --notify --file "${dolphinrc}" --group UiSettings --key ColorScheme '*'
   '';
