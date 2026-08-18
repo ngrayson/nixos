@@ -7,10 +7,53 @@
   ...
 }: let
   hx = config.theme.hex;
-  fuzzel = lib.getExe pkgs.fuzzel;
   xdgOpen = lib.getExe' pkgs.xdg-utils "xdg-open";
+  hyprctl = lib.getExe' pkgs.hyprland "hyprctl";
+  lastAppFile = "${config.home.homeDirectory}/.cache/qs-dunst-last-app";
+
+  # dunst scripts get: appname summary body icon urgency
+  trackLastApp = pkgs.writeShellScriptBin "qs-dunst-track-app" ''
+    set -euo pipefail
+    mkdir -p "$(dirname ${lib.escapeShellArg lastAppFile})"
+    printf '%s\n' "''${1:-}" > ${lib.escapeShellArg lastAppFile}
+  '';
+
+  # Fallback when do_action has no FreeDesktop action: focus a window matching appname.
+  # Also wraps fuzzel so multi-action context menus appear on the overlay layer.
+  dunstMenu = pkgs.writeShellScriptBin "qs-dunst-menu" ''
+    set -euo pipefail
+    fuzzel=${lib.getExe pkgs.fuzzel}
+    hyprctl=${lib.escapeShellArg hyprctl}
+    last_file=${lib.escapeShellArg lastAppFile}
+
+    input="$(cat || true)"
+    if [[ -n "''${input//[$' \t\r\n']/}" ]]; then
+      printf '%s\n' "$input" | "$fuzzel" -d --layer=overlay -p dunst
+      exit $?
+    fi
+
+    app=""
+    if [[ -f "$last_file" ]]; then
+      app="$(tr '[:upper:]' '[:lower:]' <"$last_file" | tr -d '[:space:]')"
+    fi
+    [[ -n "$app" ]] || exit 0
+
+    case "$app" in
+      discord|discord-canary|com.discordapp.discord) class_re='discord' ;;
+      element|element-desktop|im.riot.riot) class_re='element' ;;
+      slack|com.slack.slack) class_re='slack' ;;
+      signal|signal-desktop|org.signal.signal) class_re='signal' ;;
+      firefox|org.mozilla.firefox) class_re='firefox' ;;
+      *) class_re="$app" ;;
+    esac
+
+    "$hyprctl" dispatch focuswindow "class:(?i)$class_re" >/dev/null 2>&1 \
+      || "$hyprctl" dispatch focuswindow "initialClass:(?i)$class_re" >/dev/null 2>&1 \
+      || "$hyprctl" dispatch focuswindow "title:(?i)$class_re" >/dev/null 2>&1 \
+      || true
+  '';
 in {
-  home.packages = [pkgs.fuzzel];
+  home.packages = [pkgs.fuzzel dunstMenu trackLastApp];
 
   services.dunst = {
     enable = true;
@@ -45,15 +88,22 @@ in {
         min_icon_size = 32;
 
         # Laptop (no reliable middle-click):
-        # left  = invoke default action (or action menu if none) — do NOT chain close
+        # left  = default action (raises app; needs Hyprland focus_on_activate)
+        #         or context / focus fallback via qs-dunst-menu
         # right = dismiss
         mouse_left_click = "do_action";
         mouse_right_click = "close_current";
         mouse_middle_click = "close_all";
 
-        # overlay layer so the menu isn't buried under the notification window
-        dmenu = "${fuzzel} -d --layer=overlay -p dunst";
+        dmenu = lib.getExe dunstMenu;
         browser = xdgOpen;
+        always_run_script = true;
+      };
+
+      # Remember sender so empty-action left-clicks can still focus the app window.
+      track_last_app = {
+        appname = "*";
+        script = lib.getExe trackLastApp;
       };
 
       urgency_low = {

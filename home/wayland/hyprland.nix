@@ -59,6 +59,10 @@ in {
         kb_layout = "us";
         follow_mouse = 1;
       };
+      # Needed so notification default-actions (Discord, etc.) can raise their window.
+      misc = {
+        focus_on_activate = true;
+      };
       bind = [
         "ALT, h, movefocus, l"
         "ALT, j, movefocus, d"
