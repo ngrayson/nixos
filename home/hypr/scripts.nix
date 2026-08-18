@@ -30,6 +30,15 @@ in rec {
       ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock activate
   '';
 
+  # Overlay preview of the lock UI. Esc dismisses; does not take ext-session-lock.
+  quickshellLockPreview = pkgs.writeShellScriptBin "quickshell-lock-preview" ''
+    set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    QS="''${HOME}/.config/quickshell"
+    exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${lib.getExe pkgs.quickshell} ipc -p "$QS" -n call lock preview
+  '';
+
   # True when Slippi Dolphin netplay is actively emulating (launcher-only should not match).
   slippiIsEmulating = pkgs.writeShellScriptBin "slippi-is-emulating" ''
     set -euo pipefail

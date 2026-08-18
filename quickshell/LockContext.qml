@@ -38,6 +38,7 @@ Scope {
 			} else {
 				root.currentText = "";
 				root.showFailure = true;
+				root.failed();
 			}
 
 			root.unlockInProgress = false;

@@ -3,6 +3,7 @@
 // Quickshell: top bar (Hyprland workspaces + clock) + WlSessionLock (PAM password).
 // One bar per output via `Variants` + `Quickshell.screens` (not follow-focus on a single PanelWindow).
 // Lock: `quickshell ipc -p ~/.config/quickshell -n call lock activate` (see `quickshell-lock`).
+// Preview (not a session lock, Esc dismisses): `ipc call lock preview` (see `quickshell-lock-preview`).
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
 // Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
 import QtQuick
@@ -159,6 +160,9 @@ ShellRoot {
 	// Wayland idle-inhibit: when true, hypridle (ignore_dbus_inhibit=false) will not
 	// lock/suspend. Bound to each bar PanelWindow below.
 	property bool idleInhibited: false
+
+	// Fullscreen overlay that looks like the lock but is not WlSessionLock. Esc dismisses.
+	property bool lockPreview: false
 
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
 	property bool trayCollapsed: false
@@ -585,7 +589,11 @@ ShellRoot {
 		id: lockContext
 
 		onUnlocked: {
-			sessionLock.locked = false;
+			lockContext.currentText = "";
+			if (shellRoot.lockPreview)
+				shellRoot.lockPreview = false;
+			else
+				sessionLock.locked = false;
 		}
 	}
 
@@ -595,20 +603,58 @@ ShellRoot {
 
 		WlSessionLockSurface {
 			id: lockSessionSurface
-			// Full lock UI only on the center output. Children are reparented to an internal
-			// contentItem, so `parent` on LockSurface is not this object — use `lockSessionSurface.showLockUi`.
-			// Other outputs stay covered (protocol requirement) via `color` only.
+			// Wallpaper on every output (protocol still requires a surface per screen).
+			// Chrome only on the center output — same idea as the SDDM greeter on Tawa.
 			readonly property bool showLockUi: {
 				const c = shellRoot.centerOutputScreen();
 				return c && screen && c.name === screen.name;
 			}
 
-			color: "#1e1e2e"
+			color: "#010212"
 
 			LockSurface {
 				anchors.fill: parent
-				visible: lockSessionSurface.showLockUi
 				context: lockContext
+				preview: false
+				showUi: lockSessionSurface.showLockUi
+			}
+		}
+	}
+
+	// Not a session lock: Overlay layer-shell. Esc (and a correct password) dismisses.
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: previewWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = shellRoot.centerOutputScreen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool previewOpen: shellRoot.lockPreview && !sessionLock.locked
+
+			screen: modelData
+			visible: previewOpen
+			color: "#010212"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: previewOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-lock-preview-" + modelData.name
+			WlrLayershell.keyboardFocus: (previewOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			LockSurface {
+				anchors.fill: parent
+				context: lockContext
+				preview: true
+				showUi: previewWin.previewOpen && previewWin.isCenterScreen
+				onDismissRequested: shellRoot.lockPreview = false
 			}
 		}
 	}
@@ -618,7 +664,21 @@ ShellRoot {
 
 		// Return type required or quickshell will not register this for `ipc call lock activate`.
 		function activate(): void {
+			shellRoot.lockPreview = false;
+			lockContext.currentText = "";
 			sessionLock.locked = true;
+		}
+
+		function preview(): void {
+			if (sessionLock.locked)
+				return;
+			lockContext.currentText = "";
+			shellRoot.lockPreview = true;
+		}
+
+		function cancelPreview(): void {
+			shellRoot.lockPreview = false;
+			lockContext.currentText = "";
 		}
 	}
 
