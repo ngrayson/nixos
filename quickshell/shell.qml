@@ -162,6 +162,21 @@ ShellRoot {
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
 	property bool trayCollapsed: false
 
+	// Hidden while the running system matches the flake and flake.lock is current.
+	property bool nixosRebuildPending: false
+	property int nixosUpdates: 0
+
+	function nixosStatusVisible(): bool {
+		return nixosRebuildPending || nixosUpdates > 0;
+	}
+
+	function refreshNixosStatus(force: bool): void {
+		if (readNixosStatus.running)
+			return;
+		readNixosStatus.command = force ? ["qs-nixos-status", "--force"] : ["qs-nixos-status"];
+		readNixosStatus.running = true;
+	}
+
 	function idleInhibitIcon(): string {
 		return String.fromCodePoint(0xEC15); // nf-cod-flame
 	}
@@ -579,11 +594,37 @@ ShellRoot {
 		}
 	}
 
+	Process {
+		id: readNixosStatus
+		running: false
+
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const raw = this.text.trim();
+				if (!raw)
+					return;
+				try {
+					const data = JSON.parse(raw);
+					shellRoot.nixosRebuildPending = !!data.rebuild;
+					shellRoot.nixosUpdates = Number(data.updates) || 0;
+				} catch (_e) {
+				}
+			}
+		}
+	}
+
 	Timer {
 		interval: 2000
 		running: true
 		repeat: true
 		onTriggered: shellRoot.refreshBrightness()
+	}
+
+	Timer {
+		interval: 60000
+		running: true
+		repeat: true
+		onTriggered: shellRoot.refreshNixosStatus(false)
 	}
 
 	Timer {
@@ -667,6 +708,56 @@ ShellRoot {
 					color: "#fab387"
 					font.pixelSize: 9
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
+				}
+
+				Rectangle {
+					visible: shellRoot.nixosStatusVisible()
+					radius: 8
+					color: "#313244"
+					implicitHeight: 24
+					implicitWidth: nixosRow.implicitWidth + 16
+
+					RowLayout {
+						id: nixosRow
+						anchors.centerIn: parent
+						spacing: 4
+
+						Text {
+							visible: shellRoot.nixosRebuildPending
+							color: "#f9e2af"
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: String.fromCodePoint(0xF05B7) // nf-md-wrench
+						}
+
+						Text {
+							visible: shellRoot.nixosUpdates > 0
+							color: "#89b4fa"
+							font.pixelSize: 14
+							font.family: "IosevkaTermSlab NF"
+							text: String.fromCodePoint(0xF06B0) // nf-md-update
+						}
+
+						Text {
+							visible: shellRoot.nixosUpdates > 0
+							color: "#89b4fa"
+							font.pixelSize: 12
+							text: shellRoot.nixosUpdates
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+						onClicked: mouse => {
+							if (mouse.button === Qt.LeftButton)
+								Hyprland.dispatch("exec qs-nixos-term rebuild");
+							else if (mouse.button === Qt.RightButton)
+								Hyprland.dispatch("exec qs-nixos-term update");
+							else if (mouse.button === Qt.MiddleButton)
+								shellRoot.refreshNixosStatus(true);
+						}
+					}
 				}
 
 				Rectangle {
@@ -776,10 +867,16 @@ ShellRoot {
 
 								onClicked: mouse => {
 									if (mouse.button === Qt.LeftButton) {
-										if (modelData.onlyMenu)
+										if (modelData.onlyMenu) {
 											trayMenu.open();
-										else
+										} else {
 											modelData.activate();
+											// Activate only tells the app to show itself; it does not focus
+											// or switch workspace. qs-tray-focus resolves the SNI id to a
+											// Hyprland client and focuses it (polls briefly if the window
+											// is still appearing).
+											trayFocus.running = true;
+										}
 									} else if (mouse.button === Qt.RightButton) {
 										trayMenu.open();
 									} else if (mouse.button === Qt.MiddleButton) {
@@ -788,6 +885,13 @@ ShellRoot {
 								}
 								onWheel: event => {
 									modelData.scroll(event.angleDelta.y, false);
+								}
+
+								// Per-delegate so rapid clicks on different icons do not collide
+								// (a shared Process only allows one run at a time).
+								Process {
+									id: trayFocus
+									command: ["qs-tray-focus", trayDelegate.modelData.id]
 								}
 
 								// Rendered through MultiEffect, so the icon itself stays hidden and only
@@ -1079,6 +1183,7 @@ ShellRoot {
 		shellRoot.refreshBrightness();
 		// Silent (no pill flash) so the first click cycles from the real level.
 		shellRoot.refreshKbdBrightness();
+		shellRoot.refreshNixosStatus(false);
 	}
 
 	Variants {

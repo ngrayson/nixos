@@ -149,5 +149,11 @@ in {
       '';
   };
 
-  home.packages = [hs.pavuToggle hs.pavuEscapeClose];
+  home.packages = [
+    hs.pavuToggle
+    hs.pavuEscapeClose
+    hs.hyprTrayFocus
+    hs.hyprNixosStatus
+    hs.hyprNixosTerm
+  ];
 }
