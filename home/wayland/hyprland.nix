@@ -165,5 +165,7 @@ in {
     hs.hyprNixosStatus
     hs.hyprNixosTerm
     hs.hyprQuickshellReload
+    hs.hyprDpmsSideOff
+    hs.hyprDpmsSideOn
   ];
 }

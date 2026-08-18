@@ -592,9 +592,35 @@ ShellRoot {
 			lockContext.currentText = "";
 			if (shellRoot.lockPreview)
 				shellRoot.lockPreview = false;
-			else
+			else {
 				sessionLock.locked = false;
+				shellRoot.restoreSideMonitors();
+			}
 		}
+	}
+
+	Process {
+		id: sideDpmsOff
+		running: false
+		command: ["hypr-dpms-side-off"]
+	}
+
+	Process {
+		id: sideDpmsOn
+		running: false
+		command: ["hypr-dpms-side-on"]
+	}
+
+	function blankSideMonitors(): void {
+		if (sideDpmsOff.running)
+			sideDpmsOff.running = false;
+		sideDpmsOff.running = true;
+	}
+
+	function restoreSideMonitors(): void {
+		if (sideDpmsOn.running)
+			sideDpmsOn.running = false;
+		sideDpmsOn.running = true;
 	}
 
 	WlSessionLock {
@@ -667,6 +693,8 @@ ShellRoot {
 			shellRoot.lockPreview = false;
 			lockContext.currentText = "";
 			sessionLock.locked = true;
+			// Match the SDDM greeter: keep the center panel lit, blank the sides.
+			shellRoot.blankSideMonitors();
 		}
 
 		function preview(): void {
