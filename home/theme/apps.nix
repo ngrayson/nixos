@@ -1,4 +1,5 @@
-# Kitty palette, VS Code / Cursor theme extension, Obsidian vault theme.
+# Kitty palette, VS Code / Cursor theme extension, Obsidian vault theme,
+# Quickshell bar/lock JSON.
 {
   config,
   lib,
@@ -261,9 +262,28 @@
     patch "$HOME/.config/Cursor/User/settings.json"
     patch "$HOME/.config/Code/User/settings.json"
   '';
+
+  wallpaperStore = builtins.path {
+    path = t.wallpaper;
+    name = t.wallpaperName;
+  };
+
+  quickshellTheme = {
+    inherit (t) name;
+    bg = hx.void;
+    err = hx.error;
+    ink = hx.onAccent;
+    inherit (hx) depth chrome surface border muted text strong bright accent selection link visited sage mauve;
+    wallpaper = "${wallpaperStore}";
+  };
 in {
   xdg.configFile."kitty/palette.conf" = {
     text = kittyPalette;
+    force = true;
+  };
+
+  xdg.configFile."quickshell/theme.json" = {
+    text = builtins.toJSON quickshellTheme;
     force = true;
   };
 

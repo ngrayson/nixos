@@ -9,6 +9,8 @@
     cp ${../../quickshell/shell.qml} $out/shell.qml
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
+    cp ${../../quickshell/Theme.qml} $out/Theme.qml
+    cp ${../../quickshell/qmldir} $out/qmldir
     cp ${../../quickshell/pam/password.conf} $out/pam/password.conf
   '';
 

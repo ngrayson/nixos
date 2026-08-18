@@ -151,10 +151,10 @@ ShellRoot {
 
 	function micColor(): string {
 		if (micMuted)
-			return "#6c7086";
+			return Theme.muted;
 		if (micActive)
-			return "#f38ba8";
-		return "#cdd6f4";
+			return Theme.error;
+		return Theme.text;
 	}
 
 	// Wayland idle-inhibit: when true, hypridle (ignore_dbus_inhibit=false) will not
@@ -320,7 +320,7 @@ ShellRoot {
 	}
 
 	function idleInhibitColor(): string {
-		return idleInhibited ? "#f9e2af" : "#6c7086";
+		return idleInhibited ? Theme.bright : Theme.muted;
 	}
 
 	function mediaIcon(): string {
@@ -419,10 +419,10 @@ ShellRoot {
 
 	function networkColor(): string {
 		if (networkBusy)
-			return "#fab387";
+			return Theme.selection;
 		if (networkKind === "disconnected" || networkKind === "off")
-			return "#6c7086";
-		return "#cdd6f4";
+			return Theme.muted;
+		return Theme.text;
 	}
 
 	function bluetoothIcon(): string {
@@ -435,12 +435,12 @@ ShellRoot {
 
 	function bluetoothColor(): string {
 		if (btBusy)
-			return "#fab387";
+			return Theme.selection;
 		if (!btEnabled || btBlocked)
-			return "#6c7086";
+			return Theme.muted;
 		if (btConnectedCount > 0)
-			return "#89b4fa";
-		return "#cdd6f4";
+			return Theme.accent;
+		return Theme.text;
 	}
 
 	function brightnessIcon(): string {
@@ -546,12 +546,12 @@ ShellRoot {
 
 	function osdFillColor(): string {
 		if (osdKind === "brightness" || osdKind === "kbd")
-			return "#f9e2af";
+			return Theme.bright;
 		if (debugAudio)
-			return "#a6e3a1";
+			return Theme.sage;
 		if (audioMuted)
-			return "#6c7086";
-		return "#89b4fa";
+			return Theme.muted;
+		return Theme.accent;
 	}
 
 	// Monitor whose horizontal center is nearest the combined desktop midpoint (typical "center" panel).
@@ -610,7 +610,7 @@ ShellRoot {
 				return c && screen && c.name === screen.name;
 			}
 
-			color: "#010212"
+			color: Theme.bg
 
 			LockSurface {
 				anchors.fill: parent
@@ -636,7 +636,7 @@ ShellRoot {
 
 			screen: modelData
 			visible: previewOpen
-			color: "#010212"
+			color: Theme.bg
 			exclusionMode: ExclusionMode.Ignore
 			focusable: previewOpen && isCenterScreen
 
@@ -916,7 +916,7 @@ ShellRoot {
 			anchors.left: true
 			anchors.right: true
 			implicitHeight: shellRoot.topBarHeight
-			color: "#1e1e2e"
+			color: Theme.depth
 
 			property Item tipItem: null
 			property string tipKind: ""
@@ -970,13 +970,13 @@ ShellRoot {
 						implicitHeight: 22
 						Layout.alignment: Qt.AlignVCenter
 						radius: 6
-						color: isFocused ? "#45475a" : (occupied ? "#313244" : "transparent")
+						color: isFocused ? Theme.border : (occupied ? Theme.surface : "transparent")
 
 						Text {
 							id: wsLabel
 							anchors.centerIn: parent
 							text: parent.wid
-							color: (parent.isFocused || parent.occupied) ? "#cdd6f4" : "#6c7086"
+							color: (parent.isFocused || parent.occupied) ? Theme.text : Theme.muted
 							font.pixelSize: 14
 						}
 
@@ -995,7 +995,7 @@ ShellRoot {
 				Text {
 					visible: shellRoot.debugAudio
 					Layout.alignment: Qt.AlignVCenter
-					color: "#fab387"
+					color: Theme.selection
 					font.pixelSize: 9
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
 				}
@@ -1003,7 +1003,7 @@ ShellRoot {
 				Rectangle {
 					visible: shellRoot.mediaPresent
 					radius: 8
-					color: "#313244"
+					color: Theme.surface
 					implicitHeight: 24
 					implicitWidth: mediaRow.implicitWidth + 16
 
@@ -1013,14 +1013,14 @@ ShellRoot {
 						spacing: 4
 
 						Text {
-							color: shellRoot.mediaPlayer?.isPlaying ? "#a6e3a1" : "#cdd6f4"
+							color: shellRoot.mediaPlayer?.isPlaying ? Theme.sage : Theme.text
 							font.pixelSize: 14
 							font.family: "IosevkaTermSlab NF"
 							text: shellRoot.mediaIcon()
 						}
 
 						Text {
-							color: "#cdd6f4"
+							color: Theme.text
 							font.pixelSize: 12
 							text: shellRoot.mediaLabel()
 						}
@@ -1059,7 +1059,7 @@ ShellRoot {
 					visible: SystemTray.items.values.length > 0
 					Layout.alignment: Qt.AlignVCenter
 					radius: 8
-					color: "#313244"
+					color: Theme.surface
 					implicitHeight: 24
 					implicitWidth: trayRow.implicitWidth + 12
 
@@ -1077,7 +1077,7 @@ ShellRoot {
 
 							Text {
 								anchors.centerIn: parent
-								color: "#6c7086"
+								color: Theme.muted
 								font.pixelSize: 12
 								font.family: "IosevkaTermSlab NF"
 								text: String.fromCodePoint(shellRoot.trayCollapsed ? 0xF0141 : 0xF0142)
@@ -1087,7 +1087,7 @@ ShellRoot {
 						Text {
 							visible: shellRoot.trayCollapsed
 							anchors.verticalCenter: parent.verticalCenter
-							color: "#6c7086"
+							color: Theme.muted
 							font.pixelSize: 11
 							text: SystemTray.items.values.length
 						}
@@ -1151,7 +1151,7 @@ ShellRoot {
 									// into the bar foreground.
 									saturation: -0.8
 									colorization: 0.6
-									colorizationColor: "#cdd6f4"
+									colorizationColor: Theme.text
 								}
 
 								QsMenuAnchor {
@@ -1170,7 +1170,7 @@ ShellRoot {
 				Rectangle {
 					id: statusCluster
 					radius: 8
-					color: "#313244"
+					color: Theme.surface
 					implicitHeight: 24
 					implicitWidth: statusClusterRow.implicitWidth + 10
 
@@ -1205,7 +1205,7 @@ ShellRoot {
 
 								Text {
 									visible: shellRoot.nixosRebuildPending
-									color: "#f9e2af"
+									color: Theme.bright
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
 									text: String.fromCodePoint(0xF05B7)
@@ -1213,7 +1213,7 @@ ShellRoot {
 
 								Text {
 									visible: shellRoot.nixosUpdates > 0
-									color: "#89b4fa"
+									color: Theme.accent
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
 									text: String.fromCodePoint(0xF06B0)
@@ -1221,7 +1221,7 @@ ShellRoot {
 
 								Text {
 									visible: shellRoot.nixosUpdates > 0
-									color: "#89b4fa"
+									color: Theme.accent
 									font.pixelSize: 12
 									text: shellRoot.nixosUpdates
 								}
@@ -1245,7 +1245,7 @@ ShellRoot {
 
 							Text {
 								anchors.centerIn: parent
-								color: "#89b4fa"
+								color: Theme.accent
 								font.pixelSize: 14
 								font.family: "IosevkaTermSlab NF"
 								text: String.fromCodePoint(0xF0453) // nf-md-refresh
@@ -1326,7 +1326,7 @@ ShellRoot {
 
 							Text {
 								anchors.centerIn: parent
-								color: "#f9e2af"
+								color: Theme.bright
 								font.pixelSize: 14
 								font.family: "IosevkaTermSlab NF"
 								text: shellRoot.brightnessIcon()
@@ -1353,21 +1353,21 @@ ShellRoot {
 								spacing: 2
 
 								Text {
-									color: shellRoot.batteryLow ? "#f38ba8" : (shellRoot.batteryCharging ? "#a6e3a1" : "#cdd6f4")
+									color: shellRoot.batteryLow ? Theme.error : (shellRoot.batteryCharging ? Theme.sage : Theme.text)
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
 									text: shellRoot.batteryIcon()
 								}
 
 								Text {
-									color: shellRoot.batteryLow ? "#f38ba8" : "#cdd6f4"
+									color: shellRoot.batteryLow ? Theme.error : Theme.text
 									font.pixelSize: 12
 									text: shellRoot.batteryPercent + "%"
 								}
 
 								Text {
 									visible: shellRoot.powerProfileMarked
-									color: shellRoot.powerProfile === PowerProfile.PowerSaver ? "#a6e3a1" : "#fab387"
+									color: shellRoot.powerProfile === PowerProfile.PowerSaver ? Theme.sage : Theme.selection
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
 									text: shellRoot.powerProfileIcon()
@@ -1448,7 +1448,7 @@ ShellRoot {
 
 							Text {
 								anchors.centerIn: parent
-								color: "#cdd6f4"
+								color: Theme.text
 								font.pixelSize: 14
 								font.family: "IosevkaTermSlab NF"
 								text: shellRoot.audioIcon()
@@ -1459,7 +1459,7 @@ ShellRoot {
 
 				Text {
 					id: clockLabel
-					color: "#cdd6f4"
+					color: Theme.text
 					font.pixelSize: 14
 
 					Timer {
@@ -1495,15 +1495,15 @@ ShellRoot {
 
 				Rectangle {
 					anchors.fill: parent
-					color: "#181825"
+					color: Theme.bg
 					radius: 8
 					border.width: 1
-					border.color: "#313244"
+					border.color: Theme.surface
 
 					Text {
 						id: barTipText
 						anchors.centerIn: parent
-						color: "#cdd6f4"
+						color: Theme.text
 						font.pixelSize: 12
 						text: shellRoot.barTooltipText(barWindow.tipKind)
 					}
@@ -1542,9 +1542,9 @@ ShellRoot {
 				width: 250
 				height: shellRoot.debugAudio ? 118 : 88
 				radius: 12
-				color: "#1e1e2e"
+				color: Theme.depth
 				border.width: 1
-				border.color: "#45475a"
+				border.color: Theme.border
 				anchors.horizontalCenter: parent.horizontalCenter
 				anchors.verticalCenter: parent.verticalCenter
 				anchors.verticalCenterOffset: parent.height * 0.25
@@ -1557,7 +1557,7 @@ ShellRoot {
 					Text {
 						Layout.alignment: Qt.AlignHCenter
 						text: shellRoot.osdIcon()
-						color: "#cdd6f4"
+						color: Theme.text
 						font.pixelSize: 20
 						font.family: "IosevkaTermSlab NF"
 					}
@@ -1567,7 +1567,7 @@ ShellRoot {
 						Layout.fillWidth: true
 						Layout.preferredHeight: 8
 						radius: 4
-						color: "#313244"
+						color: Theme.surface
 
 						Rectangle {
 							anchors.left: parent.left
@@ -1583,7 +1583,7 @@ ShellRoot {
 						visible: shellRoot.debugAudio
 						Layout.fillWidth: true
 						Layout.alignment: Qt.AlignHCenter
-						color: "#fab387"
+						color: Theme.selection
 						font.pixelSize: 9
 						wrapMode: Text.WrapAnywhere
 						horizontalAlignment: Text.AlignHCenter

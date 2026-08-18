@@ -12,16 +12,23 @@ Item {
 	property bool preview: false
 	property bool showUi: true
 
-	readonly property color voidColor: "#010212"
-	readonly property color textColor: "#D7CADC"
-	readonly property color mutedColor: "#756B94"
-	readonly property color accentColor: "#6ABAB5"
-	readonly property color errorColor: "#A481CC"
-	readonly property color surfaceColor: "#CC0B0A1C"
+	readonly property color voidColor: Theme.bg
+	readonly property color depthColor: Theme.depth
+	readonly property color textColor: Theme.text
+	readonly property color mutedColor: Theme.muted
+	readonly property color accentColor: Theme.accent
+	readonly property color errorColor: Theme.error
+	readonly property color surfaceSolid: Theme.surface
+	readonly property color surfaceColor: Qt.rgba(depthColor.r, depthColor.g, depthColor.b, 0.8)
 
 	readonly property string userName: Quickshell.env("USER") || Quickshell.env("LOGNAME") || "user"
 	readonly property string homeDir: Quickshell.env("HOME") || ""
-	readonly property string wallpaperPath: `file://${homeDir}/.config/nixos/login-bg.png`
+	readonly property string wallpaperPath: {
+		const w = Theme.wallpaper;
+		if (w && w.length > 0)
+			return w.startsWith("file:") ? w : ("file://" + w);
+		return `file://${homeDir}/.config/nixos/login-bg.png`;
+	}
 
 	readonly property var battery: UPower.displayDevice
 	readonly property bool batteryPresent: battery?.isLaptopBattery ?? false
@@ -216,7 +223,7 @@ Item {
 			Rectangle {
 				anchors.fill: parent
 				radius: width / 2
-				color: "#AA0B0A1C"
+				color: Qt.rgba(depthColor.r, depthColor.g, depthColor.b, 0.67)
 				border.width: 2
 				border.color: root.accentColor
 			}
@@ -279,7 +286,7 @@ Item {
 				radius: 8
 				color: root.surfaceColor
 				border.width: 1
-				border.color: passwordBox.activeFocus ? root.accentColor : "#80302947"
+				border.color: passwordBox.activeFocus ? root.accentColor : Qt.rgba(surfaceSolid.r, surfaceSolid.g, surfaceSolid.b, 0.5)
 
 				TextInput {
 					id: passwordBox
@@ -331,7 +338,7 @@ Item {
 					implicitWidth: 34
 					implicitHeight: 34
 					radius: 6
-					color: enabled ? root.accentColor : "#66302947"
+					color: enabled ? root.accentColor : Qt.rgba(surfaceSolid.r, surfaceSolid.g, surfaceSolid.b, 0.4)
 					enabled: !root.context.unlockInProgress && root.context.currentText !== ""
 					opacity: enabled ? 1 : 0.45
 
