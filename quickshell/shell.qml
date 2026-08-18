@@ -185,8 +185,107 @@ ShellRoot {
 			lines.push("Updates: " + nixosUpdates + " flake input" + (nixosUpdates === 1 ? "" : "s") + " newer than flake.lock");
 		lines.push("Left-click: rebuild (os-rebuild switch)");
 		lines.push("Right-click: update flake inputs");
-		lines.push("Middle-click: refresh this status");
+		lines.push("Shift+click: refresh this status");
 		return lines.join("\n");
+	}
+
+	function wifiTooltipText(): string {
+		const lines = [];
+		if (networkKind === "wifi") {
+			const ssid = (netWifiNetwork?.name || "Wi-Fi").trim();
+			lines.push(ssid + " · " + networkSignal + "%");
+		} else if (networkKind === "wired") {
+			lines.push("Ethernet" + (netWiredDevice?.name ? " · " + netWiredDevice.name : ""));
+		} else if (networkKind === "off") {
+			lines.push("Wi-Fi radio off");
+		} else {
+			lines.push("Disconnected");
+		}
+		lines.push("Left-click: network manager");
+		lines.push("Right-click: nmtui");
+		return lines.join("\n");
+	}
+
+	function bluetoothTooltipText(): string {
+		const lines = [];
+		if (btBlocked)
+			lines.push("Bluetooth blocked");
+		else if (!btEnabled)
+			lines.push("Bluetooth off");
+		else if (btConnectedCount > 0)
+			lines.push("Bluetooth · " + btConnectedCount + " connected");
+		else
+			lines.push("Bluetooth on · no devices");
+		lines.push("Left-click: Blueman");
+		lines.push("Right-click: toggle adapter");
+		return lines.join("\n");
+	}
+
+	function brightnessTooltipText(): string {
+		const lines = ["Display " + brightnessPercent + "%"];
+		if (kbdBrightnessPresent)
+			lines.push("Keyboard " + kbdBrightnessPercent + "%");
+		lines.push("Scroll: display brightness");
+		if (kbdBrightnessPresent)
+			lines.push("Left-click: cycle keyboard backlight");
+		return lines.join("\n");
+	}
+
+	function batteryTooltipText(): string {
+		let status = batteryPercent + "%";
+		if (batteryCharging)
+			status += " · charging";
+		else if (batteryLow)
+			status += " · low";
+		const lines = [status, "Profile: " + powerProfileLabel()];
+		lines.push("Left-click: cycle power profile");
+		return lines.join("\n");
+	}
+
+	function idleTooltipText(): string {
+		return (idleInhibited ? "Keep awake on · idle lock/suspend blocked" : "Keep awake off")
+			+ "\nLeft-click: toggle";
+	}
+
+	function micTooltipText(): string {
+		const lines = [];
+		if (micMuted)
+			lines.push("Microphone muted");
+		else if (micActive)
+			lines.push("Microphone in use");
+		else
+			lines.push("Microphone ready");
+		lines.push("Left-click: mute/unmute");
+		lines.push("Right-click: input devices");
+		return lines.join("\n");
+	}
+
+	function audioTooltipText(): string {
+		const lines = [audioMuted ? "Muted" : ("Volume " + audioPercent + "%")];
+		lines.push("Left-click: pavucontrol");
+		lines.push("Right-click: mute");
+		lines.push("Scroll: 1%");
+		return lines.join("\n");
+	}
+
+	function barTooltipText(kind: string): string {
+		if (kind === "nixos")
+			return nixosTooltipText();
+		if (kind === "wifi")
+			return wifiTooltipText();
+		if (kind === "bt")
+			return bluetoothTooltipText();
+		if (kind === "brightness")
+			return brightnessTooltipText();
+		if (kind === "battery")
+			return batteryTooltipText();
+		if (kind === "idle")
+			return idleTooltipText();
+		if (kind === "mic")
+			return micTooltipText();
+		if (kind === "audio")
+			return audioTooltipText();
+		return "";
 	}
 
 	function idleInhibitIcon(): string {
@@ -675,6 +774,28 @@ ShellRoot {
 			implicitHeight: shellRoot.topBarHeight
 			color: "#1e1e2e"
 
+			property Item tipItem: null
+			property string tipKind: ""
+			property bool tipOn: false
+
+			function armTip(item, kind: string): void {
+				tipItem = item;
+				tipKind = kind;
+				tipDelay.restart();
+			}
+
+			function disarmTip(): void {
+				tipDelay.stop();
+				tipOn = false;
+			}
+
+			Timer {
+				id: tipDelay
+				interval: 400
+				repeat: false
+				onTriggered: barWindow.tipOn = true
+			}
+
 			// One inhibitor per output is fine; Hyprland treats a visible PanelWindow as
 			// important, so this blocks hypridle while enabled.
 			IdleInhibitor {
@@ -736,7 +857,6 @@ ShellRoot {
 					color: "#313244"
 					implicitHeight: 24
 					implicitWidth: nixosRow.implicitWidth + 16
-					property bool tipVisible: false
 
 					RowLayout {
 						id: nixosRow
@@ -771,29 +891,19 @@ ShellRoot {
 						id: nixosHover
 						anchors.fill: parent
 						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+						acceptedButtons: Qt.LeftButton | Qt.RightButton
 						onClicked: mouse => {
-							nixosPill.tipVisible = false;
-							nixosTipDelay.stop();
-							if (mouse.button === Qt.LeftButton)
+							barWindow.disarmTip();
+							// Click modifiers work on this layer-shell bar; wheel modifiers do not.
+							if (mouse.modifiers & Qt.ShiftModifier)
+								shellRoot.refreshNixosStatus(true);
+							else if (mouse.button === Qt.LeftButton)
 								Hyprland.dispatch("exec qs-nixos-term rebuild");
 							else if (mouse.button === Qt.RightButton)
 								Hyprland.dispatch("exec qs-nixos-term update");
-							else if (mouse.button === Qt.MiddleButton)
-								shellRoot.refreshNixosStatus(true);
 						}
-						onEntered: nixosTipDelay.restart()
-						onExited: {
-							nixosTipDelay.stop();
-							nixosPill.tipVisible = false;
-						}
-					}
-
-					Timer {
-						id: nixosTipDelay
-						interval: 400
-						repeat: false
-						onTriggered: nixosPill.tipVisible = true
+						onEntered: barWindow.armTip(nixosPill, "nixos")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
@@ -965,6 +1075,7 @@ ShellRoot {
 				}
 
 				Rectangle {
+					id: wifiPill
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
@@ -980,17 +1091,22 @@ ShellRoot {
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton | Qt.RightButton
 						onClicked: mouse => {
+							barWindow.disarmTip();
 							if (mouse.button === Qt.LeftButton)
 								Hyprland.dispatch("exec nmgui");
 							else if (mouse.button === Qt.RightButton)
 								Hyprland.dispatch("exec kitty --title nmtui nmtui");
 						}
+						onEntered: barWindow.armTip(wifiPill, "wifi")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
 				Rectangle {
+					id: btPill
 					visible: shellRoot.btPresent
 					radius: 8
 					color: "#313244"
@@ -1007,17 +1123,22 @@ ShellRoot {
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton | Qt.RightButton
 						onClicked: mouse => {
+							barWindow.disarmTip();
 							if (mouse.button === Qt.LeftButton)
 								Hyprland.dispatch("exec blueman-manager");
 							else if (mouse.button === Qt.RightButton && shellRoot.btAdapter)
 								shellRoot.btAdapter.enabled = !shellRoot.btAdapter.enabled;
 						}
+						onEntered: barWindow.armTip(btPill, "bt")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
 				Rectangle {
+					id: brightnessPill
 					visible: shellRoot.brightnessPresent
 					radius: 8
 					color: "#313244"
@@ -1045,23 +1166,30 @@ ShellRoot {
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton
 						scrollGestureEnabled: true
 						// Left-click cycles keyboard backlight (off → 33% → 100%). Panel
 						// brightness stays on scroll. Shift+scroll cannot be detected here:
 						// layer-shell bars never receive keyboard focus, so WheelEvent.modifiers
 						// is always 0 (confirmed in logs).
-						onClicked: shellRoot.cycleKbdBrightness()
+						onClicked: {
+							barWindow.disarmTip();
+							shellRoot.cycleKbdBrightness();
+						}
 						onWheel: event => {
 							if (event.angleDelta.y > 0)
 								shellRoot.adjustBrightness(1);
 							else if (event.angleDelta.y < 0)
 								shellRoot.adjustBrightness(-1);
 						}
+						onEntered: barWindow.armTip(brightnessPill, "brightness")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
 				Rectangle {
+					id: batteryPill
 					visible: shellRoot.batteryPresent
 					radius: 8
 					color: "#313244"
@@ -1097,12 +1225,19 @@ ShellRoot {
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton
-						onClicked: shellRoot.cyclePowerProfile()
+						onClicked: {
+							barWindow.disarmTip();
+							shellRoot.cyclePowerProfile();
+						}
+						onEntered: barWindow.armTip(batteryPill, "battery")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
 				Rectangle {
+					id: idlePill
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
@@ -1118,12 +1253,19 @@ ShellRoot {
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton
-						onClicked: shellRoot.idleInhibited = !shellRoot.idleInhibited
+						onClicked: {
+							barWindow.disarmTip();
+							shellRoot.idleInhibited = !shellRoot.idleInhibited;
+						}
+						onEntered: barWindow.armTip(idlePill, "idle")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
 				Rectangle {
+					id: micPill
 					visible: shellRoot.micPresent
 					radius: 8
 					color: "#313244"
@@ -1140,17 +1282,22 @@ ShellRoot {
 
 					MouseArea {
 						anchors.fill: parent
+						hoverEnabled: true
 						acceptedButtons: Qt.LeftButton | Qt.RightButton
 						onClicked: mouse => {
+							barWindow.disarmTip();
 							if (mouse.button === Qt.LeftButton && shellRoot.micPresent)
 								shellRoot.micSource.audio.muted = !shellRoot.micSource.audio.muted;
 							else if (mouse.button === Qt.RightButton)
 								Hyprland.dispatch("exec pavucontrol --tab=4");
 						}
+						onEntered: barWindow.armTip(micPill, "mic")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
 				Rectangle {
+					id: audioPill
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
@@ -1173,6 +1320,7 @@ ShellRoot {
 						// mouse wheels, so touchpad two-finger scroll (Theseus) is dropped.
 						scrollGestureEnabled: true
 						onClicked: mouse => {
+							barWindow.disarmTip();
 							if (mouse.button === Qt.LeftButton)
 								shellRoot.runAudioAction("pavu-toggle", false);
 							else if (mouse.button === Qt.RightButton)
@@ -1186,6 +1334,8 @@ ShellRoot {
 							else if (event.angleDelta.y < 0)
 								shellRoot.runAudioAction("pamixer -d 1", true);
 						}
+						onEntered: barWindow.armTip(audioPill, "audio")
+						onExited: barWindow.disarmTip()
 					}
 				}
 
@@ -1215,13 +1365,13 @@ ShellRoot {
 			}
 
 			PopupWindow {
-				visible: nixosPill.visible && nixosPill.tipVisible
+				visible: barWindow.tipOn && barWindow.tipItem !== null
 				grabFocus: false
 				color: "transparent"
-				implicitWidth: nixosTipText.implicitWidth + 16
-				implicitHeight: nixosTipText.implicitHeight + 12
+				implicitWidth: barTipText.implicitWidth + 16
+				implicitHeight: barTipText.implicitHeight + 12
 				anchor.window: barWindow
-				anchor.item: nixosPill
+				anchor.item: barWindow.tipItem
 				anchor.edges: Edges.Bottom
 				anchor.gravity: Edges.Bottom
 
@@ -1233,11 +1383,11 @@ ShellRoot {
 					border.color: "#313244"
 
 					Text {
-						id: nixosTipText
+						id: barTipText
 						anchors.centerIn: parent
 						color: "#cdd6f4"
 						font.pixelSize: 12
-						text: shellRoot.nixosTooltipText()
+						text: shellRoot.barTooltipText(barWindow.tipKind)
 					}
 				}
 			}
