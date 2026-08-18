@@ -1,0 +1,22 @@
+---
+description: How to change this NixOS flake (hosts, Home Manager, activation)
+alwaysApply: true
+---
+
+# NixOS agent workflow
+
+Canonical tree: `~/.config/nixos` (flake `github:ngrayson/nixos`). Hosts: **Theseus** (Framework laptop), **Tawa** (desktop), **Gcp**.
+
+- Edit files here; do not duplicate config under Stellarium `projects/`.
+- Activate with `os-rebuild switch` (alias). Never run `sudo` yourself: give the user the command plus a check (`readlink /run/current-system`, or `qs-nixos-status`).
+- Git flake: **untracked files are invisible** to the build. `git add` anything Nix must see (new host fragments, QML, scripts).
+- Commit **after** a successful rebuild, not before. `os-rebuild` records `~/.cache/qs-nixos-status/applied.json` so the bar wrench does not false-fire (dirty-tree hash ≠ committed hash).
+- One logical change per switch. Prefer `os-rebuild build --host <Name>` / `dry-activate` before activating hardware, kernel, or disk changes (`boot` for those).
+- Do not `nix flake update` unless asked. Do not copy hardware UUIDs between hosts.
+
+```bash
+# ✅ live QML without a rebuild
+quickshell -d -p ~/.config/nixos/quickshell
+# ✅ persist (user runs)
+os-rebuild switch
+```

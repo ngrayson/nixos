@@ -24,18 +24,19 @@ ShellRoot {
 	id: shellRoot
 	property int audioPercent: 0
 	property bool audioMuted: false
-	property bool audioOsdVisible: false
+	property bool osdVisible: false
+	property string osdKind: "audio"
 	property bool debugAudio: false
 	property string audioDebugRaw: ""
 	property int audioLastExitCode: -999
 	property bool brightnessPresent: false
 	property int brightnessPercent: 0
 	// Framework EC keyboard backlight (chromeos::kbd_backlight). Left-click on the
-	// brightness pill cycles off → 33% → 100%; the pill briefly shows the kbd level.
+	// brightness pill cycles off → 33% → 100%; the OSD shows the new level.
 	property bool kbdBrightnessPresent: false
 	property int kbdBrightnessPercent: 0
-	property bool brightnessShowingKbd: false
-	// Set before a user-initiated kbd read so the startup/silent read does not flash the pill.
+	property bool brightnessOsdPending: false
+	// Set before a user-initiated kbd read so the startup/silent read does not flash the OSD.
 	property bool kbdFeedbackPending: false
 	readonly property int topBarHeight: 32
 
@@ -165,6 +166,13 @@ ShellRoot {
 	// Hidden while the running system matches the flake and flake.lock is current.
 	property bool nixosRebuildPending: false
 	property int nixosUpdates: 0
+	property bool qsReloadPending: false
+	property bool qsReloadWatchArmed: false
+
+	function markQsReloadPending(): void {
+		if (qsReloadWatchArmed)
+			qsReloadPending = true;
+	}
 
 	function nixosStatusVisible(): bool {
 		return nixosRebuildPending || nixosUpdates > 0;
@@ -268,9 +276,15 @@ ShellRoot {
 		return lines.join("\n");
 	}
 
+	function qsReloadTooltipText(): string {
+		return "Quickshell source changed\nLeft-click: reload bar";
+	}
+
 	function barTooltipText(kind: string): string {
 		if (kind === "nixos")
 			return nixosTooltipText();
+		if (kind === "qsreload")
+			return qsReloadTooltipText();
 		if (kind === "wifi")
 			return wifiTooltipText();
 		if (kind === "bt")
@@ -449,6 +463,7 @@ ShellRoot {
 	function adjustBrightness(delta: int): void {
 		if (brightnessAction.running)
 			return;
+		brightnessOsdPending = true;
 		brightnessAction.command = ["brightnessctl", "-c", "backlight", "-q", "set", delta > 0 ? "+1%" : "1%-"];
 		brightnessAction.running = true;
 	}
@@ -476,8 +491,7 @@ ShellRoot {
 	}
 
 	function showKbdBrightnessFeedback(): void {
-		brightnessShowingKbd = true;
-		kbdFeedbackTimer.restart();
+		showOsd("kbd");
 	}
 
 	function refreshAudio(): void {
@@ -485,15 +499,46 @@ ShellRoot {
 		readAudio.running = true;
 	}
 
-	function runAudioAction(cmd: string, showOsd: bool): void {
-		audioAction.showOsdAfterExit = showOsd;
+	function runAudioAction(cmd: string, showOsdAfter: bool): void {
+		audioAction.showOsdAfterExit = showOsdAfter;
 		audioAction.command = ["sh", "-lc", cmd];
 		audioAction.running = true;
 	}
 
 	function showAudioOsd(): void {
-		audioOsdVisible = true;
+		showOsd("audio");
+	}
+
+	function showOsd(kind: string): void {
+		osdKind = kind;
+		osdVisible = true;
 		osdHideTimer.restart();
+	}
+
+	function osdIcon(): string {
+		if (osdKind === "brightness")
+			return brightnessIcon();
+		if (osdKind === "kbd")
+			return kbdBrightnessIcon();
+		return audioIcon();
+	}
+
+	function osdPercent(): int {
+		if (osdKind === "brightness")
+			return brightnessPercent;
+		if (osdKind === "kbd")
+			return kbdBrightnessPercent;
+		return audioPercent;
+	}
+
+	function osdFillColor(): string {
+		if (osdKind === "brightness" || osdKind === "kbd")
+			return "#f9e2af";
+		if (debugAudio)
+			return "#a6e3a1";
+		if (audioMuted)
+			return "#6c7086";
+		return "#89b4fa";
 	}
 
 	// Monitor whose horizontal center is nearest the combined desktop midpoint (typical "center" panel).
@@ -653,6 +698,10 @@ ShellRoot {
 				if (!Number.isNaN(percent)) {
 					shellRoot.brightnessPercent = Math.max(0, Math.min(100, percent));
 					shellRoot.brightnessPresent = true;
+					if (shellRoot.brightnessOsdPending) {
+						shellRoot.brightnessOsdPending = false;
+						shellRoot.showOsd("brightness");
+					}
 				}
 			}
 		}
@@ -708,6 +757,36 @@ ShellRoot {
 		}
 	}
 
+	readonly property string qsSourceDir: `${Quickshell.env("HOME")}/.config/nixos/quickshell`
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/shell.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/LockContext.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/LockSurface.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	Timer {
+		interval: 1500
+		running: true
+		repeat: false
+		onTriggered: shellRoot.qsReloadWatchArmed = true
+	}
+
 	Process {
 		id: readNixosStatus
 		running: false
@@ -749,17 +828,10 @@ ShellRoot {
 	}
 
 	Timer {
-		id: kbdFeedbackTimer
-		interval: 1500
-		repeat: false
-		onTriggered: shellRoot.brightnessShowingKbd = false
-	}
-
-	Timer {
 		id: osdHideTimer
 		interval: 1200
 		repeat: false
-		onTriggered: shellRoot.audioOsdVisible = false
+		onTriggered: shellRoot.osdVisible = false
 	}
 
 	Variants {
@@ -851,63 +923,6 @@ ShellRoot {
 					color: "#fab387"
 					font.pixelSize: 9
 					text: shellRoot.audioPercent + "% m=" + shellRoot.audioMuted + " ex=" + shellRoot.audioLastExitCode
-				}
-
-				Rectangle {
-					id: nixosPill
-					visible: shellRoot.nixosStatusVisible()
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: nixosRow.implicitWidth + 16
-
-					RowLayout {
-						id: nixosRow
-						anchors.centerIn: parent
-						spacing: 4
-
-						Text {
-							visible: shellRoot.nixosRebuildPending
-							color: "#f9e2af"
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: String.fromCodePoint(0xF05B7) // nf-md-wrench
-						}
-
-						Text {
-							visible: shellRoot.nixosUpdates > 0
-							color: "#89b4fa"
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: String.fromCodePoint(0xF06B0) // nf-md-update
-						}
-
-						Text {
-							visible: shellRoot.nixosUpdates > 0
-							color: "#89b4fa"
-							font.pixelSize: 12
-							text: shellRoot.nixosUpdates
-						}
-					}
-
-					MouseArea {
-						id: nixosHover
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton | Qt.RightButton
-						onClicked: mouse => {
-							barWindow.disarmTip();
-							// Click modifiers work on this layer-shell bar; wheel modifiers do not.
-							if (mouse.modifiers & Qt.ShiftModifier)
-								shellRoot.refreshNixosStatus(true);
-							else if (mouse.button === Qt.LeftButton)
-								Hyprland.dispatch("exec qs-nixos-term rebuild");
-							else if (mouse.button === Qt.RightButton)
-								Hyprland.dispatch("exec qs-nixos-term update");
-						}
-						onEntered: barWindow.armTip(nixosPill, "nixos")
-						onExited: barWindow.disarmTip()
-					}
 				}
 
 				Rectangle {
@@ -1078,267 +1093,292 @@ ShellRoot {
 				}
 
 				Rectangle {
-					id: wifiPill
+					id: statusCluster
 					radius: 8
 					color: "#313244"
 					implicitHeight: 24
-					implicitWidth: 30
+					implicitWidth: statusClusterRow.implicitWidth + 10
 
-					Text {
+					Row {
+						id: statusClusterRow
 						anchors.centerIn: parent
-						color: shellRoot.networkColor()
-						font.pixelSize: 14
-						font.family: "IosevkaTermSlab NF"
-						text: shellRoot.networkIcon()
-					}
+						spacing: 2
 
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton | Qt.RightButton
-						onClicked: mouse => {
-							barWindow.disarmTip();
-							if (mouse.button === Qt.LeftButton)
-								Hyprland.dispatch("exec nmgui");
-							else if (mouse.button === Qt.RightButton)
-								Hyprland.dispatch("exec kitty --title nmtui nmtui");
-						}
-						onEntered: barWindow.armTip(wifiPill, "wifi")
-						onExited: barWindow.disarmTip()
-					}
-				}
+						MouseArea {
+							id: nixosPill
+							visible: shellRoot.nixosStatusVisible()
+							implicitWidth: Math.max(22, nixosClusterRow.implicitWidth + 4)
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.modifiers & Qt.ShiftModifier)
+									shellRoot.refreshNixosStatus(true);
+								else if (mouse.button === Qt.LeftButton)
+									Hyprland.dispatch("exec qs-nixos-term rebuild");
+								else if (mouse.button === Qt.RightButton)
+									Hyprland.dispatch("exec qs-nixos-term update");
+							}
+							onEntered: barWindow.armTip(nixosPill, "nixos")
+							onExited: barWindow.disarmTip()
 
-				Rectangle {
-					id: btPill
-					visible: shellRoot.btPresent
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: 30
+							Row {
+								id: nixosClusterRow
+								anchors.centerIn: parent
+								spacing: 2
 
-					Text {
-						anchors.centerIn: parent
-						color: shellRoot.bluetoothColor()
-						font.pixelSize: 14
-						font.family: "IosevkaTermSlab NF"
-						text: shellRoot.bluetoothIcon()
-					}
+								Text {
+									visible: shellRoot.nixosRebuildPending
+									color: "#f9e2af"
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: String.fromCodePoint(0xF05B7)
+								}
 
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton | Qt.RightButton
-						onClicked: mouse => {
-							barWindow.disarmTip();
-							if (mouse.button === Qt.LeftButton)
-								Hyprland.dispatch("exec blueman-manager");
-							else if (mouse.button === Qt.RightButton && shellRoot.btAdapter)
-								shellRoot.btAdapter.enabled = !shellRoot.btAdapter.enabled;
-						}
-						onEntered: barWindow.armTip(btPill, "bt")
-						onExited: barWindow.disarmTip()
-					}
-				}
+								Text {
+									visible: shellRoot.nixosUpdates > 0
+									color: "#89b4fa"
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: String.fromCodePoint(0xF06B0)
+								}
 
-				Rectangle {
-					id: brightnessPill
-					visible: shellRoot.brightnessPresent
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: brightnessRow.implicitWidth + 16
-
-					RowLayout {
-						id: brightnessRow
-						anchors.centerIn: parent
-						spacing: 4
-
-						Text {
-							color: "#f9e2af"
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: shellRoot.brightnessShowingKbd ? shellRoot.kbdBrightnessIcon() : shellRoot.brightnessIcon()
+								Text {
+									visible: shellRoot.nixosUpdates > 0
+									color: "#89b4fa"
+									font.pixelSize: 12
+									text: shellRoot.nixosUpdates
+								}
+							}
 						}
 
-						Text {
-							color: "#cdd6f4"
-							font.pixelSize: 12
-							text: (shellRoot.brightnessShowingKbd ? shellRoot.kbdBrightnessPercent : shellRoot.brightnessPercent) + "%"
-						}
-					}
+						MouseArea {
+							id: qsReloadPill
+							visible: shellRoot.qsReloadPending
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								shellRoot.qsReloadPending = false;
+								Hyprland.dispatch("exec qs-quickshell-reload");
+							}
+							onEntered: barWindow.armTip(qsReloadPill, "qsreload")
+							onExited: barWindow.disarmTip()
 
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton
-						scrollGestureEnabled: true
-						// Left-click cycles keyboard backlight (off → 33% → 100%). Panel
-						// brightness stays on scroll. Shift+scroll cannot be detected here:
-						// layer-shell bars never receive keyboard focus, so WheelEvent.modifiers
-						// is always 0 (confirmed in logs).
-						onClicked: {
-							barWindow.disarmTip();
-							shellRoot.cycleKbdBrightness();
-						}
-						onWheel: event => {
-							if (event.angleDelta.y > 0)
-								shellRoot.adjustBrightness(1);
-							else if (event.angleDelta.y < 0)
-								shellRoot.adjustBrightness(-1);
-						}
-						onEntered: barWindow.armTip(brightnessPill, "brightness")
-						onExited: barWindow.disarmTip()
-					}
-				}
-
-				Rectangle {
-					id: batteryPill
-					visible: shellRoot.batteryPresent
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: batteryRow.implicitWidth + 16
-
-					RowLayout {
-						id: batteryRow
-						anchors.centerIn: parent
-						spacing: 4
-
-						Text {
-							color: shellRoot.batteryLow ? "#f38ba8" : (shellRoot.batteryCharging ? "#a6e3a1" : "#cdd6f4")
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: shellRoot.batteryIcon()
+							Text {
+								anchors.centerIn: parent
+								color: "#89b4fa"
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: String.fromCodePoint(0xF0453) // nf-md-refresh
+							}
 						}
 
-						Text {
-							color: shellRoot.batteryLow ? "#f38ba8" : "#cdd6f4"
-							font.pixelSize: 12
-							text: shellRoot.batteryPercent + "%"
+						MouseArea {
+							id: wifiPill
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									Hyprland.dispatch("exec nmgui");
+								else if (mouse.button === Qt.RightButton)
+									Hyprland.dispatch("exec kitty --title nmtui nmtui");
+							}
+							onEntered: barWindow.armTip(wifiPill, "wifi")
+							onExited: barWindow.disarmTip()
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.networkColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.networkIcon()
+							}
 						}
 
-						Text {
-							visible: shellRoot.powerProfileMarked
-							color: shellRoot.powerProfile === PowerProfile.PowerSaver ? "#a6e3a1" : "#fab387"
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: shellRoot.powerProfileIcon()
+						MouseArea {
+							id: btPill
+							visible: shellRoot.btPresent
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									Hyprland.dispatch("exec blueman-manager");
+								else if (mouse.button === Qt.RightButton && shellRoot.btAdapter)
+									shellRoot.btAdapter.enabled = !shellRoot.btAdapter.enabled;
+							}
+							onEntered: barWindow.armTip(btPill, "bt")
+							onExited: barWindow.disarmTip()
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.bluetoothColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.bluetoothIcon()
+							}
 						}
-					}
 
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton
-						onClicked: {
-							barWindow.disarmTip();
-							shellRoot.cyclePowerProfile();
+						MouseArea {
+							id: brightnessPill
+							visible: shellRoot.brightnessPresent
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton
+							scrollGestureEnabled: true
+							onClicked: {
+								barWindow.disarmTip();
+								shellRoot.cycleKbdBrightness();
+							}
+							onWheel: event => {
+								if (event.angleDelta.y > 0)
+									shellRoot.adjustBrightness(1);
+								else if (event.angleDelta.y < 0)
+									shellRoot.adjustBrightness(-1);
+							}
+							onEntered: barWindow.armTip(brightnessPill, "brightness")
+							onExited: barWindow.disarmTip()
+
+							Text {
+								anchors.centerIn: parent
+								color: "#f9e2af"
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.brightnessIcon()
+							}
 						}
-						onEntered: barWindow.armTip(batteryPill, "battery")
-						onExited: barWindow.disarmTip()
-					}
-				}
 
-				Rectangle {
-					id: idlePill
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: 30
+						MouseArea {
+							id: batteryPill
+							visible: shellRoot.batteryPresent
+							implicitWidth: Math.max(22, batteryClusterRow.implicitWidth + 4)
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								shellRoot.cyclePowerProfile();
+							}
+							onEntered: barWindow.armTip(batteryPill, "battery")
+							onExited: barWindow.disarmTip()
 
-					Text {
-						anchors.centerIn: parent
-						color: shellRoot.idleInhibitColor()
-						font.pixelSize: 14
-						font.family: "IosevkaTermSlab NF"
-						text: shellRoot.idleInhibitIcon()
-					}
+							Row {
+								id: batteryClusterRow
+								anchors.centerIn: parent
+								spacing: 2
 
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton
-						onClicked: {
-							barWindow.disarmTip();
-							shellRoot.idleInhibited = !shellRoot.idleInhibited;
+								Text {
+									color: shellRoot.batteryLow ? "#f38ba8" : (shellRoot.batteryCharging ? "#a6e3a1" : "#cdd6f4")
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: shellRoot.batteryIcon()
+								}
+
+								Text {
+									color: shellRoot.batteryLow ? "#f38ba8" : "#cdd6f4"
+									font.pixelSize: 12
+									text: shellRoot.batteryPercent + "%"
+								}
+
+								Text {
+									visible: shellRoot.powerProfileMarked
+									color: shellRoot.powerProfile === PowerProfile.PowerSaver ? "#a6e3a1" : "#fab387"
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: shellRoot.powerProfileIcon()
+								}
+							}
 						}
-						onEntered: barWindow.armTip(idlePill, "idle")
-						onExited: barWindow.disarmTip()
-					}
-				}
 
-				Rectangle {
-					id: micPill
-					visible: shellRoot.micPresent
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: 30
+						MouseArea {
+							id: idlePill
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								shellRoot.idleInhibited = !shellRoot.idleInhibited;
+							}
+							onEntered: barWindow.armTip(idlePill, "idle")
+							onExited: barWindow.disarmTip()
 
-					Text {
-						anchors.centerIn: parent
-						color: shellRoot.micColor()
-						font.pixelSize: 14
-						font.family: "IosevkaTermSlab NF"
-						text: shellRoot.micIcon()
-					}
-
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton | Qt.RightButton
-						onClicked: mouse => {
-							barWindow.disarmTip();
-							if (mouse.button === Qt.LeftButton && shellRoot.micPresent)
-								shellRoot.micSource.audio.muted = !shellRoot.micSource.audio.muted;
-							else if (mouse.button === Qt.RightButton)
-								Hyprland.dispatch("exec pavucontrol --tab=4");
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.idleInhibitColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.idleInhibitIcon()
+							}
 						}
-						onEntered: barWindow.armTip(micPill, "mic")
-						onExited: barWindow.disarmTip()
-					}
-				}
 
-				Rectangle {
-					id: audioPill
-					radius: 8
-					color: "#313244"
-					implicitHeight: 24
-					implicitWidth: 30
+						MouseArea {
+							id: micPill
+							visible: shellRoot.micPresent
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton && shellRoot.micPresent)
+									shellRoot.micSource.audio.muted = !shellRoot.micSource.audio.muted;
+								else if (mouse.button === Qt.RightButton)
+									Hyprland.dispatch("exec pavucontrol --tab=4");
+							}
+							onEntered: barWindow.armTip(micPill, "mic")
+							onExited: barWindow.disarmTip()
 
-					Text {
-						id: audioLabel
-						anchors.centerIn: parent
-						color: "#cdd6f4"
-						font.pixelSize: 14
-						font.family: "IosevkaTermSlab NF"
-						text: shellRoot.audioIcon()
-					}
-
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-						acceptedButtons: Qt.LeftButton | Qt.RightButton
-						// Must stay true: when false, onWheel only fires for physical
-						// mouse wheels, so touchpad two-finger scroll (Theseus) is dropped.
-						scrollGestureEnabled: true
-						onClicked: mouse => {
-							barWindow.disarmTip();
-							if (mouse.button === Qt.LeftButton)
-								shellRoot.runAudioAction("pavu-toggle", false);
-							else if (mouse.button === Qt.RightButton)
-								shellRoot.runAudioAction("pamixer -t", true);
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.micColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.micIcon()
+							}
 						}
-						onWheel: event => {
-							// 1% per event: touchpad scroll fires many ticks; 5% felt too coarse.
-							// Keyboard XF86 bindings stay at 5% (home/wayland/hyprland.nix).
-							if (event.angleDelta.y > 0)
-								shellRoot.runAudioAction("pamixer -i 1", true);
-							else if (event.angleDelta.y < 0)
-								shellRoot.runAudioAction("pamixer -d 1", true);
+
+						MouseArea {
+							id: audioPill
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							scrollGestureEnabled: true
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									shellRoot.runAudioAction("pavu-toggle", false);
+								else if (mouse.button === Qt.RightButton)
+									shellRoot.runAudioAction("pamixer -t", true);
+							}
+							onWheel: event => {
+								if (event.angleDelta.y > 0)
+									shellRoot.runAudioAction("pamixer -i 1", true);
+								else if (event.angleDelta.y < 0)
+									shellRoot.runAudioAction("pamixer -d 1", true);
+							}
+							onEntered: barWindow.armTip(audioPill, "audio")
+							onExited: barWindow.disarmTip()
+
+							Text {
+								anchors.centerIn: parent
+								color: "#cdd6f4"
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.audioIcon()
+							}
 						}
-						onEntered: barWindow.armTip(audioPill, "audio")
-						onExited: barWindow.disarmTip()
 					}
 				}
 
@@ -1416,7 +1456,7 @@ ShellRoot {
 
 			screen: modelData
 			color: "transparent"
-			visible: isCenterScreen && shellRoot.audioOsdVisible
+			visible: isCenterScreen && shellRoot.osdVisible
 
 			anchors.top: true
 			anchors.bottom: true
@@ -1441,7 +1481,7 @@ ShellRoot {
 
 					Text {
 						Layout.alignment: Qt.AlignHCenter
-						text: shellRoot.audioIcon()
+						text: shellRoot.osdIcon()
 						color: "#cdd6f4"
 						font.pixelSize: 20
 						font.family: "IosevkaTermSlab NF"
@@ -1457,10 +1497,10 @@ ShellRoot {
 						Rectangle {
 							anchors.left: parent.left
 							anchors.verticalCenter: parent.verticalCenter
-							width: shellRoot.audioPercent > 0 ? Math.max(6, Math.min(parent.width, parent.width * (shellRoot.audioPercent / 100.0))) : 0
+							width: shellRoot.osdPercent() > 0 ? Math.max(6, Math.min(parent.width, parent.width * (shellRoot.osdPercent() / 100.0))) : 0
 							height: parent.height
 							radius: parent.radius
-							color: shellRoot.debugAudio ? "#a6e3a1" : (shellRoot.audioMuted ? "#6c7086" : "#89b4fa")
+							color: shellRoot.osdFillColor()
 						}
 					}
 

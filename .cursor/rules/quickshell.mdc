@@ -1,0 +1,26 @@
+---
+description: Quickshell bar conventions (QML, OSD, cluster, reload)
+globs: "{quickshell/**/*.qml,home/hypr/scripts.nix,home/wayland/hyprland.nix}"
+alwaysApply: false
+---
+
+# Quickshell
+
+Bar source: `quickshell/shell.qml`. Catppuccin Mocha. Icons: `IosevkaTermSlab NF` via `String.fromCodePoint(0xF…)`, never paste PUA glyphs (editors mangle them).
+
+**Layout (right side):** media pill | tray pill | **one status cluster** | clock. Cluster order: updates, qs-reload (only if `quickshell/*.qml` changed since last start), wifi, bluetooth, brightness, battery, keep-awake, mic, volume. Keep click/scroll/tooltip behavior per icon; do not split those back into separate pills.
+
+**OSD:** volume and brightness (incl. keyboard backlight) use the centered modal (`showOsd`), not a percent on the pill. Audio IPC: `quickshell ipc -p ~/.config/quickshell call audio notifyChange`.
+
+**Tooltips:** `barWindow.armTip(item, kind)` / `disarmTip()`. One `PopupWindow` on the `PanelWindow`, never nested inside a pill (that crashes).
+
+**Helpers:** `home/hypr/scripts.nix` `writeShellScriptBin`, put on PATH in `home/wayland/hyprland.nix` `home.packages`. Nix `''` strings: bash `${` must be `''${`.
+
+**Reload after every QML change** (until `os-rebuild` points Hyprland at this tree):
+
+```bash
+pkill -x quickshell; sleep 0.3
+quickshell -d -p ~/.config/nixos/quickshell
+```
+
+`~/.config/quickshell` is the Home Manager store copy and will be stale until switch.

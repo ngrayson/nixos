@@ -497,4 +497,17 @@ in rec {
         ;;
     esac
   '';
+
+  # Restart the bar from the flake tree (HM ~/.config/quickshell is stale until switch).
+  hyprQuickshellReload = pkgs.writeShellScriptBin "qs-quickshell-reload" ''
+    set -eu
+    QS="${lib.getExe pkgs.quickshell}"
+    SRC="${config.home.homeDirectory}/.config/nixos/quickshell"
+    SETSID="${lib.getExe' pkgs.util-linux "setsid"}"
+    SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
+    PKILL="${lib.getExe' pkgs.procps "pkill"}"
+    # New process must be outside the current quickshell cgroup so pkill does not take it.
+    "$SETSID" -f ${lib.getExe pkgs.bash} -c "\"$SLEEP\" 0.4; exec \"$QS\" -d -p \"$SRC\"" >/dev/null 2>&1
+    "$PKILL" -x quickshell || true
+  '';
 }
