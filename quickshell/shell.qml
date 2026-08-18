@@ -2,7 +2,7 @@
 // Required for system tray context menus (QsMenuAnchor.open needs QApplication mode).
 // Quickshell: top bar (Hyprland workspaces + clock) + WlSessionLock (PAM password).
 // One bar per output via `Variants` + `Quickshell.screens` (not follow-focus on a single PanelWindow).
-// Lock: `quickshell ipc -p ~/.config/quickshell -n call lock activate` (see `quickshell-lock`).
+// Lock: `quickshell ipc -p <live config> -n call lock activate` (see `quickshell-lock`).
 // Preview (not a session lock, Esc dismisses): `ipc call lock preview` (see `quickshell-lock-preview`).
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
 // Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
