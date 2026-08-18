@@ -243,7 +243,9 @@
   patchEditors = pkgs.writeShellScript "patch-editor-color-theme" ''
     set -euo pipefail
     theme=${lib.escapeShellArg t.name}
-    jq=${lib.getExe pkgs.jq}
+    # Cursor/Code settings are JSONC (trailing commas, optional comments). Strict
+    # jq fails those files and takes home-manager-wiz.service down with them.
+    py=${lib.getExe (pkgs.python3.withPackages (ps: [ps.json5]))}
     patch() {
       local f="$1"
       mkdir -p "$(dirname "$f")"
@@ -251,12 +253,22 @@
         echo '{}' > "$f"
       fi
       tmp=$(mktemp)
-      "$jq" --arg theme "$theme" \
-        '. + {
-          "workbench.colorTheme": $theme,
-          "workbench.preferredDarkColorTheme": $theme,
-          "window.autoDetectColorScheme": false
-        }' "$f" > "$tmp"
+      "$py" - "$f" "$theme" "$tmp" <<'PY'
+import json, json5, sys
+
+path, theme, out = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path, "r", encoding="utf-8") as fh:
+    raw = fh.read().strip() or "{}"
+data = json5.loads(raw)
+if not isinstance(data, dict):
+    raise SystemExit(f"{path}: expected a JSON object, got {type(data).__name__}")
+data["workbench.colorTheme"] = theme
+data["workbench.preferredDarkColorTheme"] = theme
+data["window.autoDetectColorScheme"] = False
+with open(out, "w", encoding="utf-8", newline="\n") as fh:
+    json.dump(data, fh, indent="\t", ensure_ascii=False)
+    fh.write("\n")
+PY
       mv "$tmp" "$f"
     }
     patch "$HOME/.config/Cursor/User/settings.json"
