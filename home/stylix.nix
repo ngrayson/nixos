@@ -1,29 +1,45 @@
 # Stylix via Home Manager only. The module is supplied by the pinned flake input.
 #
-# Tawa: multi-monitor Izar wallpaper is handled by [`services/rwpspread-wallpaper.nix`](./services/rwpspread-wallpaper.nix),
-# not Stylix Hyprpaper. Other hosts: Stylix preloads `stylix.image` as Hyprpaper fallback (`wallpaper = ,<path>`).
+# Palette + wallpaper come from [`theme/hosts.nix`](./theme/hosts.nix). Tawa spans
+# wallpaper via [`services/rwpspread-wallpaper.nix`](./services/rwpspread-wallpaper.nix);
+# other hosts preload `stylix.image` as Hyprpaper fallback (`wallpaper = ,<path>`).
 #
-# GTK: Stylix uses theme name `adw-gtk3` (engine) plus generated `gtk.css` (Base16 colors) — `gsettings get
-# org.gnome.desktop.interface gtk-theme` may show `adw-gtk3` while Izar palette still applies.
-# Firefox “System theme” follows GTK/dconf; Stylix `targets.firefox` needs HM `programs.firefox` profiles +
-# `stylix.targets.firefox.profileNames` (see Stylix installation docs / Firefox module).
+# GTK: Stylix uses theme name `adw-gtk3` (engine) plus generated `gtk.css` (Base16 colors) —
+# `gsettings get org.gnome.desktop.interface gtk-theme` may show `adw-gtk3` while the
+# active palette still applies.
 {
-  nixosConfig ? null,
   stylixModule,
   pkgs,
   config,
   lib,
   ...
 }: let
-  hostIsTawa = nixosConfig != null && nixosConfig.networking.hostName == "Tawa";
-  wallpaperFile =
-    if hostIsTawa
-    then ../izar-utopia.png
-    else ../login-bg.png;
-  wallpaperName =
-    if hostIsTawa
-    then "izar-utopia.png"
-    else "stylix-wallpaper.png";
+  b = config.theme.base16;
+  base16Yaml = pkgs.writeText "${config.theme.slug}-base16.yaml" ''
+    system: "base16"
+    name: "${config.theme.name}"
+    author: "stellarium home/theme"
+    variant: "${config.theme.polarity}"
+    palette:
+    ${lib.concatMapStrings (k: "  ${k}: \"#${b.${k}}\"\n") [
+      "base00"
+      "base01"
+      "base02"
+      "base03"
+      "base04"
+      "base05"
+      "base06"
+      "base07"
+      "base08"
+      "base09"
+      "base0A"
+      "base0B"
+      "base0C"
+      "base0D"
+      "base0E"
+      "base0F"
+    ]}
+  '';
 in {
   imports = [stylixModule];
 
@@ -32,12 +48,11 @@ in {
     # Explicit targets only (avoids surprise enables as Stylix adds defaults). See MIGRATION.md § Stylix.
     autoEnable = false;
 
-    polarity = "dark";
-    # Was `tokyo-night-dark`; Izar keeps Firefox/GTK/Stylix aligned with Hyprland + Kitty (chromamancer).
-    base16Scheme = "${../themes/izar-base16.yaml}";
+    polarity = config.theme.polarity;
+    base16Scheme = "${base16Yaml}";
     image = builtins.path {
-      path = wallpaperFile;
-      name = wallpaperName;
+      path = config.theme.wallpaper;
+      name = config.theme.wallpaperName;
     };
 
     fonts = {
@@ -71,12 +86,14 @@ in {
       gtk.enable = true;
 
       kitty.enable = false;
+      vscode.enable = false;
 
-      qt.enable = true;
+      # KDE color scheme is [`programs/qt-palette.nix`](./programs/qt-palette.nix).
+      qt.enable = false;
 
       hyprland = {
         enable = true;
-        hyprpaper.enable = !hostIsTawa;
+        hyprpaper.enable = !config.theme.spanMonitors;
       };
     };
   };

@@ -43,9 +43,9 @@ in {
         gaps_in = 10;
         gaps_out = 15;
         border_size = 2;
-        # Izar (chromamancer themes/izar): overrides Stylix Hyprland `col.*`
-        "col.active_border" = lib.mkForce "rgba(6abab5ff)";
-        "col.inactive_border" = lib.mkForce "rgba(302947ff)";
+        # Active scheme (home/theme/hosts.nix): overrides Stylix Hyprland `col.*`
+        "col.active_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.accent}ff)";
+        "col.inactive_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.surface}ff)";
       };
       decoration = {
         rounding = 25;

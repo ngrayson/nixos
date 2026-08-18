@@ -27,10 +27,6 @@ in {
         source = "${hs.quickshellBundled}/pam/password.conf";
         force = true;
       };
-      "kitty/izar.conf" = {
-        source = ../../kitty/izar.conf;
-        force = true;
-      };
       "kitty/kitty.conf" = {
         source = ../../kitty/kitty.conf;
         force = true;
