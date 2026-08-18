@@ -7,6 +7,7 @@
 }: {
   imports = [
     ./jellyfin.nix
+    ./docker.nix
   ];
 
   networking.hostName = "Tawa";
