@@ -9,6 +9,28 @@ error() { printf "\033[1;31m[err]\033[0m  %s\n" "$*" >&2; }
 ok() { printf "\033[1;32m[ok]\033[0m   %s\n" "$*"; }
 heading() { printf "\n\033[1m%s\033[0m\n" "$*"; }
 
+term_width() {
+  local w="${COLUMNS:-}"
+  if [[ -z "$w" ]] && [[ -t 1 ]]; then
+    w="$(tput cols 2>/dev/null || true)"
+  fi
+  if [[ -z "$w" || "$w" -lt 40 ]]; then
+    w=80
+  fi
+  printf '%s' "$w"
+}
+
+# Prefer ~ for paths under $HOME so status lines fit a typical terminal.
+short_home() {
+  local p="$1"
+  local home="${HOME%/}"
+  if [[ -n "$home" && "$p" == "$home"/* ]]; then
+    printf '~/%s' "${p#"$home"/}"
+  else
+    printf '%s' "$p"
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Guided, flake-native NixOS rebuild helper.
@@ -281,6 +303,15 @@ show_repository_diff() {
 }
 
 show_guidance() {
+  if ((${#SCOPE_HARDWARE[@]} == 0)) &&
+    ((${#SCOPE_FLAKE[@]} == 0)) &&
+    ((${#SCOPE_BASE[@]} == 0)) &&
+    ((${#SCOPE_HOME[@]} == 0)) &&
+    ((${#SCOPE_OTHER_HOST[@]} == 0)) &&
+    ((${#SCOPE_LEGACY[@]} == 0)); then
+    return 0
+  fi
+
   heading "Guidance"
 
   if ((${#SCOPE_HARDWARE[@]})); then
@@ -394,15 +425,54 @@ check_untracked_flake_inputs() {
 
 # Slippi traces, crane placeholders, and git-dirty warnings drown the actual
 # "what will this rebuild change" lines. Full output still lands in LOG_FILE.
+# Live lines are hash-shortened and wrapped to the terminal width.
 filter_rebuild_output() {
-  awk '
+  local width
+  width="$(term_width)"
+  awk -v width="$width" '
     BEGIN { skip = 0 }
+
+    function squash(s,    out, rest, hash) {
+      out = ""
+      rest = s
+      while (match(rest, /\/nix\/store\/[0-9a-z]{20,}/)) {
+        hash = substr(rest, RSTART + 11, 7)
+        out = out substr(rest, 1, RSTART - 1) "/nix/store/" hash "…"
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+      return out rest
+    }
+
+    function wrap(s,    chunk, i, pad) {
+      s = squash(s)
+      pad = ""
+      while (length(s) > width) {
+        chunk = substr(s, 1, width)
+        i = width
+        while (i > 24 && substr(chunk, i, 1) != " ") {
+          i--
+        }
+        if (i <= 24) {
+          i = width
+        }
+        print pad substr(s, 1, i)
+        s = substr(s, i + 1)
+        sub(/^[[:space:]]+/, "", s)
+        pad = "  "
+      }
+      if (s != "") {
+        print pad s
+      }
+    }
+
     /^warning: Git tree / { next }
     /^trace: / { next }
     /^evaluation warning: .system. has been renamed/ { next }
     /^evaluation warning: crane / { skip = 1; next }
-    skip && /^[[:space:]]/ { next }
-    { skip = 0; print }
+    skip && (/^[[:space:]]/ || $0 == "") { next }
+    /To find the source of this warning/ { next }
+    /NIX_ABORT_ON_WARN/ { next }
+    { skip = 0; wrap($0) }
   '
 }
 
@@ -442,9 +512,9 @@ show_closure_diff() {
     printf "  No store-path change vs the previous generation.\n"
     return 0
   fi
-  nix store diff-closures "$before" "$after" || {
+  nix store diff-closures "$before" "$after" | filter_rebuild_output || {
     warn "nix store diff-closures failed; compare:"
-    printf "  before: %s\n  after:  %s\n" "$before" "$after"
+    printf "  before: %s\n  after:  %s\n" "$(basename "$before")" "$(basename "$after")"
   }
 }
 
@@ -552,9 +622,9 @@ main() {
   heading "Target"
   printf "  action:      %s\n" "$ACTION"
   printf "  host output: nixosConfigurations.%s\n" "$NIXOS_HOST"
-  printf "  flake:       %s\n" "$FLAKE_ROOT"
+  printf "  flake:       %s\n" "$(short_home "$FLAKE_ROOT")"
   if [[ "$ACTION" != "explain" && "$ACTION" != "check" ]]; then
-    printf "  log:         %s\n" "$LOG_FILE"
+    printf "  log:         %s\n" "$(short_home "$LOG_FILE")"
   fi
 
   show_change_scope
@@ -683,7 +753,7 @@ main() {
   command_exists notify-send &&
     notify-send -e "NixOS $ACTION OK" "$NIXOS_HOST" \
       --icon=software-update-available 2>/dev/null || true
-  ok "Log saved at $LOG_FILE"
+  ok "Log saved at $(short_home "$LOG_FILE")"
 }
 
 if [[ "${BASH_SOURCE[0]:-$0}" == "$0" ]]; then
