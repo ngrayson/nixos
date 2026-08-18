@@ -59,6 +59,10 @@ in {
         kb_layout = "us";
         follow_mouse = 1;
       };
+      # Needed so notification default-actions (Discord, etc.) can raise their window.
+      misc = {
+        focus_on_activate = true;
+      };
       bind = [
         "ALT, h, movefocus, l"
         "ALT, j, movefocus, d"
@@ -139,7 +143,7 @@ in {
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"
         "${lib.getExe pkgs.albert}"
-        "${lib.getExe pkgs.dunst}"
+        # dunst: Home Manager `services.dunst` (systemd user unit), not exec-once.
         "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
         "${lib.getExe pkgs.quickshell} -d -p ${hs.quickshellConfigDir}"
       ];
