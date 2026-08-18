@@ -32,7 +32,7 @@
     # Screen color picker on Hyprland (compositor buffer; avoids gcolor3 / xdg_foreign on Wayland).
     # Super+Shift+C: see wayland/hyprland.nix (`hyprpicker -a -n` → wl-copy + dunst).
     hyprpicker
-    dunst
+    # dunst: installed via services.dunst in home/services/dunst.nix
     fastfetch
     (
       if pkgs ? crosspipe
