@@ -180,7 +180,7 @@ ShellRoot {
 	function nixosTooltipText(): string {
 		const lines = [];
 		if (nixosRebuildPending)
-			lines.push("Wrench: local config is not the running system");
+			lines.push("Wrench: flake config is not what this machine is running");
 		if (nixosUpdates > 0)
 			lines.push("Updates: " + nixosUpdates + " flake input" + (nixosUpdates === 1 ? "" : "s") + " newer than flake.lock");
 		lines.push("Left-click: rebuild (os-rebuild switch)");
@@ -623,6 +623,13 @@ ShellRoot {
 				}
 			}
 		}
+	}
+
+	FileView {
+		path: `${Quickshell.env("HOME")}/.cache/qs-nixos-status/bump`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.refreshNixosStatus(false)
 	}
 
 	Timer {

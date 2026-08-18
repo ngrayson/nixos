@@ -324,7 +324,23 @@ in rec {
   hyprNixosStatus = pkgs.writeShellScriptBin "qs-nixos-status" ''
     set -eu
     FORCE=0
-    [ "''${1:-}" = "--force" ] && FORCE=1
+    case "''${1:-}" in
+      --force) FORCE=1 ;;
+      --invalidate|--invalidate-local)
+        CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
+        "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
+        "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/fingerprint" "$CACHE/local.json"
+        "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
+        exit 0
+        ;;
+      --invalidate-inputs)
+        CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
+        "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
+        "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/inputs.json"
+        "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
+        exit 0
+        ;;
+    esac
 
     NIX="${lib.getExe pkgs.nix}"
     GIT="${lib.getExe pkgs.git}"
@@ -344,6 +360,31 @@ in rec {
     CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
     "$MKDIR" -p "$CACHE"
     INPUT_TTL=21600
+
+    # Docs/other-host edits dirty a git flake without changing this host's runtime.
+    path_is_config() {
+      local path="$1"
+      case "$path" in
+        documentation/* | scripts/* | .cursor/* | *.md) return 1 ;;
+        "hosts/$HOST/"*) return 0 ;;
+        hosts/*) return 1 ;;
+        *) return 0 ;;
+      esac
+    }
+
+    relevant_dirty() {
+      local line path
+      "$GIT" -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+      while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || continue
+        path="''${line:3}"
+        case "$path" in
+          *" -> "*) path="''${path##* -> }" ;;
+        esac
+        path_is_config "$path" && return 0
+      done < <("$GIT" -C "$NIXOS_DIR" status --porcelain=v1 --untracked-files=all 2>/dev/null)
+      return 1
+    }
 
     lock_hash() {
       "$SHA" <"$NIXOS_DIR/flake.lock" | {
@@ -371,32 +412,30 @@ in rec {
 
     rebuild=false
     updates=0
-    fp="$(fingerprint)"
+    fp="v3-$(fingerprint)"
     lh="$(lock_hash)"
+    current="$("$READLINK" -f /run/current-system 2>/dev/null || true)"
+    head="$("$GIT" -C "$NIXOS_DIR" rev-parse HEAD 2>/dev/null || printf none)"
 
-    if [ "$FORCE" != 1 ] && [ -f "$CACHE/fingerprint" ] && [ -f "$CACHE/local.json" ]; then
-      if [ "$fp" = "$("$CAT" "$CACHE/fingerprint")" ]; then
-        rebuild="$("$J" -r '.rebuild' "$CACHE/local.json")"
+    if relevant_dirty; then
+      rebuild=true
+    elif [ -f "$CACHE/applied.json" ]; then
+      applied_gen="$("$J" -r '.generation // empty' "$CACHE/applied.json" 2>/dev/null || true)"
+      applied_head="$("$J" -r '.head // empty' "$CACHE/applied.json" 2>/dev/null || true)"
+      if [ "$head" != "$applied_head" ] || { [ -n "$current" ] && [ "$current" != "$applied_gen" ]; }; then
+        rebuild=true
+      else
+        rebuild=false
       fi
+    else
+      # First run: treat a clean tree as already applied so a dirty-build-then-commit
+      # does not leave the wrench on (Nix hashes dirty vs committed sources differently).
+      "$J" -nc --arg generation "$current" --arg head "$head" --arg host "$HOST" \
+        '{generation:$generation,head:$head,host:$host}' >"$CACHE/applied.json"
+      rebuild=false
     fi
-
-    if [ "$FORCE" = 1 ] || [ ! -f "$CACHE/local.json" ] || [ "$fp" != "$("$CAT" "$CACHE/fingerprint" 2>/dev/null || true)" ]; then
-      current="$("$READLINK" -f /run/current-system 2>/dev/null || true)"
-      expected=""
-      if expected="$("$NIX" eval --raw \
-        "$NIXOS_DIR#nixosConfigurations.''${HOST}.config.system.build.toplevel" \
-        2>/dev/null)"; then
-        if [ -n "$current" ] && [ "$current" != "$expected" ]; then
-          rebuild=true
-        else
-          rebuild=false
-        fi
-        "$J" -nc --argjson rebuild "$rebuild" '{rebuild:$rebuild}' >"$CACHE/local.json"
-        printf '%s' "$fp" >"$CACHE/fingerprint"
-      elif [ -f "$CACHE/local.json" ]; then
-        rebuild="$("$J" -r '.rebuild' "$CACHE/local.json")"
-      fi
-    fi
+    "$J" -nc --argjson rebuild "$rebuild" '{rebuild:$rebuild}' >"$CACHE/local.json"
+    printf '%s' "$fp" >"$CACHE/fingerprint"
 
     reuse_inputs=0
     if [ "$FORCE" != 1 ] && [ -f "$CACHE/inputs.json" ]; then
@@ -442,6 +481,7 @@ in rec {
     KITTY="${lib.getExe pkgs.kitty}"
     BASH="${lib.getExe pkgs.bash}"
     NIX="${lib.getExe pkgs.nix}"
+    STATUS="${lib.getExe hyprNixosStatus}"
     REBUILD="${../../documentation/nixos-framework-setup/os-rebuild.sh}"
     FLAKE="${config.home.homeDirectory}/.config/nixos"
     case "''${1:-}" in
@@ -449,7 +489,8 @@ in rec {
         exec "$KITTY" --hold --title os-rebuild "$BASH" "$REBUILD" switch
         ;;
       update)
-        exec "$KITTY" --hold --title flake-update "$BASH" -c "cd \"$FLAKE\" && exec \"$NIX\" flake update"
+        exec "$KITTY" --hold --title flake-update "$BASH" -c \
+          "cd \"$FLAKE\" && \"$NIX\" flake update; rc=\$?; \"$STATUS\" --invalidate-inputs >/dev/null 2>&1 || true; exit \$rc"
         ;;
       *)
         exit 2

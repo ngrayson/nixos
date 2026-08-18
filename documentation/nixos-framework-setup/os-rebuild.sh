@@ -32,7 +32,7 @@ Options:
   --format                Run the flake formatter before validation
   --yes                   Skip the rebuild confirmation
   --allow-host-mismatch   Permit activation for a host other than this machine
-  --commit                After success, commit dirty changes (default)
+  --commit                After a successful rebuild, commit dirty changes (default)
   --no-commit             Do not commit after a successful rebuild
   -h, --help              Show this help
 
@@ -265,21 +265,17 @@ repo_is_dirty() {
 show_repository_diff() {
   repo_is_dirty || return 0
 
-  heading "Repository diff"
+  heading "Repository changes"
   git -C "$NIXOS_DIR" --no-pager status --short
   printf "\n"
   git -C "$NIXOS_DIR" --no-pager diff --stat HEAD
-  printf "\n"
-  # Staged + unstaged content vs HEAD. Nix git flakes include dirty *tracked*
-  # files in the build; untracked files are omitted until `git add`.
-  git -C "$NIXOS_DIR" --no-pager diff HEAD
   if [[ -n "$(git -C "$NIXOS_DIR" ls-files --others --exclude-standard)" ]]; then
     printf "\n"
-    warn "Untracked files are shown above but are NOT in the flake build until staged."
+    warn "Untracked files are listed above but are NOT in the flake build until staged."
   fi
 
   heading "Build vs commit"
-  printf "  - Tracked dirty files in the diff ARE included in this rebuild (dirty git flake).\n"
+  printf "  - Docs/tooling-only edits do not change the running system.\n"
   printf "  - After a successful rebuild, dirty changes are committed by default.\n"
   printf "  - Pass --no-commit to leave the working tree dirty.\n"
 }
@@ -396,15 +392,60 @@ check_untracked_flake_inputs() {
   return 1
 }
 
+# Slippi traces, crane placeholders, and git-dirty warnings drown the actual
+# "what will this rebuild change" lines. Full output still lands in LOG_FILE.
+filter_rebuild_output() {
+  awk '
+    BEGIN { skip = 0 }
+    /^warning: Git tree / { next }
+    /^trace: / { next }
+    /^evaluation warning: .system. has been renamed/ { next }
+    /^evaluation warning: crane / { skip = 1; next }
+    skip && /^[[:space:]]/ { next }
+    { skip = 0; print }
+  '
+}
+
 run_logged() {
   local -a command=("$@")
   local rc
 
   set +e
-  "${command[@]}" 2>&1 | tee "$LOG_FILE"
+  "${command[@]}" 2>&1 | tee "$LOG_FILE" | filter_rebuild_output
   rc=${PIPESTATUS[0]}
   set -e
   return "$rc"
+}
+
+notify_status_bar() {
+  local cache="${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
+  local gen head
+  mkdir -p "$cache"
+  gen="$(readlink -f /run/current-system 2>/dev/null || true)"
+  head="$(git -C "$NIXOS_DIR" rev-parse HEAD 2>/dev/null || true)"
+  if [[ -n "$gen" && -n "$head" ]]; then
+    printf '{"generation":"%s","head":"%s","host":"%s"}\n' "$gen" "$head" "$NIXOS_HOST" >"$cache/applied.json"
+  fi
+  rm -f "$cache/fingerprint" "$cache/local.json"
+  date +%s >"$cache/bump"
+}
+
+show_closure_diff() {
+  local before="$1"
+  local after="$2"
+  heading "Closure changes"
+  if [[ -z "$before" || -z "$after" ]]; then
+    warn "Could not compare system closures."
+    return 0
+  fi
+  if [[ "$before" == "$after" ]]; then
+    printf "  No store-path change vs the previous generation.\n"
+    return 0
+  fi
+  nix store diff-closures "$before" "$after" || {
+    warn "nix store diff-closures failed; compare:"
+    printf "  before: %s\n  after:  %s\n" "$before" "$after"
+  }
 }
 
 main() {
@@ -526,8 +567,10 @@ main() {
 
   check_untracked_flake_inputs
 
-  info "Validating all tracked/staged flake outputs"
-  nix flake check --no-build "$FLAKE_ROOT"
+  if [[ "$ACTION" == "check" ]]; then
+    info "Validating all tracked/staged flake outputs"
+    nix flake check --no-build "$FLAKE_ROOT"
+  fi
 
   local configured_host
   configured_host="$(
@@ -573,7 +616,8 @@ main() {
   fi
 
   info "Running: ${rebuild[*]}"
-  local rc
+  local before_system rc
+  before_system="$(readlink -f /run/current-system 2>/dev/null || true)"
   if run_logged "${rebuild[@]}"; then
     rc=0
   else
@@ -606,6 +650,10 @@ main() {
       ;;
   esac
 
+  if [[ "$ACTION" == "switch" || "$ACTION" == "test" ]]; then
+    show_closure_diff "$before_system" "$(readlink -f /run/current-system 2>/dev/null || true)"
+  fi
+
   if repo_is_dirty; then
     if ((COMMIT == 0)); then
       info "Leaving working tree dirty (--no-commit)."
@@ -626,6 +674,10 @@ main() {
         info "Skipped commit; pass --no-commit next time to silence this prompt."
       fi
     fi
+  fi
+
+  if [[ "$ACTION" == "switch" || "$ACTION" == "test" ]]; then
+    notify_status_bar
   fi
 
   command_exists notify-send &&
