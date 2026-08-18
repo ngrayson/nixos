@@ -174,6 +174,15 @@ ShellRoot {
 			qsReloadPending = true;
 	}
 
+	function hyprWorkspace(id: int): var {
+		const list = Hyprland.workspaces.values;
+		for (let i = 0; i < list.length; ++i) {
+			if (list[i].id === id)
+				return list[i];
+		}
+		return null;
+	}
+
 	function nixosStatusVisible(): bool {
 		return nixosRebuildPending || nixosUpdates > 0;
 	}
@@ -885,24 +894,30 @@ ShellRoot {
 				spacing: 10
 
 				Repeater {
-					model: 6
+					model: 10
 
-					delegate: Item {
+					delegate: Rectangle {
 						required property int index
 
 						property int wid: index + 1
-						property bool isActive: Hyprland.focusedWorkspace?.id === wid
+						property var hyprWs: shellRoot.hyprWorkspace(wid)
+						property bool isFocused: Hyprland.focusedWorkspace?.id === wid
+						property bool isOnMonitor: hyprWs?.active ?? false
+						property bool occupied: (hyprWs?.toplevels.values.length ?? 0) > 0
 
+						visible: isFocused || isOnMonitor || occupied
 						implicitWidth: wsLabel.implicitWidth + 16
-						implicitHeight: shellRoot.topBarHeight
+						implicitHeight: 22
+						Layout.alignment: Qt.AlignVCenter
+						radius: 6
+						color: isFocused ? "#45475a" : (occupied ? "#313244" : "transparent")
 
 						Text {
 							id: wsLabel
 							anchors.centerIn: parent
 							text: parent.wid
-							color: parent.isActive ? "#89b4fa" : "#6c7086"
+							color: (parent.isFocused || parent.occupied) ? "#cdd6f4" : "#6c7086"
 							font.pixelSize: 14
-							font.bold: true
 						}
 
 						MouseArea {
