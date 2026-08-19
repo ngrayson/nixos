@@ -992,6 +992,46 @@ ShellRoot {
 				onTriggered: barWindow.tipOn = true
 			}
 
+			// Shared hover/press feedback for status-cluster icons.
+			component StatusPill: MouseArea {
+				id: pill
+				implicitWidth: 22
+				implicitHeight: 22
+				hoverEnabled: true
+				cursorShape: Qt.PointingHandCursor
+				property string tipKind: ""
+				scale: pressed ? 0.94 : 1
+				Behavior on scale {
+					NumberAnimation {
+						duration: 90
+						easing.type: Easing.OutCubic
+					}
+				}
+				onEntered: {
+					if (pill.tipKind !== "")
+						barWindow.armTip(pill, pill.tipKind);
+				}
+				onExited: barWindow.disarmTip()
+
+				Rectangle {
+					z: -1
+					anchors.fill: parent
+					radius: 4
+					color: {
+						if (pill.pressed)
+							return Qt.alpha(Theme.selection, 0.28);
+						if (pill.containsMouse)
+							return Qt.alpha(Theme.selection, 0.16);
+						return "transparent";
+					}
+					Behavior on color {
+						ColorAnimation {
+							duration: 100
+						}
+					}
+				}
+			}
+
 			// One inhibitor per output is fine; Hyprland treats a visible PanelWindow as
 			// important, so this blocks hypridle while enabled.
 			IdleInhibitor {
@@ -1231,12 +1271,11 @@ ShellRoot {
 						anchors.centerIn: parent
 						spacing: 2
 
-						MouseArea {
+						StatusPill {
 							id: nixosPill
 							visible: shellRoot.nixosStatusVisible()
 							implicitWidth: Math.max(22, nixosClusterRow.implicitWidth + 4)
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "nixos"
 							acceptedButtons: Qt.LeftButton | Qt.RightButton
 							onClicked: mouse => {
 								barWindow.disarmTip();
@@ -1249,8 +1288,6 @@ ShellRoot {
 								else if (mouse.button === Qt.RightButton)
 									Hyprland.dispatch("exec qs-nixos-term update");
 							}
-							onEntered: barWindow.armTip(nixosPill, "nixos")
-							onExited: barWindow.disarmTip()
 
 							Row {
 								id: nixosClusterRow
@@ -1297,20 +1334,16 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: qsReloadPill
 							visible: shellRoot.qsReloadPending
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "qsreload"
 							acceptedButtons: Qt.LeftButton
 							onClicked: {
 								barWindow.disarmTip();
 								shellRoot.qsReloadPending = false;
 								Hyprland.dispatch("exec qs-quickshell-reload");
 							}
-							onEntered: barWindow.armTip(qsReloadPill, "qsreload")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1321,11 +1354,9 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: wifiPill
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "wifi"
 							acceptedButtons: Qt.LeftButton | Qt.RightButton
 							onClicked: mouse => {
 								barWindow.disarmTip();
@@ -1334,8 +1365,6 @@ ShellRoot {
 								else if (mouse.button === Qt.RightButton)
 									Hyprland.dispatch("exec kitty --title nmtui nmtui");
 							}
-							onEntered: barWindow.armTip(wifiPill, "wifi")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1346,12 +1375,10 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: btPill
 							visible: shellRoot.btPresent
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "bt"
 							acceptedButtons: Qt.LeftButton | Qt.RightButton
 							onClicked: mouse => {
 								barWindow.disarmTip();
@@ -1360,8 +1387,6 @@ ShellRoot {
 								else if (mouse.button === Qt.RightButton && shellRoot.btAdapter)
 									shellRoot.btAdapter.enabled = !shellRoot.btAdapter.enabled;
 							}
-							onEntered: barWindow.armTip(btPill, "bt")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1372,12 +1397,10 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: brightnessPill
 							visible: shellRoot.brightnessPresent
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "brightness"
 							acceptedButtons: Qt.LeftButton
 							scrollGestureEnabled: true
 							onClicked: {
@@ -1390,8 +1413,6 @@ ShellRoot {
 								else if (event.angleDelta.y < 0)
 									shellRoot.adjustBrightness(-1);
 							}
-							onEntered: barWindow.armTip(brightnessPill, "brightness")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1402,19 +1423,16 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: batteryPill
 							visible: shellRoot.batteryPresent
 							implicitWidth: Math.max(22, batteryClusterRow.implicitWidth + 4)
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "battery"
 							acceptedButtons: Qt.LeftButton
 							onClicked: {
 								barWindow.disarmTip();
 								shellRoot.cyclePowerProfile();
 							}
-							onEntered: barWindow.armTip(batteryPill, "battery")
-							onExited: barWindow.disarmTip()
 
 							Row {
 								id: batteryClusterRow
@@ -1444,18 +1462,14 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: idlePill
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "idle"
 							acceptedButtons: Qt.LeftButton
 							onClicked: {
 								barWindow.disarmTip();
 								shellRoot.idleInhibited = !shellRoot.idleInhibited;
 							}
-							onEntered: barWindow.armTip(idlePill, "idle")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1466,12 +1480,10 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: micPill
 							visible: shellRoot.micPresent
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "mic"
 							acceptedButtons: Qt.LeftButton | Qt.RightButton
 							onClicked: mouse => {
 								barWindow.disarmTip();
@@ -1480,8 +1492,6 @@ ShellRoot {
 								else if (mouse.button === Qt.RightButton)
 									Hyprland.dispatch("exec pavucontrol --tab=4");
 							}
-							onEntered: barWindow.armTip(micPill, "mic")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1492,11 +1502,9 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: audioPill
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "audio"
 							acceptedButtons: Qt.LeftButton | Qt.RightButton
 							scrollGestureEnabled: true
 							onClicked: mouse => {
@@ -1512,8 +1520,6 @@ ShellRoot {
 								else if (event.angleDelta.y < 0)
 									shellRoot.runAudioAction("pamixer -d 1", true);
 							}
-							onEntered: barWindow.armTip(audioPill, "audio")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
@@ -1524,17 +1530,13 @@ ShellRoot {
 							}
 						}
 
-						MouseArea {
+						StatusPill {
 							id: powerPill
-							implicitWidth: 22
-							implicitHeight: 22
-							hoverEnabled: true
+							tipKind: "power"
 							onClicked: {
 								barWindow.disarmTip();
 								shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
 							}
-							onEntered: barWindow.armTip(powerPill, "power")
-							onExited: barWindow.disarmTip()
 
 							Text {
 								anchors.centerIn: parent
