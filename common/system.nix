@@ -45,6 +45,7 @@
 in {
   imports = [
     ./base.nix
+    ./mime.nix
     # Slippi NixOS module: udev/runtime tuning for official GameCube USB adapter input.
     "${slippi-nix-src}/modules/nixos/gamecube-controller-adapter.nix"
     ./vpn-vortix.nix
