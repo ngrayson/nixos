@@ -37,6 +37,10 @@ in {
       env = [
         "QT_QPA_PLATFORMTHEME,kde"
         "XDG_DATA_DIRS,${xdgDataDirsShare}"
+        # Mirrors `environment.sessionVariables` in common/system.nix. plasma6 ships only
+        # `plasma-applications.menu`, so kbuildsycoca6 builds an empty menu without this and
+        # KDE "Open With" dialogs list no applications.
+        "XDG_MENU_PREFIX,plasma-"
       ];
       "$mod" = "SUPER";
       general = {

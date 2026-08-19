@@ -150,6 +150,10 @@ in {
 
   services.printing.enable = true;
 
+  # Volume monitoring and trash for GTK: the gtk portal's file chooser (Firefox, GIMP) shows
+  # removable drives only through gvfs. Dolphin does not need it — Solid talks to udisks2 directly.
+  services.gvfs.enable = true;
+
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
@@ -226,7 +230,9 @@ in {
       btop
       bottom
       feh
-      nautilus
+      # Default image viewer (home/xdg/mime.nix). Plasma pulls it in already; named here so the
+      # mime defaults do not depend on the Plasma stack staying installed.
+      kdePackages.gwenview
       powertop
       vlc
       pkgs.geeqie
@@ -283,6 +289,10 @@ in {
       SHELL = "${pkgs.zsh}/bin/zsh";
       # Match HM qt platform theme (kde): Dolphin/KF6 need kde, not qt5ct.
       QT_QPA_PLATFORMTHEME = "kde";
+      # plasma6 installs only `plasma-applications.menu`; there is no plain `applications.menu`.
+      # Plasma exports this prefix itself, Hyprland does not, and without it kbuildsycoca6
+      # resolves no menu at all — leaving KDE's "Open With" application tree empty.
+      XDG_MENU_PREFIX = "plasma-";
     };
   };
 }
