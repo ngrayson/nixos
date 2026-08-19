@@ -170,5 +170,7 @@ in {
     hs.hyprNixosTerm
     hs.hyprQuickshellReload
     hs.hyprQuickshellIpc
+    hs.hyprDpmsSideOff
+    hs.hyprDpmsSideOn
   ];
 }

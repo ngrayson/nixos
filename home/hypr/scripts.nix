@@ -102,6 +102,59 @@ in rec {
     done < <("$H" -i 0 monitors -j | "$J" -r '.[].name')
   '';
 
+  # Blank every output except the geometric center panel (same midpoint heuristic as
+  # Quickshell `centerOutputScreen`). Used while the session is locked so side
+  # monitors go dark the way the SDDM greeter does on Tawa.
+  hyprDpmsSideOff = pkgs.writeShellScriptBin "hypr-dpms-side-off" ''
+    set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    H="${pkgs.hyprland}/bin/hyprctl"
+    J="${lib.getExe pkgs.jq}"
+    json="$("$H" -i 0 monitors -j 2>/dev/null || true)"
+    case "$json" in
+      \[*) ;;
+      *) exit 0 ;;
+    esac
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      "$H" -i 0 dispatch dpms off "$name" || true
+    done < <("$J" -r '
+      if length <= 1 then empty
+      else
+        (map(.x) | min) as $minX
+        | (map(.x + .width) | max) as $maxX
+        | (($minX + $maxX) / 2) as $mid
+        | (sort_by((.x + (.width / 2) - $mid) | fabs) | .[0].name) as $center
+        | .[] | select(.name != $center) | .name
+      end
+    ' <<<"$json")
+  '';
+
+  hyprDpmsSideOn = pkgs.writeShellScriptBin "hypr-dpms-side-on" ''
+    set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    H="${pkgs.hyprland}/bin/hyprctl"
+    J="${lib.getExe pkgs.jq}"
+    json="$("$H" -i 0 monitors -j 2>/dev/null || true)"
+    case "$json" in
+      \[*) ;;
+      *) exit 0 ;;
+    esac
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      "$H" -i 0 dispatch dpms on "$name" || true
+    done < <("$J" -r '
+      if length <= 1 then empty
+      else
+        (map(.x) | min) as $minX
+        | (map(.x + .width) | max) as $maxX
+        | (($minX + $maxX) / 2) as $mid
+        | (sort_by((.x + (.width / 2) - $mid) | fabs) | .[0].name) as $center
+        | .[] | select(.name != $center) | .name
+      end
+    ' <<<"$json")
+  '';
+
   # Suppress idle lock while Slippi emulation is active.
   quickshellLockGuarded = pkgs.writeShellScriptBin "quickshell-lock-guarded" ''
     set -euo pipefail
