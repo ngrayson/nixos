@@ -16,10 +16,4 @@ Bar source: `quickshell/shell.qml`. Colors come from `Theme.qml` / `~/.config/qu
 
 **Helpers:** `home/hypr/scripts.nix` `writeShellScriptBin`, put on PATH in `home/wayland/hyprland.nix` `home.packages`. Nix `''` strings: bash `${` must be `''${`.
 
-**Reload after every QML change** (until `os-rebuild` points Hyprland at this tree): click the cluster refresh pill (`qs-quickshell-reload`), which kills every `quickshell` then starts `-p ~/.config/nixos/quickshell`. Manual:
-
-```bash
-qs-quickshell-reload
-```
-
-`~/.config/quickshell` is the Home Manager store copy and will be stale until switch.
+**Reload after QML change:** click the cluster refresh pill (`qs-quickshell-reload`), or `qs-quickshell-reload`. Session `exec-once` and reload both use `-p ~/.config/nixos/quickshell`. `~/.config/quickshell` is the Home Manager copy (fallback only).

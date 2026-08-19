@@ -16,14 +16,15 @@
   '';
 
   quickshellConfigDir = "${config.home.homeDirectory}/.config/quickshell";
+  quickshellLiveDir = "${config.home.homeDirectory}/.config/nixos/quickshell";
   qsBin = lib.getExe pkgs.quickshell;
-  # Live QML reload (`qs-quickshell-reload`) runs `-p ~/.config/nixos/quickshell`.
-  # A normal session `exec-once` uses HM `~/.config/quickshell`. IPC must follow the live process.
+  # Session start, reload, and IPC all use the flake tree. HM ~/.config/quickshell
+  # is only a fallback if the checkout is missing.
   qsLiveDirSnippet = ''
     qs_live_dir() {
       local nixos="''${HOME}/.config/nixos/quickshell"
       local hm="''${HOME}/.config/quickshell"
-      if ${qsBin} ipc -p "$nixos" show >/dev/null 2>&1; then
+      if [ -f "$nixos/shell.qml" ]; then
         printf '%s\n' "$nixos"
       else
         printf '%s\n' "$hm"
@@ -31,7 +32,7 @@
     }
   '';
 in rec {
-  inherit quickshellBundled quickshellConfigDir;
+  inherit quickshellBundled quickshellConfigDir quickshellLiveDir;
 
   # Super+Shift+S / Print: region capture via hyprshot (clipboard only; spectacle needs KWin on Wayland).
   hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
@@ -624,13 +625,13 @@ in rec {
     esac
   '';
 
-  # Restart the bar from the flake tree (HM ~/.config/quickshell is stale until switch).
+  # Restart the bar from the same flake tree Hyprland exec-once uses.
   # Detach first: the bar often execs this helper, and killing it would abort a
   # same-session pkill before every leftover instance is signaled.
   hyprQuickshellReload = pkgs.writeShellScriptBin "qs-quickshell-reload" ''
     set -eu
     QS="${lib.getExe pkgs.quickshell}"
-    SRC="${config.home.homeDirectory}/.config/nixos/quickshell"
+    SRC="${quickshellLiveDir}"
     SETSID="${lib.getExe' pkgs.util-linux "setsid"}"
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
     PKILL="${lib.getExe' pkgs.procps "pkill"}"
