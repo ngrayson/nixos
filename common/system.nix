@@ -231,7 +231,7 @@ in {
       btop
       bottom
       feh
-      # Default image viewer (home/xdg/mime.nix). Plasma pulls it in already; named here so the
+      # Default image viewer (./mime.nix). Plasma pulls it in already; named here so the
       # mime defaults do not depend on the Plasma stack staying installed.
       kdePackages.gwenview
       powertop
