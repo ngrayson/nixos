@@ -23,6 +23,10 @@ in {
         source = "${hs.quickshellBundled}/LockSurface.qml";
         force = true;
       };
+      "quickshell/PowerMenu.qml" = {
+        source = "${hs.quickshellBundled}/PowerMenu.qml";
+        force = true;
+      };
       "quickshell/Theme.qml" = {
         source = "${hs.quickshellBundled}/Theme.qml";
         force = true;

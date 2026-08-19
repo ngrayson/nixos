@@ -1,3 +1,4 @@
 singleton Theme 1.0 Theme.qml
 LockContext 1.0 LockContext.qml
 LockSurface 1.0 LockSurface.qml
+PowerMenu 1.0 PowerMenu.qml
