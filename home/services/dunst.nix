@@ -55,6 +55,13 @@
 in {
   home.packages = [pkgs.fuzzel dunstMenu trackLastApp];
 
+  # HM's dunst module emits a `Type=dbus` unit with no `[Install]` section, so dunst is only ever
+  # started lazily by D-Bus activation — and never at all if something already owns
+  # org.freedesktop.Notifications (plasma-workspace ships a competing activation file for that very
+  # name). Binding it to the session starts it deterministically and, because the unit then stays
+  # active, lets HM's `X-Reload-Triggers` on dunstrc actually reload dunst on `os-rebuild switch`.
+  systemd.user.services.dunst.Install.WantedBy = ["graphical-session.target"];
+
   services.dunst = {
     enable = true;
     # Breeze ships dialog-* under status/22|64 (not hicolor/32x32); recursive lookup

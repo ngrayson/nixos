@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Fire desktop notifications that exercise dunst / FreeDesktop Notification aspects.
-# Default stack: dunst (Hyprland exec-once), no custom dunstrc yet — stock defaults.
+# Stack: dunst as a systemd user unit (`home/services/dunst.nix`), themed from `config.theme.hex`.
+# If styling looks stale, check `systemctl --user status dunst` — a daemon started outside systemd
+# holds org.freedesktop.Notifications and keeps serving whatever dunstrc it read at startup.
 #
 # Usage:
 #   ./scripts/test-notifications.sh              # full suite (paced)

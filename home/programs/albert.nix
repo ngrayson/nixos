@@ -14,10 +14,31 @@
 {
   lib,
   config,
+  pkgs,
   ...
 }: let
   cfg = "${config.home.homeDirectory}/.config/albert/config";
 in {
+  # Systemd user unit rather than a Hyprland `exec-once`. exec-once pinned Albert to the store path
+  # current at session start, so a rebuild never picked up a new build (including the unstable
+  # overlay in common/system.nix) and a crash left no launcher until the next login. `ALT, Space`
+  # runs `albert toggle`, which reaches this instance over D-Bus, so the keybind is unaffected.
+  # Starts after the activation block below, which seeds ~/.config/albert/config and the plugin dirs.
+  systemd.user.services.albert = {
+    Unit = {
+      Description = "Albert launcher";
+      After = ["graphical-session.target"];
+      PartOf = ["graphical-session.target"];
+      ConditionEnvironment = "WAYLAND_DISPLAY";
+    };
+    Service = {
+      ExecStart = lib.getExe pkgs.albert;
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+    Install.WantedBy = ["graphical-session.target"];
+  };
+
   home.activation.albertPythonPlugins = lib.hm.dag.entryAfter ["writeBoundary"] ''
     _albert_cfg="${cfg}"
     mkdir -p "$(dirname "$_albert_cfg")"

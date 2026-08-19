@@ -146,9 +146,10 @@ in {
       ];
       "exec-once" = [
         "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all"
-        "${lib.getExe pkgs.albert}"
+        # albert: `../programs/albert.nix` (systemd user unit), not exec-once.
         # dunst: Home Manager `services.dunst` (systemd user unit), not exec-once.
-        "${pkgs.kdePackages.polkit-kde-agent-1}/libexec/polkit-kde-authentication-agent-1"
+        # polkit-kde agent: `../services/polkit-agent.nix` (systemd user unit), not exec-once —
+        # exec-once pins it to the session's original store path and never restarts it.
         "${lib.getExe pkgs.quickshell} -d -p ${hs.quickshellLiveDir}"
       ];
     };

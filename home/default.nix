@@ -14,6 +14,7 @@
     ./programs/git.nix
     ./wayland/hyprland.nix
     ./services/dunst.nix
+    ./services/polkit-agent.nix
     ./services/hypridle.nix
     ./services/spotifyd.nix
     ./activation/plasma-multi-monitor.nix
