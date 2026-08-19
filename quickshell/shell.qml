@@ -173,6 +173,7 @@ ShellRoot {
 	// Hidden while the running system matches the flake and flake.lock is current.
 	property bool nixosRebuildPending: false
 	property int nixosUpdates: 0
+	property int nixosRepoBehind: 0
 	property bool qsReloadPending: false
 	property bool qsReloadWatchArmed: false
 
@@ -191,23 +192,33 @@ ShellRoot {
 	}
 
 	function nixosStatusVisible(): bool {
-		return nixosRebuildPending || nixosUpdates > 0;
+		return nixosRebuildPending || nixosUpdates > 0 || nixosRepoBehind > 0;
 	}
 
 	function refreshNixosStatus(force: bool): void {
 		if (readNixosStatus.running)
 			return;
-		readNixosStatus.command = force ? ["qs-nixos-status", "--force"] : ["qs-nixos-status"];
+		const args = ["qs-nixos-status"];
+		if (force)
+			args.push("--force");
+		if (networkKind === "wifi" || networkKind === "wired")
+			args.push("--online");
+		readNixosStatus.command = args;
 		readNixosStatus.running = true;
 	}
 
 	function nixosTooltipText(): string {
 		const lines = [];
+		if (nixosRepoBehind > 0)
+			lines.push("Repo: " + nixosRepoBehind + " commit" + (nixosRepoBehind === 1 ? "" : "s") + " on origin not pulled");
 		if (nixosRebuildPending)
 			lines.push("Wrench: flake config is not what this machine is running");
 		if (nixosUpdates > 0)
 			lines.push("Updates: " + nixosUpdates + " flake input" + (nixosUpdates === 1 ? "" : "s") + " newer than flake.lock");
-		lines.push("Left-click: rebuild (os-rebuild switch)");
+		if (nixosRepoBehind > 0)
+			lines.push("Left-click: git pull");
+		else
+			lines.push("Left-click: rebuild (os-rebuild switch)");
 		lines.push("Right-click: update flake inputs");
 		lines.push("Shift+click: refresh this status");
 		return lines.join("\n");
@@ -881,6 +892,7 @@ ShellRoot {
 					const data = JSON.parse(raw);
 					shellRoot.nixosRebuildPending = !!data.rebuild;
 					shellRoot.nixosUpdates = Number(data.updates) || 0;
+					shellRoot.nixosRepoBehind = Number(data.behind) || 0;
 				} catch (_e) {
 				}
 			}
@@ -1202,6 +1214,8 @@ ShellRoot {
 								barWindow.disarmTip();
 								if (mouse.modifiers & Qt.ShiftModifier)
 									shellRoot.refreshNixosStatus(true);
+								else if (mouse.button === Qt.LeftButton && shellRoot.nixosRepoBehind > 0)
+									Hyprland.dispatch("exec qs-nixos-term pull");
 								else if (mouse.button === Qt.LeftButton)
 									Hyprland.dispatch("exec qs-nixos-term rebuild");
 								else if (mouse.button === Qt.RightButton)
@@ -1214,6 +1228,21 @@ ShellRoot {
 								id: nixosClusterRow
 								anchors.centerIn: parent
 								spacing: 2
+
+								Text {
+									visible: shellRoot.nixosRepoBehind > 0
+									color: Theme.accent
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: String.fromCodePoint(0xF04A2)
+								}
+
+								Text {
+									visible: shellRoot.nixosRepoBehind > 0
+									color: Theme.accent
+									font.pixelSize: 12
+									text: shellRoot.nixosRepoBehind
+								}
 
 								Text {
 									visible: shellRoot.nixosRebuildPending

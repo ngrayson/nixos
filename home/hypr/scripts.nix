@@ -39,23 +39,25 @@ in rec {
     exec ${lib.getExe pkgs.hyprshot} -m region --clipboard-only
   '';
 
-  quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
+  # IPC to whichever bar is actually running (HM path or live nixos tree).
+  hyprQuickshellIpc = pkgs.writeShellScriptBin "qs-quickshell-ipc" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     ${qsLiveDirSnippet}
     QS="$(qs_live_dir)"
     exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
-      ${qsBin} ipc -p "$QS" -n call lock activate
+      ${qsBin} ipc -p "$QS" -n "$@"
+  '';
+
+  quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
+    set -euo pipefail
+    exec ${lib.getExe hyprQuickshellIpc} call lock activate
   '';
 
   # Overlay preview of the lock UI. Esc dismisses; does not take ext-session-lock.
   quickshellLockPreview = pkgs.writeShellScriptBin "quickshell-lock-preview" ''
     set -euo pipefail
-    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    ${qsLiveDirSnippet}
-    QS="$(qs_live_dir)"
-    exec env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
-      ${qsBin} ipc -p "$QS" -n call lock preview
+    exec ${lib.getExe hyprQuickshellIpc} call lock preview
   '';
 
   # True when Slippi Dolphin netplay is actively emulating (launcher-only should not match).
@@ -137,10 +139,7 @@ in rec {
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    ${qsLiveDirSnippet}
-    QS="$(qs_live_dir)"
-    env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
-      ${qsBin} ipc -p "$QS" -n call lock activate
+    ${lib.getExe hyprQuickshellIpc} call lock activate
     ${lib.getExe' pkgs.coreutils "sleep"} 1
     ${lib.getExe hyprDpmsAllOn} || true
   '';
@@ -347,29 +346,39 @@ in rec {
     "$H" -i 0 dispatch focuswindow "address:$addr" >/dev/null 2>&1 || true
   '';
 
-  # Bar status for unapplied NixOS config vs /run/current-system, and stale flake inputs.
-  # Prints one JSON line: {"rebuild":bool,"updates":n}. Caches the expensive eval and the
-  # network lock-file probe; `qs-nixos-status --force` bypasses both.
+  # Bar status for unapplied NixOS config vs /run/current-system, stale flake
+  # inputs, and commits on the git remote not yet pulled. Prints one JSON line:
+  # {"rebuild":bool,"updates":n,"behind":n}. Caches the expensive eval, the
+  # network lock-file probe, and git fetch; `qs-nixos-status --force` bypasses them.
+  # `--online` (from the bar when a connection exists) allows a periodic fetch.
   hyprNixosStatus = pkgs.writeShellScriptBin "qs-nixos-status" ''
     set -eu
     FORCE=0
-    case "''${1:-}" in
-      --force) FORCE=1 ;;
-      --invalidate|--invalidate-local)
-        CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
-        "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
-        "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/fingerprint" "$CACHE/local.json"
-        "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
-        exit 0
-        ;;
-      --invalidate-inputs)
-        CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
-        "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
-        "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/inputs.json"
-        "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
-        exit 0
-        ;;
-    esac
+    ONLINE=0
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --force) FORCE=1 ;;
+        --online) ONLINE=1 ;;
+        --invalidate|--invalidate-local)
+          CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
+          "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
+          "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/fingerprint" "$CACHE/local.json"
+          "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
+          exit 0
+          ;;
+        --invalidate-inputs)
+          CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
+          "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
+          "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/inputs.json"
+          "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
+          exit 0
+          ;;
+        *)
+          break
+          ;;
+      esac
+      shift
+    done
 
     NIX="${lib.getExe pkgs.nix}"
     GIT="${lib.getExe pkgs.git}"
@@ -383,12 +392,14 @@ in rec {
     READLINK="${lib.getExe' pkgs.coreutils "readlink"}"
     UNAME="${lib.getExe' pkgs.coreutils "uname"}"
     CAT="${lib.getExe' pkgs.coreutils "cat"}"
+    TIMEOUT="${lib.getExe' pkgs.coreutils "timeout"}"
 
     NIXOS_DIR="''${NIXOS_DIR:-$HOME/.config/nixos}"
     HOST="''${NIXOS_HOST:-$("$UNAME" -n)}"
     CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
     "$MKDIR" -p "$CACHE"
     INPUT_TTL=21600
+    REMOTE_TTL=600
 
     # Docs/other-host edits dirty a git flake without changing this host's runtime.
     path_is_config() {
@@ -435,8 +446,8 @@ in rec {
     }
 
     print_status() {
-      "$J" -nc --argjson rebuild "$1" --argjson updates "$2" \
-        '{rebuild:$rebuild,updates:$updates}'
+      "$J" -nc --argjson rebuild "$1" --argjson updates "$2" --argjson behind "$3" \
+        '{rebuild:$rebuild,updates:$updates,behind:$behind}'
     }
 
     rebuild=false
@@ -501,7 +512,35 @@ in rec {
       trap - EXIT
     fi
 
-    print_status "$rebuild" "$updates"
+    do_fetch=0
+    if [ "$ONLINE" = 1 ]; then
+      if [ "$FORCE" = 1 ] || [ ! -f "$CACHE/remote.json" ]; then
+        do_fetch=1
+      else
+        remote_at="$("$J" -r '.checked_at // 0' "$CACHE/remote.json" 2>/dev/null || printf 0)"
+        now="$("$DATE" +%s)"
+        age=$((now - remote_at))
+        if [ "$age" -ge "$REMOTE_TTL" ]; then
+          do_fetch=1
+        fi
+      fi
+    fi
+    if [ "$do_fetch" = 1 ]; then
+      GIT_TERMINAL_PROMPT=0 "$TIMEOUT" 15 "$GIT" -C "$NIXOS_DIR" fetch --quiet origin >/dev/null 2>&1 || true
+      "$J" -nc --argjson checked_at "$("$DATE" +%s)" '{checked_at:$checked_at}' >"$CACHE/remote.json"
+    fi
+
+    behind=0
+    upstream="$("$GIT" -C "$NIXOS_DIR" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || true)"
+    if [ -z "$upstream" ] && "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify origin/main >/dev/null 2>&1; then
+      upstream=origin/main
+    fi
+    if [ -n "$upstream" ]; then
+      behind="$("$GIT" -C "$NIXOS_DIR" rev-list --count "HEAD..$upstream" 2>/dev/null || printf 0)"
+    fi
+    behind=$((behind + 0))
+
+    print_status "$rebuild" "$updates" "$behind"
   '';
 
   # Interactive Kitty that stays open after os-rebuild / flake update finish.
@@ -510,6 +549,7 @@ in rec {
     KITTY="${lib.getExe pkgs.kitty}"
     BASH="${lib.getExe pkgs.bash}"
     NIX="${lib.getExe pkgs.nix}"
+    GIT="${lib.getExe pkgs.git}"
     STATUS="${lib.getExe hyprNixosStatus}"
     REBUILD="${../../documentation/nixos-framework-setup/os-rebuild.sh}"
     FLAKE="${config.home.homeDirectory}/.config/nixos"
@@ -521,6 +561,10 @@ in rec {
         exec "$KITTY" --hold --title flake-update "$BASH" -c \
           "cd \"$FLAKE\" && \"$NIX\" flake update; rc=\$?; \"$STATUS\" --invalidate-inputs >/dev/null 2>&1 || true; exit \$rc"
         ;;
+      pull)
+        exec "$KITTY" --title nixos-pull "$BASH" -lc \
+          "cd \"$FLAKE\" && \"$GIT\" pull; \"$STATUS\" --invalidate-local >/dev/null 2>&1 || true; exec \"$BASH\" -l"
+        ;;
       *)
         exit 2
         ;;
@@ -528,6 +572,8 @@ in rec {
   '';
 
   # Restart the bar from the flake tree (HM ~/.config/quickshell is stale until switch).
+  # Detach first: the bar often execs this helper, and killing it would abort a
+  # same-session pkill before every leftover instance is signaled.
   hyprQuickshellReload = pkgs.writeShellScriptBin "qs-quickshell-reload" ''
     set -eu
     QS="${lib.getExe pkgs.quickshell}"
@@ -535,8 +581,23 @@ in rec {
     SETSID="${lib.getExe' pkgs.util-linux "setsid"}"
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
     PKILL="${lib.getExe' pkgs.procps "pkill"}"
-    # New process must be outside the current quickshell cgroup so pkill does not take it.
-    "$SETSID" -f ${lib.getExe pkgs.bash} -c "\"$SLEEP\" 0.4; exec \"$QS\" -d -p \"$SRC\"" >/dev/null 2>&1
-    "$PKILL" -x quickshell || true
+    PGREP="${lib.getExe' pkgs.procps "pgrep"}"
+
+    if [ "''${QS_RELOAD_WORKER:-}" != 1 ]; then
+      exec "$SETSID" -f env QS_RELOAD_WORKER=1 "$0"
+    fi
+
+    "$PKILL" -TERM -x quickshell || true
+    n=0
+    while "$PGREP" -x quickshell >/dev/null 2>&1; do
+      n=$((n + 1))
+      if [ "$n" -ge 25 ]; then
+        "$PKILL" -KILL -x quickshell || true
+        break
+      fi
+      "$SLEEP" 0.1
+    done
+    "$SLEEP" 0.2
+    exec "$QS" -d -p "$SRC"
   '';
 }

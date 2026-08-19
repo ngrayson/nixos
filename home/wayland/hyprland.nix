@@ -119,9 +119,9 @@ in {
         "$mod, Tab, cyclenext"
         "$mod SHIFT, Tab, cyclenext, prev"
         ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
-        ", XF86AudioRaiseVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -i 5; ${lib.getExe pkgs.quickshell} ipc -p ${hs.quickshellConfigDir} -n call audio notifyChange'"
-        ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe pkgs.quickshell} ipc -p ${hs.quickshellConfigDir} -n call audio notifyChange'"
-        ", XF86AudioMute, exec, sh -lc '${lib.getExe pkgs.pamixer} -t; ${lib.getExe pkgs.quickshell} ipc -p ${hs.quickshellConfigDir} -n call audio notifyChange'"
+        ", XF86AudioRaiseVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -i 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
+        ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
+        ", XF86AudioMute, exec, sh -lc '${lib.getExe pkgs.pamixer} -t; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
         ", XF86AudioMicMute, exec, ${lib.getExe pkgs.pamixer} --default-source -t"
       ];
       bindm = [
@@ -169,5 +169,6 @@ in {
     hs.hyprNixosStatus
     hs.hyprNixosTerm
     hs.hyprQuickshellReload
+    hs.hyprQuickshellIpc
   ];
 }
