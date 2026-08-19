@@ -412,14 +412,44 @@ check_placeholder_hardware() {
   fi
 }
 
-check_untracked_flake_inputs() {
-  ((${#UNTRACKED_FLAKE_INPUTS[@]} == 0)) && return 0
-
-  error "Refusing to build while configuration inputs are untracked."
-  error "A Git flake cannot see them. Review and stage the intended files, for example:"
+print_untracked_add_hint() {
   printf '  git -C %q add' "$NIXOS_DIR" >&2
   printf ' %q' "${UNTRACKED_FLAKE_INPUTS[@]}" >&2
   printf '\n' >&2
+}
+
+# Git flakes copy tracked (including dirty) files, not untracked ones. Offer to
+# stage configuration inputs instead of failing until the user runs git add.
+offer_stage_untracked_flake_inputs() {
+  ((${#UNTRACKED_FLAKE_INPUTS[@]} == 0)) && return 0
+
+  heading "Untracked flake inputs"
+  warn "A Git flake cannot see these until they are staged:"
+  printf '    - %s\n' "${UNTRACKED_FLAKE_INPUTS[@]}"
+
+  local stage=0
+  if [[ "$NO_PROMPT" == "1" ]]; then
+    warn "Staging them because --yes was passed."
+    stage=1
+  elif [[ -t 0 ]] && prompt_confirm "Stage these files and continue?" "yes"; then
+    stage=1
+  fi
+
+  if ((stage)); then
+    git -C "$NIXOS_DIR" add -- "${UNTRACKED_FLAKE_INPUTS[@]}"
+    ok "Staged ${#UNTRACKED_FLAKE_INPUTS[@]} file(s) so the flake can see them."
+    collect_change_scope
+    if ((${#UNTRACKED_FLAKE_INPUTS[@]})); then
+      error "Still untracked after staging; aborting."
+      print_untracked_add_hint
+      return 1
+    fi
+    return 0
+  fi
+
+  error "Refusing to build while configuration inputs are untracked."
+  error "Stage them, or re-run and accept the prompt, for example:"
+  print_untracked_add_hint
   return 1
 }
 
@@ -581,7 +611,8 @@ main() {
     return 2
   }
   # Keep this Git-backed: unlike path:, it cannot accidentally copy ignored
-  # secrets into the world-readable Nix store. Untracked inputs are blocked.
+  # secrets into the world-readable Nix store. Untracked inputs are offered
+  # for staging (and still blocked if declined).
   FLAKE_ROOT="$NIXOS_DIR"
   FLAKE="$FLAKE_ROOT#$NIXOS_HOST"
   TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
@@ -635,7 +666,7 @@ main() {
     return 0
   fi
 
-  check_untracked_flake_inputs
+  offer_stage_untracked_flake_inputs
 
   if [[ "$ACTION" == "check" ]]; then
     info "Validating all tracked/staged flake outputs"

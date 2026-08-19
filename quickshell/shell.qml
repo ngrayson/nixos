@@ -164,6 +164,9 @@ ShellRoot {
 	// Fullscreen overlay that looks like the lock but is not WlSessionLock. Esc dismisses.
 	property bool lockPreview: false
 
+	// Centered power menu (sleep / hibernate / restart / shutdown). Esc dismisses.
+	property bool powerMenuVisible: false
+
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
 	property bool trayCollapsed: false
 
@@ -312,6 +315,8 @@ ShellRoot {
 			return micTooltipText();
 		if (kind === "audio")
 			return audioTooltipText();
+		if (kind === "power")
+			return "Power";
 		return "";
 	}
 
@@ -844,6 +849,13 @@ ShellRoot {
 
 	FileView {
 		path: `${shellRoot.qsSourceDir}/LockSurface.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/PowerMenu.qml`
 		watchChanges: true
 		printErrors: false
 		onFileChanged: shellRoot.markQsReloadPending()
@@ -1454,6 +1466,27 @@ ShellRoot {
 								text: shellRoot.audioIcon()
 							}
 						}
+
+						MouseArea {
+							id: powerPill
+							implicitWidth: 22
+							implicitHeight: 22
+							hoverEnabled: true
+							onClicked: {
+								barWindow.disarmTip();
+								shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
+							}
+							onEntered: barWindow.armTip(powerPill, "power")
+							onExited: barWindow.disarmTip()
+
+							Text {
+								anchors.centerIn: parent
+								color: Theme.text
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: String.fromCodePoint(0xF0425)
+							}
+						}
 					}
 				}
 
@@ -1517,6 +1550,41 @@ ShellRoot {
 		// Silent (no pill flash) so the first click cycles from the real level.
 		shellRoot.refreshKbdBrightness();
 		shellRoot.refreshNixosStatus(false);
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: powerMenuWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = shellRoot.centerOutputScreen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool menuOpen: shellRoot.powerMenuVisible
+
+			screen: modelData
+			visible: menuOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: menuOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-power-menu-" + modelData.name
+			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			PowerMenu {
+				anchors.fill: parent
+				active: powerMenuWin.menuOpen && powerMenuWin.isCenterScreen
+				onDismissed: shellRoot.powerMenuVisible = false
+			}
+		}
 	}
 
 	Variants {
