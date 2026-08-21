@@ -1,5 +1,5 @@
 {
-  description = "NixOS configurations for Tawa, Theseus, and cloud hosts";
+  description = "NixOS configurations for Tawa, Theseus, Hearth, and cloud hosts";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -55,6 +55,11 @@
       Theseus = mkHost [
         nixos-hardware.nixosModules.framework-amd-ai-300-series
         ./hosts/Theseus/configuration.nix
+      ];
+
+      Hearth = mkHost [
+        nixos-hardware.nixosModules.microsoft-surface-common
+        ./hosts/Hearth/configuration.nix
       ];
 
       Gcp = mkHost [

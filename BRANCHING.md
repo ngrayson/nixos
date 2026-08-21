@@ -2,8 +2,9 @@
 
 | Branch | Purpose |
 |--------|---------|
-| **`main`** | All hosts as named flake outputs: **Tawa** (desktop), **Theseus** (Framework laptop), **Gcp** (cloud). Each machine builds its own `nixosConfigurations.<hostname>`. |
+| **`main`** | All hosts as named flake outputs: **Tawa** (desktop), **Theseus** (Framework laptop), **Hearth** (Surface Laptop 3 media host), **Gcp** (cloud). Each machine builds its own `nixosConfigurations.<hostname>`. |
 | **`legacy/previous-machine`** | Snapshot of **GitHub `main` before 2026-04** (prior NixOS install history). |
+| **`legacy/surface-standalone`** | Pre-flake standalone Surface Laptop 3 config (hostname `nixos`, Plasma 6, stateVersion 24.05). |
 
 Remote: **`https://github.com/ngrayson/nixos.git`** (`git remote rename nixos origin` if you prefer the usual name).
 

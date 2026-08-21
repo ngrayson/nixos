@@ -10,6 +10,7 @@
   schemes = {
     izar = import ./schemes/izar.nix;
     lilac-ash = import ./schemes/lilac-ash.nix;
+    ghost = import ./schemes/ghost.nix;
   };
   hostName =
     if nixosConfig == null

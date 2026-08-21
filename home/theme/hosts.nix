@@ -1,6 +1,6 @@
 # Per-machine appearance. Edit this file to change wallpaper or color scheme.
 #
-# `scheme` must be a key in ./schemes/ (izar | lilac-ash).
+# `scheme` must be a key in ./schemes/ (izar | lilac-ash | ghost).
 # `wallpaper` is a repo-relative path from this file.
 # `spanMonitors`: Tawa spans one image across heads via rwpspread; other hosts
 # use Stylix Hyprpaper with a single wallpaper.
@@ -16,6 +16,13 @@
     scheme = "lilac-ash";
     wallpaper = ../../login-bg.png;
     wallpaperName = "login-bg.png";
+    spanMonitors = false;
+  };
+
+  Hearth = {
+    scheme = "ghost";
+    wallpaper = ../../telePole.jpg;
+    wallpaperName = "telePole.jpg";
     spanMonitors = false;
   };
 }
