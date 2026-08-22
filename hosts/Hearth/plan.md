@@ -19,15 +19,16 @@ the historical record of the flake migration (phases 0-5, complete).
 | Session | Assumed headless | Currently Hyprland desktop (from migration phase 2) — to be **converted to headless** (see H4) |
 | Jellyfin | This node only | Tawa also serves Jellyfin today — **Tawa's will be disabled** (H3) |
 
-Current live facts (2026-08-21): hostname `Hearth`, generation on
-`26.05.20260819`, Wi-Fi only (`GiGstreem`, 172.16.141.38), sshd **inactive**
-until H0 switch, no Tailscale until `tailscale up`, `/srv/media` on the boot
-NVMe (52 GB free), two movies (~12 GB) in the library, playback confirmed
-from a LAN client.
+Current live facts (2026-08-21, post-H0 reboot): hostname `Hearth`,
+generation `26.05.20260819` (`2h9gw6ig…`), sshd key-only on `:22`, Jellyfin
+`Healthy` on `:8096`. Wi-Fi `GiGstreem` `wlp0s20f3` MAC `c8:34:8e:21:97:1b`
+still at DHCP `172.16.141.38/24`. Tailnet `ngrayson.github`
+(`hearth.tail6cd822.ts.net` = `100.84.222.78`); peer `pixel-8a`
+(`100.85.252.55`) pings over DERP and then LAN. `/srv/media` still on NVMe
+(52 GB free). HDD not attached yet.
 
-H1 reservation target: Wi-Fi `wlp0s20f3` MAC `c8:34:8e:21:97:1b`, current
-DHCP `172.16.141.38/24` via `172.16.141.1`. Reserve that IP on the GiGstreem
-router so the TV's Jellyfin URL stays stable.
+H1: GiGstreem cannot reserve DHCP. Hearth pins **172.16.141.38/24** locally
+(decision 18). MAC `c8:34:8e:21:97:1b` is informational.
 
 ## 2. Confirmed decisions (2026-08-21)
 
@@ -87,6 +88,10 @@ router so the TV's Jellyfin URL stays stable.
     `IdleAction` is at its default of ignore. The only suspend trigger is
     **lid close while on battery**. Confirmed streaming works lid-closed on
     AC. The sole remaining H4 policy choice is what to do on battery.
+18. **GiGstreem has no DHCP reservations.** Interim H1 pins **172.16.141.38/24**
+    on Hearth's existing NetworkManager `GiGstreem` profile (PSK stays on-box,
+    not in the flake). Collision risk if Hearth is offline and the ISP pool
+    reissues .38 — accepted until the better router / wired LAN.
 
 ## 3. Target architecture
 
@@ -132,14 +137,16 @@ desktop is currently the only recovery console.
   touching the machine.
 
 ### H1 — Wired network + DNS (deferred until better router)
-- Interim (now): Hearth and the LG TV both on GiGstreem Wi-Fi, no static
-  route. Reserve **172.16.141.38** for MAC `c8:34:8e:21:97:1b` (`wlp0s20f3`)
-  on the GiGstreem router so the TV's Jellyfin URL stays stable.
+- Interim (now): Hearth and the LG TV both on GiGstreem Wi-Fi. The ISP
+  gateway has **no DHCP-reservation UI** (decision 18), so Hearth pins
+  **172.16.141.38/24** on the existing `GiGstreem` NM profile (gateway +
+  DNS `172.16.141.1`). MAC `c8:34:8e:21:97:1b` is informational only.
 - Later (new router acquired): USB-A gigabit ethernet adapter (decision 15)
   → switch → TP-Link LAN; static lease; prefer wired over Wi-Fi.
 - Pi Zero W: Pi-hole as LAN DNS (`hearth.home` etc.) when the wired LAN
   lands. Out of scope for this flake unless we NixOS-ify the Pi later.
-- Acceptance (interim): TV plays from Hearth's reserved GiGstreem IP.
+- Acceptance (interim): Hearth holds 172.16.141.38 after reconnect; TV plays
+  from that IP.
   Acceptance (final): Jellyfin reachable via wired IP; LAN DNS resolves.
 
 ### H2 — Storage (HDD tier)
