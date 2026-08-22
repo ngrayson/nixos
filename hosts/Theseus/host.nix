@@ -1,8 +1,16 @@
 # Theseus (Framework laptop) — hostname, hibernation, and host overrides.
 # The Framework AMD AI 300 module is imported by flake.nix.
 {pkgs, ...}: {
+  imports = [
+    ../../common/tailscale.nix
+  ];
+
   networking.hostName = "Theseus";
   system.stateVersion = "26.05";
+
+  # Fingerprint for sudo / polkit / lock. SDDM login stays password-only
+  # (`security.pam.services.login.fprintAuth = false` in common/system.nix).
+  services.fprintd.enable = true;
 
   # Unencrypted install; no luks.devices. hardware-configuration.nix maps
   # ext4 / and vfat /boot by UUID with no crypto_LUKS devices.

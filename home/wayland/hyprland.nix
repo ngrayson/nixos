@@ -65,10 +65,18 @@ in {
         # Keep the orientation chosen by `layoutmsg, togglesplit` when new windows open.
         preserve_split = true;
       };
-      input = {
-        kb_layout = "us";
-        follow_mouse = 1;
-      };
+      input =
+        {
+          kb_layout = "us";
+          follow_mouse = 1;
+        }
+        // lib.optionalAttrs (hostName == "Theseus") {
+          touchpad = {
+            natural_scroll = true;
+            disable_while_typing = true;
+            tap-to-click = true;
+          };
+        };
       # Needed so notification default-actions (Discord, etc.) can raise their window.
       misc = {
         focus_on_activate = true;
@@ -138,6 +146,10 @@ in {
           ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioMute, exec, sh -lc '${lib.getExe pkgs.pamixer} -t; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioMicMute, exec, ${lib.getExe pkgs.pamixer} --default-source -t"
+        ]
+        ++ lib.optionals (hostName == "Theseus") [
+          ", XF86MonBrightnessUp, exec, ${lib.getExe pkgs.brightnessctl} -c backlight set +5%"
+          ", XF86MonBrightnessDown, exec, ${lib.getExe pkgs.brightnessctl} -c backlight set 5%-"
         ];
       bindm = [
         "$mod, mouse:272, movewindow"
