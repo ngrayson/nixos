@@ -80,6 +80,24 @@
     };
   };
 
+  # Seagate IronWolf 4 TB (ST4000NE001) in a USB 3.2 UASP enclosure.
+  # NTFS volume COLD — extant personal archive; do not format.
+  # Layout on the volume: existing folders stay at the root; Jellyfin lives
+  # under media/; seedbox + file-sharing under share/.
+  boot.supportedFilesystems = ["ntfs"];
+  fileSystems."/mnt/cold" = {
+    device = "/dev/disk/by-uuid/22C21140C2111A1D";
+    fsType = "ntfs";
+    options = [
+      "nofail"
+      "x-systemd.device-timeout=10s"
+      "uid=0"
+      "gid=989" # jellyfin
+      "umask=0002"
+      "iocharset=utf8"
+    ];
+  };
+
   # First install of this machine was 24.05 — never bump.
   system.stateVersion = "24.05";
 }

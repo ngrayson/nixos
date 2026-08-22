@@ -24,8 +24,10 @@ generation `26.05.20260819` (`2h9gw6ig…`), sshd key-only on `:22`, Jellyfin
 `Healthy` on `:8096`. Wi-Fi `GiGstreem` `wlp0s20f3` MAC `c8:34:8e:21:97:1b`
 still at DHCP `172.16.141.38/24`. Tailnet `ngrayson.github`
 (`hearth.tail6cd822.ts.net` = `100.84.222.78`); peer `pixel-8a`
-(`100.85.252.55`) pings over DERP and then LAN. `/srv/media` still on NVMe
-(52 GB free). HDD not attached yet.
+(`100.85.252.55`) pings over DERP and then LAN. `/srv/media` still on NVMe. HDD is Seagate IronWolf 4 TB NTFS `COLD`
+(UUID `22C21140C2111A1D`, UASP, ~1.8 T used); mounted at `/mnt/cold`.
+Extant archive stays at the volume root. Jellyfin target is
+`/mnt/cold/media/`; seedbox/file-sharing is `/mnt/cold/share`.
 
 H1: GiGstreem cannot reserve DHCP. Hearth pins **172.16.141.38/24** locally
 (decision 18). MAC `c8:34:8e:21:97:1b` is informational.
@@ -150,13 +152,15 @@ desktop is currently the only recovery console.
   Acceptance (final): Jellyfin reachable via wired IP; LAN DNS resolves.
 
 ### H2 — Storage (HDD tier)
-- Powered UASP hub into the **USB-C** port; HDD and fans on the hub (fans on
-  its power rail). Verify UASP is active: `lsusb -t` shows driver `uas`, not
-  `usb-storage`.
-- Partition/format HDD (ext4), add `fileSystems."/mnt/media"` by UUID with
-  `options = ["nofail" "x-systemd.device-timeout=10s"]` to `host.nix`.
-- Move `/srv/media/*` → `/mnt/media/`; repoint Jellyfin libraries; keep
-  tmpfiles ownership rules (`jellyfin:jellyfin`, group-writable for `wiz`).
+- Disk on hand is a **4 TB Seagate IronWolf** (ST4000NE001) NTFS volume
+  **COLD** with a large extant archive. **Do not format.** UASP is active
+  (`Driver=uas`); the hub is currently enumerating at USB2 480 Mb/s — move
+  it to the USB-C SuperSpeed port when convenient.
+- Mount by UUID at `/mnt/cold` with `nofail` + `x-systemd.device-timeout=10s`.
+- New dirs only: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and
+  `/mnt/cold/share` (seedbox mirror + file sharing). Leave Anime/Music/…
+  at the volume root.
+- Move `/srv/media/*` → `/mnt/cold/media/`; repoint Jellyfin libraries.
 - Delete media from NVMe after verification.
 - Acceptance: playback works from HDD; NVMe holds no media; unplugging the
   HDD does not block boot.

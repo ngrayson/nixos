@@ -239,7 +239,10 @@
     open(dest_path, "w", encoding="utf-8").write(text)
   '';
 
-  colorsPath = "${h}/.local/share/color-schemes/${name}.colors";
+  # Store path — do not read ~/.local/share during activation. linkGeneration is
+  # also after writeBoundary, so a new scheme (e.g. Ghost on Hearth) is not
+  # linked yet when this hook runs.
+  colorsFile = pkgs.writeText "${name}.colors" kdeColors;
 in {
   qt = {
     enable = true;
@@ -247,10 +250,10 @@ in {
     style.name = "breeze";
   };
 
-  xdg.dataFile."color-schemes/${name}.colors".text = kdeColors;
+  xdg.dataFile."color-schemes/${name}.colors".source = colorsFile;
 
   home.activation.kdeColorScheme = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    $DRY_RUN_CMD ${lib.getExe pkgs.python3} ${mergeKdeglobals} ${lib.escapeShellArg colorsPath} ${lib.escapeShellArg kdglobals}
+    $DRY_RUN_CMD ${lib.getExe pkgs.python3} ${mergeKdeglobals} ${colorsFile} ${lib.escapeShellArg kdglobals}
     $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group General --key ColorScheme ${lib.escapeShellArg name}
     $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group General --key Name ${lib.escapeShellArg name}
     $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group KDE --key widgetStyle breeze
