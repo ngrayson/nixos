@@ -1,6 +1,8 @@
 # Cursor Install (This NixOS Setup)
 
-The IDE is **`pkgs.code-cursor`** in [`common/system.nix`](./common/system.nix). Desktop/Albert launchers are owned by [`home/xdg/data.nix`](./home/xdg/data.nix) (templates in [`desktop/applications/cursor.desktop`](./desktop/applications/cursor.desktop)). Do not point those entries at a local AppImage.
+The IDE is **`pkgs.code-cursor`** in [`profiles/workstation.nix`](./profiles/workstation.nix). Desktop/Albert launchers are owned by [`home/xdg/data.nix`](./home/xdg/data.nix) (templates in [`desktop/applications/cursor.desktop`](./desktop/applications/cursor.desktop)). Do not point those entries at a local AppImage.
+
+Conveyor codespaces: pick an available machine type in WizOs Project Settings. `.devcontainer/conveyor/setup.sh` runs `nix flake check` only — never `nixos-rebuild`.
 
 1. Rebuild so `cursor` is on PATH: `os-rebuild switch` (or `sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>`).
 2. In Cursor, run **Install Cursor CLI** from the command palette (agent shim).

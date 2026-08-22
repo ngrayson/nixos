@@ -44,6 +44,8 @@ The script disables OS Login on the instance because this profile deliberately u
 ## Validate without building the image
 
 ```bash
+# Evaluates all four host module graphs (hostname checks). Not formatter-only.
 nix flake check --no-build
+# Real image-build path:
 nix build .#nixosConfigurations.Gcp.config.system.build.toplevel
 ```
