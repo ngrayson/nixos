@@ -1,8 +1,8 @@
 # Entry module for host Theseus (Framework laptop). Build with:
 #   os-rebuild build --host Theseus
-# Before first deploy on real hardware, replace ./hardware-configuration.nix with
-# `nixos-generate-config` output (see file header there). Once its partition-backed
-# swapDevices entry is verified, add ./hibernate.nix to imports.
+# hardware-configuration.nix is the real disk map (/, /boot, partition swap).
+# Confirm UUIDs on-box before activate. Once swap is verified on Theseus,
+# uncomment ./hibernate.nix (do not enable it from a docs-only change).
 {
   config,
   pkgs,

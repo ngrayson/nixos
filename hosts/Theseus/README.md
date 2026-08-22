@@ -1,24 +1,20 @@
 # Theseus: Framework AMD AI 300
 
-The flake imports `nixos-hardware.nixosModules.framework-amd-ai-300-series` for this host. The checked-in `hardware-configuration.nix` is deliberately a non-deployable placeholder.
+The flake imports `nixos-hardware.nixosModules.framework-amd-ai-300-series` for this host.
 
-## Bring in the installed machine
+Checked-in `hardware-configuration.nix` is the **real disk map**:
 
-On Theseus, copy the installer-generated hardware file:
+| Mount | UUID |
+|-------|------|
+| `/` (ext4) | `78da7cc6-e97a-4f75-b5c3-15c07def2efb` |
+| `/boot` (vfat) | `BB07-BF1D` |
+| swap (partition) | `c42d065c-1419-42c6-b230-c46632922e7f` |
 
-```bash
-sudo cp /etc/nixos/hardware-configuration.nix \
-  ~/.config/nixos/hosts/Theseus/hardware-configuration.nix
-```
+Confirm on-box with `lsblk -f` and `findmnt / /boot` before treating this file as source of truth. If they disagree, replace from `nixos-generate-config` **on Theseus**. Never copy Tawa UUIDs.
 
-Before building, inspect it and confirm:
+## LUKS
 
-- `/` and `/boot` use Theseus's real UUIDs.
-- The LUKS mapping matches `lsblk -f`.
-- `swapDevices` names the partition created by “swap with hibernate”.
-- No all-zero placeholder UUID remains.
-
-Do not copy Tawa's hardware file or UUIDs.
+`host.nix` has no `boot.initrd.luks.devices`. Before enabling hibernate, check `lsblk -f` for `crypto_LUKS` and either wire the real UUID or leave an explicit “unencrypted” note. Do not leave `luks-…` template comments.
 
 ## Internal microphone (ALC285)
 
@@ -28,7 +24,7 @@ PipeWire's ALSA card profile merges **Capture** and **Internal Mic Boost** into 
 
 `hibernate.nix` derives `boot.resumeDevice` from exactly one partition-backed `swapDevices` entry and rejects swap files because those require a resume offset.
 
-After verifying the generated swap entry, uncomment `./hibernate.nix` in `configuration.nix`, then:
+The import in `configuration.nix` is still commented (`# ./hibernate.nix`). After verifying the swap UUID on-box, uncomment it, then:
 
 ```bash
 os-rebuild build --host Theseus
@@ -36,4 +32,4 @@ os-rebuild dry-activate --host Theseus
 os-rebuild boot --host Theseus
 ```
 
-Reboot only after reviewing the dry activation. After boot, test `systemctl hibernate` with nonessential applications closed. A normal boot remains the recovery path if resume fails.
+Reboot only after reviewing the dry activation. After boot, test `systemctl hibernate` with nonessential applications closed. A normal boot remains the recovery path if resume fails. Prefer `boot`, not `switch`, for resume-device changes. From Tawa, `os-rebuild build --host Theseus` only — activate on Theseus.
