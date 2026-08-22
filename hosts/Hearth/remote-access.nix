@@ -3,7 +3,14 @@
 # SSH is key-only, matching profiles/server.nix. Extra client keys: append
 # to users.users.wiz.openssh.authorizedKeys.keys (cat ~/.ssh/id_ed25519.pub
 # on Go 2 / Tawa / Theseus).
+<<<<<<< HEAD
 # Tailscale is the shared module (same install as Tawa).
+=======
+#
+# trusted-users + passwordless wheel sudo let Tawa run `hearth-deploy`
+# (nix-copy-closure as wiz, then --use-remote-sudo). Same sudo policy as
+# profiles/server.nix; keep this host-local so Tawa/Theseus stay prompting.
+>>>>>>> 3571a26ee2880f4695b98de73aa4df03b691f18a
 {
   imports = [../../common/tailscale.nix];
 
@@ -21,5 +28,13 @@
     };
   };
 
-  networking.firewall.allowedTCPPorts = [22];
+  services.tailscale.enable = true;
+
+  networking.firewall = {
+    allowedTCPPorts = [22];
+    trustedInterfaces = ["tailscale0"];
+  };
+
+  nix.settings.trusted-users = ["@wheel"];
+  security.sudo.wheelNeedsPassword = false;
 }

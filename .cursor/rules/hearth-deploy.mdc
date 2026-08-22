@@ -1,0 +1,16 @@
+---
+description: Build Hearth on Tawa, activate with hearth-deploy
+globs: "{scripts/hearth-deploy.sh,hosts/Hearth/**,home/programs/ssh-hearth.nix}"
+alwaysApply: false
+---
+
+# hearth-deploy
+
+`scripts/hearth-deploy.sh` (zsh alias `hearth-deploy`). Daily loop for host **Hearth**: evaluate and build on Tawa, copy + activate over OpenSSH.
+
+- Run it on **Tawa** (or Theseus). Refuse activation if `hostname` is `Hearth`.
+- Command: `nixos-rebuild <switch|boot|dry-activate> --flake ~/.config/nixos#Hearth --target-host wiz@hearth.tail6cd822.ts.net --use-remote-sudo`. Omit `--build-host` so the build stays local.
+- Talk to `sshd` on port 22 (MagicDNS / tailnet), not Tailscale SSH.
+- Do not `os-rebuild switch --host Hearth` on Tawa (activates the wrong machine). Do not write Tawa's `applied.json` after a Hearth deploy.
+- Kernel, initrd, disk, or the H4 headless flip: `boot`, then reboot Hearth. `test` is not a rollback.
+- One-time Hearth settings live in `hosts/Hearth/remote-access.nix` (`trusted-users`, passwordless wheel sudo). Those need one on-box Hearth `os-rebuild switch` before the first remote deploy.

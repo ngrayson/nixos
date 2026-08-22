@@ -240,6 +240,7 @@ in {
       alejandra
       hyprmon
       fzf
+      gum
       libnotify
       appimageRunWithCurl
       topgrade
