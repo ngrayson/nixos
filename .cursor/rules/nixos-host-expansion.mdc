@@ -11,7 +11,7 @@ alwaysApply: false
 - Add the case-sensitive host output to `nixosConfigurations` in `flake.nix`; put `nixos-hardware` modules in its module list.
 - Never copy hardware UUIDs, LUKS mappings, swap devices, or resume offsets between machines.
 - Set `system.stateVersion` once in `host.nix` to the machine's initial install release; do not bump it during upgrades.
-- Put server-safe defaults in `common/base.nix`. Until `profiles/workstation.nix` exists, the Tawa/Theseus desktop stack (display managers, gaming, VPN, Home Manager) lives in `common/system.nix` — do not grow `common/base.nix` with those. Hearth uses `profiles/media-desktop.nix`; Gcp uses `profiles/server.nix`.
+- Put server-safe defaults in `common/base.nix`. Tawa/Theseus import `profiles/workstation.nix` (display managers, gaming, VPN, Home Manager). Do not grow `common/base.nix` with those. Hearth uses `profiles/media-desktop.nix`; Gcp uses `profiles/server.nix`. `common/system.nix` is a deprecated re-export of the workstation profile.
 - Validate a host in this order: `nix flake check --no-build`, `os-rebuild build --host <Name>`, then `os-rebuild dry-activate --host <Name>`.
 - Prefer `boot` for kernel, initrd, disk, LUKS, or hibernation changes. Ask the user before rebooting or restarting their graphical session.
 - Do not activate a host whose placeholder hardware configuration still contains all-zero UUIDs.

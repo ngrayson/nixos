@@ -18,7 +18,7 @@ Host **shapes differ**. Do not copy the Tawa/Theseus import list onto Hearth or 
 
 | Host | `configuration.nix` imports | Hardware file |
 |------|-----------------------------|---------------|
-| **Tawa**, **Theseus** | `../../common/system.nix`, `./hardware-configuration.nix`, `./host.nix` | Required (`nixos-generate-config` for that machine) |
+| **Tawa**, **Theseus** | `../../profiles/workstation.nix`, `./hardware-configuration.nix`, `./host.nix` | Required (`nixos-generate-config` for that machine) |
 | **Hearth** | `../../profiles/media-desktop.nix`, `./hardware-configuration.nix`, `./host.nix`, plus host modules (Jellyfin, remote-access) | Required |
 | **Gcp** | `../../profiles/server.nix`, GCE image module, `./host.nix` | **None** — see [`scripts/gcp/`](./scripts/gcp/) |
 
@@ -30,7 +30,7 @@ Under **`hosts/<hostname>/`** for **this** machine:
 
 Hardware modules from `nixos-hardware` belong in that host's module list in [`flake.nix`](./flake.nix), not in a channel-style `<nixos-hardware/...>` import.
 
-Until `profiles/workstation.nix` exists, the Tawa/Theseus desktop stack lives in **[`common/system.nix`](./common/system.nix)**. Server-safe defaults stay in **[`common/base.nix`](./common/base.nix)**. VPN is **[`common/vpn-vortix.nix`](./common/vpn-vortix.nix)** (imported from the workstation stack), not `environment.etc` in `common/system.nix`. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.). Hearth uses the slimmer [`home/media.nix`](./home/media.nix).
+The Tawa/Theseus desktop stack lives in **[`profiles/workstation.nix`](./profiles/workstation.nix)**. Server-safe defaults stay in **[`common/base.nix`](./common/base.nix)**. VPN is **[`common/vpn-vortix.nix`](./common/vpn-vortix.nix)** (imported from the workstation profile). Shared SDDM/Albert/appimage helpers live under **`common/`**. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.). Hearth uses the slimmer [`home/media.nix`](./home/media.nix).
 
 ## 4. `system.stateVersion`
 

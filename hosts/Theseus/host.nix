@@ -9,7 +9,7 @@
   system.stateVersion = "26.05";
 
   # Fingerprint for sudo / polkit / lock. SDDM login stays password-only
-  # (`security.pam.services.login.fprintAuth = false` in common/system.nix).
+  # (`security.pam.services.login.fprintAuth = false` in profiles/workstation.nix).
   services.fprintd.enable = true;
 
   # Unencrypted install; no luks.devices. hardware-configuration.nix maps
