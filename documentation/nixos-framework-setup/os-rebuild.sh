@@ -428,7 +428,14 @@ EOF
     base) EDIT_FILE="$NIXOS_DIR/common/system.nix" ;;
     flake) EDIT_FILE="$NIXOS_DIR/flake.nix" ;;
     host) EDIT_FILE="$NIXOS_DIR/hosts/$NIXOS_HOST/host.nix" ;;
-    hardware) EDIT_FILE="$NIXOS_DIR/hosts/$NIXOS_HOST/hardware-configuration.nix" ;;
+    hardware)
+      if [[ "$NIXOS_HOST" == "Gcp" ]]; then
+        info "Gcp has no hardware-configuration.nix — image path is scripts/gcp/"
+        EDIT_FILE="$NIXOS_DIR/scripts/gcp/build-image.sh"
+      else
+        EDIT_FILE="$NIXOS_DIR/hosts/$NIXOS_HOST/hardware-configuration.nix"
+      fi
+      ;;
     home) EDIT_FILE="$NIXOS_DIR/home/default.nix" ;;
     *)
       error "Unknown edit scope '$scope' (use base, flake, host, hardware, or home)"

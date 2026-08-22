@@ -28,7 +28,7 @@
   "hostRequirements": {
     "memory": "8gb",
     "cpus": 4,
-    "storage": "16gb"
+    "storage": "32gb"
   },
   "customizations": {
     "vscode": {

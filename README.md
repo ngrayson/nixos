@@ -23,4 +23,4 @@ Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Gcp}`.
 
 `legacy/surface-standalone` is listed in BRANCHING.md as the pre-flake Surface rollback. It is **not** on `origin` today — do not invent the branch.
 
-Conveyor codespaces need a valid machine type in project settings; they must never `nixos-rebuild` (eval / format only).
+`nix flake check` evaluates all four hostnames (not full toplevel — too heavy for 8 GB codespaces). Conveyor codespaces still need a **valid machine type in WizOs Project Settings** (launch already failed HTTP 400); they must never `nixos-rebuild`.
