@@ -12,6 +12,7 @@
     ./programs/slippi.nix
     ./programs/zsh.nix
     ./programs/git.nix
+    ./programs/ssh-hearth.nix
     ./wayland/hyprland.nix
     ./services/dunst.nix
     ./services/polkit-agent.nix

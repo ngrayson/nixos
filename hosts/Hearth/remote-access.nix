@@ -3,6 +3,10 @@
 # SSH is key-only, matching profiles/server.nix. Extra client keys: append
 # to users.users.wiz.openssh.authorizedKeys.keys (cat ~/.ssh/id_ed25519.pub
 # on Go 2 / Tawa / Theseus).
+#
+# trusted-users + passwordless wheel sudo let Tawa run `hearth-deploy`
+# (nix-copy-closure as wiz, then --use-remote-sudo). Same sudo policy as
+# profiles/server.nix; keep this host-local so Tawa/Theseus stay prompting.
 {
   users.users.wiz.openssh.authorizedKeys.keys = [
     # github.com/ngrayson.keys
@@ -24,4 +28,7 @@
     allowedTCPPorts = [22];
     trustedInterfaces = ["tailscale0"];
   };
+
+  nix.settings.trusted-users = ["@wheel"];
+  security.sudo.wheelNeedsPassword = false;
 }
