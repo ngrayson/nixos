@@ -1,7 +1,8 @@
 [Desktop Entry]
 Name=Cursor - URL Handler
 Comment=Open cursor:// links (e.g. MCP OAuth callbacks)
-Exec=env GUI_SESSION_STDIO_LOG=/home/wiz/.cache/cursor-url-handler-stdio.log /home/wiz/bin/gui-session-launch.sh /run/current-system/sw/bin/appimage-run /home/wiz/bin/Cursor-3.2.11-x86_64.AppImage --open-url %U
+TryExec=/run/current-system/sw/bin/cursor
+Exec=/run/current-system/sw/bin/cursor --open-url %U
 Icon=co.anysphere.cursor
 Type=Application
 NoDisplay=true
