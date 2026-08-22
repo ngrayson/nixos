@@ -69,6 +69,10 @@ in {
     };
     Service = {
       ExecStart = lib.getExe pkgs.albert;
+      # Apps started from Albert (Firefox, Discord, …) stay in this cgroup.
+      # Default KillMode=control-group then murders them on `restart` or when
+      # HM rewrites the unit during switch.
+      KillMode = "process";
       Restart = "on-failure";
       RestartSec = 5;
     };
