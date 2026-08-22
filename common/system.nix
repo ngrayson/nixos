@@ -96,10 +96,11 @@ in {
   services.fwupd.enable = true;
   powerManagement.enable = true;
 
-  # An eDP panel can return from s2idle with its backlight stage still dark. The user
-  # session cannot write these sysfs nodes (root-owned, wiz is not in `video`), so
-  # re-assert power and re-apply the current level here, where resume runs as root.
-  powerManagement.resumeCommands = ''
+  # Laptop-only: eDP backlight can return from s2idle dark. The user session
+  # cannot write these sysfs nodes (root-owned), so re-assert here as root.
+  # Tawa is a desktop — do not run this, and do not suspend on lid close.
+  # Theseus hibernate.nix mkForce's HandleLidSwitch* to suspend-then-hibernate.
+  powerManagement.resumeCommands = lib.mkIf (config.networking.hostName == "Theseus") ''
     for bl in /sys/class/backlight/*; do
       [ -e "$bl/brightness" ] || continue
       if [ -e "$bl/bl_power" ]; then
@@ -112,8 +113,14 @@ in {
 
   services.logind.settings = {
     Login = {
-      HandleLidSwitch = "suspend";
-      HandleLidSwitchExternalPower = "suspend";
+      HandleLidSwitch =
+        if config.networking.hostName == "Theseus"
+        then "suspend"
+        else "ignore";
+      HandleLidSwitchExternalPower =
+        if config.networking.hostName == "Theseus"
+        then "suspend"
+        else "ignore";
       HandleLidSwitchDocked = "ignore";
       # Default short-press poweroff is easy to hit while probing a black screen after
       # resume, which shuts the machine down mid-session. Require a deliberate hold.
@@ -214,7 +221,11 @@ in {
   users.defaultUserShell = pkgs.zsh;
 
   programs.nix-ld.enable = true;
-  programs.nix-ld.libraries = with pkgs; [];
+  programs.nix-ld.libraries = with pkgs; [
+    stdenv.cc.cc
+    zlib
+    openssl
+  ];
 
   programs.appimage = {
     enable = true;
@@ -276,7 +287,6 @@ in {
       prismlauncher
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum
-      # pkgs.nwg-look
       sassc
       gnome-themes-extra
       gtk-engine-murrine

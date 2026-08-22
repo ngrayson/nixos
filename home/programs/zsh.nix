@@ -27,17 +27,15 @@
       vpn-froot = "vpn-froot";
       "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor-agent";
       agent = "cd ~/Stellarium && ~/.local/bin/cursor-agent --resume";
-      clock = "~/.cargo/bin/tenki --mode snow -l 1000 --wind disable";
       config = "code ~/.config/nixos";
       fetch = "fastfetch";
-      keyboard-flash = "sudo sleep 1; cd ~/pocket-reform/pocket-reform-keyboard-fw/pocket-hid; ./build.sh;echo \"flashing in 10s\";sleep 7; echo \"flashing in 3s\"; sleep 4;sudo picotool load build/pocket-hid.uf2 -f";
       kitty = "kitty 2>/dev/null";
       l = "ls -CF";
       la = "ls -A";
       ll = "ls -ll";
       moon = "curl \"wttr.in/moon?Fun\"";
       notes = "obsidian";
-      ohmyzshconfig = "micro ~/.config/nixos/home/default.nix";
+      ohmyzshconfig = "micro ~/.config/nixos/home/programs/zsh.nix";
       "os-rebuild" = "bash ~/.config/nixos/documentation/nixos-framework-setup/os-rebuild.sh";
       "hearth-deploy" = "bash ~/.config/nixos/scripts/hearth-deploy.sh";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
@@ -46,7 +44,7 @@
       "wifi-connect" = "nmcli device wifi connect";
       "wifi-connection" = "nmcli connection show";
       "wifi-list" = "nmcli device wifi list";
-      zshconfig = "micro ~/.config/nixos/home/default.nix";
+      zshconfig = "micro ~/.config/nixos/home/programs/zsh.nix";
       # Hyprland: edit `./hypr/<hostname>/monitors.conf` (hostname must match `networking.hostName`).
       hyprmon-cfg = "HYPRLAND_CONFIG=\"$HOME/.config/nixos/hypr/$(hostname)/monitors.conf\" ${lib.getExe pkgs.hyprmon}";
     };

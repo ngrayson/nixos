@@ -1,5 +1,4 @@
-# Tawa (desktop) — hostname, optional nixos-hardware, LUKS, kernelParams.
-# Other hosts: add `hosts/<name>/host.nix` with their `networking.hostName` and imports.
+# Tawa (desktop) — hostname, AMD, SDDM xrandr. Intel desktop, no LUKS.
 {
   pkgs,
   lib,
@@ -43,7 +42,4 @@
       "$XRANDR" --query || true
     } >>"$LOG" 2>&1
   '';
-
-  # boot.initrd.luks.devices."luks-…".device = "/dev/disk/by-uuid/…";
-  # boot.kernelParams = ["amd_pstate=active"];
 }

@@ -5,7 +5,7 @@
     settings = {
       user = {
         name = "wiz";
-        email = "windows@example.com";
+        email = "intercomman14@gmail.com";
       };
       core = {
         editor = "micro";
