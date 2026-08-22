@@ -6,6 +6,7 @@
   ...
 }: {
   imports = [
+    ../../common/tailscale.nix
     ./jellyfin.nix
     ./docker.nix
     ./lan.nix

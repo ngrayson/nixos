@@ -3,7 +3,10 @@
 # SSH is key-only, matching profiles/server.nix. Extra client keys: append
 # to users.users.wiz.openssh.authorizedKeys.keys (cat ~/.ssh/id_ed25519.pub
 # on Go 2 / Tawa / Theseus).
+# Tailscale is the shared module (same install as Tawa).
 {
+  imports = [../../common/tailscale.nix];
+
   users.users.wiz.openssh.authorizedKeys.keys = [
     # github.com/ngrayson.keys
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO3Tk/SJjoGA1RR6NvGAQ+Lu7WZyuk3KydyhCiIldliZ"
@@ -18,10 +21,5 @@
     };
   };
 
-  services.tailscale.enable = true;
-
-  networking.firewall = {
-    allowedTCPPorts = [22];
-    trustedInterfaces = ["tailscale0"];
-  };
+  networking.firewall.allowedTCPPorts = [22];
 }
