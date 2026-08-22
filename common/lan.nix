@@ -2,15 +2,14 @@
 # Host modules import this — do not hardcode LAN addresses in host.nix.
 #
 # Topology (2026-08): GiGstreem LAN is 172.16.141.0/24 (gw .1). AncientGlade
-# is a downstream Wi-Fi router (WAN .4, LAN 192.168.0.0/24). Theseus stays on
-# DHCP and must not be added here. Eval throws if any two names share an IP.
+# is a downstream Wi-Fi router (WAN .4, LAN 192.168.0.0/24). Tawa and Theseus
+# stay on DHCP. Eval throws if any two names share an IP.
 let
   prefix = 24;
   gateway = "172.16.141.1";
   dns = "172.16.141.1";
 
   hosts = {
-    Tawa = "172.16.141.23";
     Hearth = "172.16.141.38";
   };
 

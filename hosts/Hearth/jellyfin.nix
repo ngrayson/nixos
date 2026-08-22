@@ -3,10 +3,6 @@
 # Enable VAAPI in Dashboard → Playback → Transcoding.
 {pkgs, ...}: {
   systemd.tmpfiles.rules = [
-    "d /srv/media 0775 jellyfin jellyfin -"
-    "d /srv/media/movies 0775 jellyfin jellyfin -"
-    "d /srv/media/tv 0775 jellyfin jellyfin -"
-    "d /srv/media/music 0775 jellyfin jellyfin -"
     # HDD (COLD). Created only when /mnt/cold is mounted; nofail so a missing
     # disk does not fail tmpfiles. Existing archive folders are left alone.
     "d /mnt/cold/media 0775 jellyfin jellyfin -"

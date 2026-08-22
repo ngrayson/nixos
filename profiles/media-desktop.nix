@@ -67,6 +67,19 @@ in {
   services.displayManager.sddm.enable = true;
   services.displayManager.sddm.wayland.enable = false;
   services.displayManager.sddm.theme = "breeze-login";
+  # breeze-login is Plasma Breeze QML. plasma6.enable injects these into the
+  # greeter wrap; Hearth does not enable Plasma, so list them here.
+  services.displayManager.sddm.extraPackages = with pkgs.kdePackages; [
+    breeze
+    breeze-icons
+    kirigami
+    libplasma
+    plasma-workspace
+    plasma5support
+    qt5compat
+    qtsvg
+    qtvirtualkeyboard
+  ];
   services.displayManager.sddm.settings.Theme = {
     CursorTheme = "breeze_cursors";
     CursorSize = 24;
@@ -124,6 +137,8 @@ in {
   environment.systemPackages =
     [sddmThemeBreezeLogin]
     ++ (with pkgs; [
+      # Xcursor looks in the system profile; extraPackages only wrap QML.
+      kdePackages.breeze
       wget
       micro
       gh

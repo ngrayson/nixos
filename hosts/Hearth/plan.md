@@ -19,18 +19,13 @@ the historical record of the flake migration (phases 0-5, complete).
 | Session | Assumed headless | Currently Hyprland desktop (from migration phase 2) — to be **converted to headless** (see H4) |
 | Jellyfin | This node only | Tawa also serves Jellyfin today — **Tawa's will be disabled** (H3) |
 
-Current live facts (2026-08-21, post-H0 reboot): hostname `Hearth`,
-generation `26.05.20260819` (`2h9gw6ig…`), sshd key-only on `:22`, Jellyfin
-`Healthy` on `:8096`. Wi-Fi `GiGstreem` `wlp0s20f3` MAC `c8:34:8e:21:97:1b`
-still at DHCP `172.16.141.38/24`. Tailnet `ngrayson.github`
-(`hearth.tail6cd822.ts.net` = `100.84.222.78`); peer `pixel-8a`
-(`100.85.252.55`) pings over DERP and then LAN. `/srv/media` still on NVMe. HDD is Seagate IronWolf 4 TB NTFS `COLD`
-(UUID `22C21140C2111A1D`, UASP, ~1.8 T used); mounted at `/mnt/cold`.
-Extant archive stays at the volume root. Jellyfin target is
-`/mnt/cold/media/`; seedbox/file-sharing is `/mnt/cold/share`.
-
-H1: GiGstreem cannot reserve DHCP. Hearth pins **172.16.141.38/24** locally
-(decision 18). MAC `c8:34:8e:21:97:1b` is informational.
+Current live facts (2026-08-21, post-H2): hostname `Hearth`, sshd key-only,
+Jellyfin `Healthy`. **Wi-Fi is AncientGlade `192.168.0.133` during agent
+sessions** (Cursor cannot reach this machine on GiGstreem yet). GiGstreem
+profile stays pinned at **172.16.141.38/24** for TV hosting. Tailnet
+`ngrayson.github`: `hearth.tail6cd822.ts.net` = `100.84.222.78`. HDD is
+Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
+`/srv/media` emptied. Unplug drill passed (`nofail`).
 
 ## 2. Confirmed decisions (2026-08-21)
 
@@ -94,12 +89,23 @@ H1: GiGstreem cannot reserve DHCP. Hearth pins **172.16.141.38/24** locally
     on Hearth's existing NetworkManager `GiGstreem` profile (PSK stays on-box,
     not in the flake). Collision risk if Hearth is offline and the ISP pool
     reissues .38 — accepted until the better router / wired LAN.
+19. **Seedbox: Ultra.cc.** Account and slot ready before H8. Syncthing (or
+    rsync/SSH) pulls completed files into `/mnt/cold/share`. Tailnet join vs
+    native Syncthing is decided when H8 lands. Zero local seeding still holds.
+20. **Agent sessions stay on AncientGlade** (`192.168.0.133`) until remote
+    development works (SSH/Tailscale from Go 2). Cursor cannot reach Hearth
+    on GiGstreem. TV hosting still requires GiGstreem `172.16.141.38` — flip
+    SSID for playback tests, then come back to AncientGlade to continue
+    this agent. Fixed by H0-from-elsewhere / H7, not by another LAN hack.
 
 ## 3. Target architecture
 
 ```
-Interim (now, decision 13):
-Internet ── GiGstreem router ── Wi-Fi: Hearth + LG TV (no static route)
+Interim (now, decisions 13 + 20):
+Internet ── GiGstreem ── Wi-Fi: LG TV (Jellyfin at 172.16.141.38 when Hearth
+                    │        is on this SSID)
+                    └── AncientGlade (NAT) ── Hearth 192.168.0.133
+                         (Cursor agent sessions until remote-dev works)
 
 Final (after better router acquired):
 Internet ── new router ── TP-Link router (NAT, dedicated server LAN)
@@ -109,7 +115,7 @@ Internet ── new router ── TP-Link router (NAT, dedicated server LAN)
                       Hearth  Pi Zero W  (future wired clients)
                     (USB-A NIC (Pi-hole
                      or hub NIC) DNS)
-Tailscale mesh: Hearth ⇄ Surface Go 2 ⇄ phones ⇄ (seedbox?)
+Tailscale mesh: Hearth ⇄ Surface Go 2 ⇄ phones ⇄ Ultra.cc (H8)
 LG TV: local LAN path to Jellyfin (cannot run Tailscale) — same LAN as Hearth
 ```
 
@@ -237,10 +243,10 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 5. Notifications (Discord webhook via H5 secret) on start/success/rollback.
 
 ### H8 — Acquisition pipeline (seedbox-first)
-- Seedbox downloads; **Syncthing** pulls completed files to Hearth
-  (staging on NVMe if small, direct to HDD otherwise); tag-based routing to
-  `/mnt/media/{movies,tv,music}` via a small systemd path unit or the future
-  homepage API.
+- **Provider (decision 19): Ultra.cc** — stand up the slot before this phase.
+- Seedbox downloads; **Syncthing** pulls completed files to
+  `/mnt/cold/share`; tag-based routing to `/mnt/cold/media/{movies,tv,music}`
+  via a small systemd path unit or the future homepage API.
 - VPN-piped local download as fallback only: reuse the repo's existing VPN
   stack (`common/vpn-vortix.nix` stunnel/FrootVPN — server-safe subset) or a
   dedicated namespace so torrent traffic cannot leak; upload hard-capped at 0.
@@ -270,8 +276,9 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 
 1. **Better router:** which model / when — gates the final H1 wired topology.
    (TBD.)
-2. **Seedbox:** which provider/host, and is it joined to the tailnet for
-   Syncthing, or synced over its own protocol? **Decide before H8.**
+2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
+   sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
+   decided).
 3. **`hms.wiztow.org` exposure:** tailnet-only (private, simplest) or public
    via Tailscale Funnel (Jellyfin auth is the only gate)? Pick when H6 lands.
 4. **Battery policy after headless (H4):** keep lid-close-on-battery =
