@@ -14,7 +14,7 @@ Confirm on-box with `lsblk -f` and `findmnt / /boot` before treating this file a
 
 ## LUKS
 
-`host.nix` has no `boot.initrd.luks.devices`. Before enabling hibernate, check `lsblk -f` for `crypto_LUKS` and either wire the real UUID or leave an explicit “unencrypted” note. Do not leave `luks-…` template comments.
+Unencrypted install — `host.nix` has no `boot.initrd.luks.devices`. Recheck `lsblk -f` for `crypto_LUKS` after a reinstall; if one appears, wire the real UUID (do not leave `luks-…` placeholders).
 
 ## Internal microphone (ALC285)
 
@@ -24,7 +24,7 @@ PipeWire's ALSA card profile merges **Capture** and **Internal Mic Boost** into 
 
 `hibernate.nix` derives `boot.resumeDevice` from exactly one partition-backed `swapDevices` entry and rejects swap files because those require a resume offset.
 
-The import in `configuration.nix` is still commented (`# ./hibernate.nix`). After verifying the swap UUID on-box, uncomment it, then:
+`configuration.nix` imports `./hibernate.nix`. After verifying the swap UUID on-box:
 
 ```bash
 os-rebuild build --host Theseus
@@ -32,4 +32,4 @@ os-rebuild dry-activate --host Theseus
 os-rebuild boot --host Theseus
 ```
 
-Reboot only after reviewing the dry activation. After boot, test `systemctl hibernate` with nonessential applications closed. A normal boot remains the recovery path if resume fails. Prefer `boot`, not `switch`, for resume-device changes. From Tawa, `os-rebuild build --host Theseus` only — activate on Theseus.
+Reboot only after reviewing the dry activation. After boot, test `systemctl hibernate` with nonessential applications closed. A normal boot remains the recovery path if resume fails. Prefer `boot`, not `switch`, for resume-device changes. From Tawa, `os-rebuild build --host Theseus` only — activate on Theseus. Hypridle's 1800s listener is Theseus-only `suspend-then-hibernate` so it matches logind lid policy; Tawa and Hearth stay on `suspend`.
