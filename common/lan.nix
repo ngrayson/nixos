@@ -7,7 +7,9 @@
 let
   prefix = 24;
   gateway = "172.16.141.1";
-  dns = "172.16.141.1";
+  # Public resolvers — ISP DNS plus Tailscale MagicDNS (accept-dns) hung
+  # cache.nixos.org from Hearth on GiGstreem. Space-separated for nmcli ipv4.dns.
+  dns = "1.1.1.1,8.8.8.8";
 
   hosts = {
     Hearth = "172.16.141.38";

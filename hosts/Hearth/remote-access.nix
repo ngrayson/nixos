@@ -9,7 +9,15 @@
 # (nix-copy-closure as wiz, then --use-remote-sudo). Same sudo policy as
 # profiles/server.nix; keep this host-local so Tawa/Theseus stay prompting.
 {
+  lib,
+  ...
+}: {
   imports = [../../common/tailscale.nix];
+
+  # MagicDNS as the only resolv.conf nameserver hung public lookups (nix
+  # cache) on GiGstreem. Inbound tailnet SSH does not need accept-dns.
+  services.tailscale.extraSetFlags = lib.mkForce ["--ssh" "--accept-dns=false"];
+  networking.nameservers = ["1.1.1.1" "8.8.8.8"];
 
   users.users.wiz.openssh.authorizedKeys.keys = [
     # github.com/ngrayson.keys
