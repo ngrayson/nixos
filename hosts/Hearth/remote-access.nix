@@ -22,6 +22,9 @@
   users.users.wiz.openssh.authorizedKeys.keys = [
     # github.com/ngrayson.keys
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO3Tk/SJjoGA1RR6NvGAQ+Lu7WZyuk3KydyhCiIldliZ"
+    # Tawa builder (`~/.ssh/id_ed25519`, comment wiz@Tawa). Needed for
+    # OpenSSH to sshd — Tailscale SSH is not enough for nix-copy-closure.
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4FCRpTA4uD29z9zf6HTPDFVwZb1mAZ199kuRchqISx"
   ];
 
   services.openssh = {

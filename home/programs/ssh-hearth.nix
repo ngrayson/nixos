@@ -15,13 +15,23 @@
 
   home.file.".ssh/config.d/hearth" = {
     text = ''
+      # OpenSSH to sshd on GiGstreem (common/lan.nix Hearth pin). hearth-deploy
+      # / nix-copy-closure need this, not Tailscale SSH on MagicDNS :22.
       Host hearth
-        HostName hearth.tail6cd822.ts.net
+        HostName 172.16.141.38
         User wiz
         Port 22
+        IdentityFile ~/.ssh/id_ed25519
+        IdentitiesOnly yes
         ControlMaster auto
         ControlPath ~/.ssh/cm-%r@%h:%p
         ControlPersist 10m
+
+      # Tailscale SSH convenience (no key). Do not use for hearth-deploy.
+      Host hearth-tailnet
+        HostName hearth.tail6cd822.ts.net
+        User wiz
+        Port 22
     '';
   };
 }

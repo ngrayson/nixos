@@ -137,12 +137,20 @@ desktop is currently the only recovery console.
 
 ### H0 — Remote access + prerequisites — **shipped in config**
 - `hosts/Hearth/remote-access.nix` enables key-only `sshd` and Tailscale
-  (`--ssh`, `--accept-dns=false`). Pubkey is the GitHub `ngrayson` ed25519.
-- Extra per-machine keys, a recorded GC of old Plasma generations, and a
-  written accept of “SSH from Go 2 over Tailscale, Wi-Fi only” are leftover
-  ops — not missing modules.
-- Acceptance (config): sshd + tailscaled on; `hearth-deploy doctor` is the
-  check. Do not re-open H0 as a flake task.
+  (`--ssh`, `--accept-dns=false`). Pubkeys: GitHub `ngrayson` ed25519 and
+  Tawa `wiz@Tawa` (`~/.ssh/id_ed25519` on the builder).
+- **Ops accept (2026-08-22, from Tawa):** Hearth was on GiGstreem
+  `172.16.141.38` (AncientGlade `192.168.0.133` had no route).
+  `sshd` + `tailscaled` + `jellyfin` + `display-manager` active; trusted-users
+  `@wheel` and passwordless sudo already on the running generation (no
+  on-box switch). `ssh hearth` over MagicDNS was **Tailscale SSH** (doctor
+  warned: nix-copy wants sshd). OpenSSH path is LAN `172.16.141.38` with
+  the Tawa key — `Host hearth` in `home/programs/ssh-hearth.nix` now targets
+  that IP. MagicDNS Tailscale SSH remains as `Host hearth-tailnet`.
+  `hearth-deploy doctor` from Tawa is the check. Do not re-open H0 as a
+  flake task.
+- Extra Go 2 / Theseus keys and a recorded GC of old Plasma generations
+  are still leftover ops — not missing modules.
 
 ### H1 — Wired network + DNS (deferred until better router)
 - Interim (now): Hearth and the LG TV both on GiGstreem Wi-Fi. The ISP
@@ -265,7 +273,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 | No secrets story | **Resolved** — sops-nix + Bitwarden Pro vault confirmed (H5) |
 | TV cannot run Tailscale | **Resolved** — TV + Hearth share GiGstreem (decision 13); wired LAN later |
 | Jellyfin state migration | **Resolved** — fresh start (decision 14) |
-| No remote SSH path | **Resolved** — H0 shipped (`remote-access.nix`); leftover is ops accept |
+| No remote SSH path | **Resolved** — H0 shipped; Tawa OpenSSH to GiGstreem `.38` proven 2026-08-22 |
 | HDD on USB | **Mitigated** — powered UASP hub on USB-C, `nofail` mount, USB-A kept free for rescue |
 | Battery-as-UPS vs suspend-on-battery | **Narrowed** — idle suspend ruled out (decision 17); only lid-close-on-battery policy left for H4 |
 
