@@ -176,6 +176,70 @@
     inactiveBlend=${blueRgb}
     inactiveForeground=${blueRgb}
   '';
+
+  mergeKdeglobals = pkgs.writeText "merge-kdeglobals.py" ''
+    import os
+    import sys
+
+    src_path, dest_path = sys.argv[1:3]
+
+
+    def parse(text):
+        preamble = []
+        sections = []
+        current = None
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[") and "]" in stripped:
+                current = []
+                sections.append((stripped, current))
+                continue
+            if current is None:
+                preamble.append(line)
+            else:
+                current.append(line)
+        return preamble, sections
+
+
+    def replaceable(header):
+        return (
+            header.startswith("[ColorEffects")
+            or header.startswith("[Colors:")
+            or header == "[WM]"
+        )
+
+
+    src_text = open(src_path, encoding="utf-8").read()
+    try:
+        dest_text = open(dest_path, encoding="utf-8").read()
+    except FileNotFoundError:
+        dest_text = ""
+
+    _, src_sections = parse(src_text)
+    src_map = {h: body for h, body in src_sections if replaceable(h)}
+    preamble, dest_sections = parse(dest_text)
+
+    seen = set()
+    out = list(preamble)
+    for header, body in dest_sections:
+        if header in src_map:
+            body = src_map[header]
+            seen.add(header)
+        out.append(header)
+        out.extend(body)
+    for header, body in src_sections:
+        if replaceable(header) and header not in seen:
+            out.append(header)
+            out.extend(body)
+
+    text = "\n".join(out)
+    if text and not text.endswith("\n"):
+        text += "\n"
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    open(dest_path, "w", encoding="utf-8").write(text)
+  '';
+
+  colorsPath = "${h}/.local/share/color-schemes/${name}.colors";
 in {
   qt = {
     enable = true;
@@ -186,8 +250,11 @@ in {
   xdg.dataFile."color-schemes/${name}.colors".text = kdeColors;
 
   home.activation.kdeColorScheme = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    $DRY_RUN_CMD ${lib.getExe pkgs.python3} ${mergeKdeglobals} ${lib.escapeShellArg colorsPath} ${lib.escapeShellArg kdglobals}
     $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group General --key ColorScheme ${lib.escapeShellArg name}
+    $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group General --key Name ${lib.escapeShellArg name}
     $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group KDE --key widgetStyle breeze
+    $DRY_RUN_CMD ${kwrite} --notify --file "${kdglobals}" --group UiSettings --key ColorScheme ${lib.escapeShellArg name}
     $DRY_RUN_CMD ${kwrite} --notify --file "${dolphinrc}" --group UiSettings --key ColorScheme '*'
   '';
 
