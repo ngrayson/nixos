@@ -3,7 +3,10 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  lan = import ../../common/lan.nix;
+  hearthCidr = lan.cidrFor "Hearth";
+in {
   networking.hostName = "Hearth";
 
   # Patched linux-surface kernel (module wired in flake.nix).
@@ -45,11 +48,11 @@
     naturalScrolling = true;
   };
 
-  # GiGstreem's gateway has no DHCP-reservation UI. Pin the address the TV
-  # already uses; the existing NM profile keeps the PSK (do not rewrite it
-  # via ensureProfiles). Remove this oneshot when the wired LAN lands.
+  # GiGstreem has no DHCP-reservation UI. Pin Hearth's current address so
+  # the TV keeps reaching Jellyfin. PSK stays on the existing NM profile
+  # (do not rewrite it via ensureProfiles). Address is common/lan.nix.
   systemd.services.hearth-gigstreem-static = {
-    description = "Pin GiGstreem Wi-Fi to 172.16.141.38";
+    description = "Pin GiGstreem Wi-Fi to ${hearthCidr}";
     wantedBy = ["multi-user.target"];
     after = ["NetworkManager.service"];
     wants = ["NetworkManager.service"];
@@ -65,14 +68,14 @@
         fi
         method=$("$nmcli" -g ipv4.method connection show GiGstreem)
         addrs=$("$nmcli" -g ipv4.addresses connection show GiGstreem)
-        if [ "$method" = manual ] && [ "$addrs" = "172.16.141.38/24" ]; then
+        if [ "$method" = manual ] && [ "$addrs" = "${hearthCidr}" ]; then
           exit 0
         fi
         "$nmcli" connection modify GiGstreem \
           ipv4.method manual \
-          ipv4.addresses 172.16.141.38/24 \
-          ipv4.gateway 172.16.141.1 \
-          ipv4.dns 172.16.141.1
+          ipv4.addresses ${hearthCidr} \
+          ipv4.gateway ${lan.gateway} \
+          ipv4.dns ${lan.dns}
         if "$nmcli" -t -f NAME connection show --active | grep -qx GiGstreem; then
           "$nmcli" connection up GiGstreem
         fi
