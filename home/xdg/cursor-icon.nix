@@ -1,5 +1,5 @@
-# AppImage ships Icon=co.anysphere.cursor but only cursor.png inside the mount; menus resolve
-# icons from ~/.local/share/icons (hicolor). Install the expected name so launchers show artwork.
+# Custom Cursor .desktop files use Icon=co.anysphere.cursor; menus resolve icons from
+# ~/.local/share/icons (hicolor). Install that name so Albert/Plasma show artwork.
 {...}: let
   icon = ../../desktop/icons/co.anysphere.cursor.png;
 in {
