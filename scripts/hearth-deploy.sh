@@ -98,6 +98,50 @@ is_activation() {
   esac
 }
 
+# The flake is the builder's checkout. main = stable, dev = daily/unstable.
+repo_branch() {
+  command_exists git || {
+    printf 'unknown'
+    return
+  }
+  git -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    printf 'unknown'
+    return
+  }
+  local ref
+  ref="$(git -C "$NIXOS_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  if [[ -n "$ref" ]]; then
+    printf '%s' "$ref"
+    return
+  fi
+  local short
+  short="$(git -C "$NIXOS_DIR" rev-parse --short HEAD 2>/dev/null || printf '?')"
+  printf 'detached@%s' "$short"
+}
+
+branch_lane() {
+  case "$1" in
+    main) printf 'stable' ;;
+    dev) printf 'unstable' ;;
+    detached@*) printf 'detached' ;;
+    unknown) printf 'unknown' ;;
+    *) printf 'topic' ;;
+  esac
+}
+
+branch_summary() {
+  local branch lane
+  branch="$(repo_branch)"
+  lane="$(branch_lane "$branch")"
+  case "$lane" in
+    stable) printf '%s (stable)' "$branch" ;;
+    unstable) printf '%s (unstable — daily host work)' "$branch" ;;
+    detached) printf '%s (not a branch)' "$branch" ;;
+    topic) printf '%s (topic — not main/dev)' "$branch" ;;
+    *) printf '%s' "$branch" ;;
+  esac
+}
+
 local_hostname() {
   hostname
 }
@@ -350,6 +394,7 @@ collect_status_body() {
 
   printf '%s\n' \
     "flake     $(short_home "$NIXOS_DIR")   ${flake_state}" \
+    "branch    $(branch_summary)" \
     "builder   ${here}" \
     "target    ${TARGET}" \
     "ssh       $(status_text "$DOC_SSH")${DOC_SSH_KIND:+  $DOC_SSH_KIND}" \
@@ -529,11 +574,22 @@ run_deploy() {
 
   if [[ "$action" == "switch" ]] && hardware_dirty; then
     warn "Hardware/host files changed. Boot + reboot is safer than switch."
-    if ! confirm "Still switch now?" "no"; then
+    if ! confirm "Still switch Hearth from $(branch_summary)?" "no"; then
       return 0
     fi
   elif is_activation "$action"; then
-    if ! confirm "Run '${action}' on Hearth? Build stays on $(local_hostname)." "no"; then
+    case "$(branch_lane "$(repo_branch)")" in
+      unstable)
+        warn "Hearth will activate this machine's checkout on $(branch_summary)."
+        ;;
+      stable)
+        info "Hearth will activate this machine's checkout on $(branch_summary)."
+        ;;
+      *)
+        warn "Hearth will activate this machine's checkout on $(branch_summary)."
+        ;;
+    esac
+    if ! confirm "Run '${action}' on Hearth from $(branch_summary)? Build stays on $(local_hostname)." "no"; then
       return 0
     fi
   fi
@@ -543,7 +599,7 @@ run_deploy() {
     before="$(ssh_hearth -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
   fi
 
-  heading "${action} on Hearth (build on $(local_hostname))"
+  heading "${action} on Hearth (build on $(local_hostname), $(branch_summary))"
   info "nixos-rebuild ${action} --flake ${FLAKE} --target-host ${TARGET} --use-remote-sudo"
 
   local -a cmd=(

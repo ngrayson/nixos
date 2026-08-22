@@ -586,8 +586,13 @@ in rec {
 
     behind=0
     upstream="$("$GIT" -C "$NIXOS_DIR" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || true)"
-    if [ -z "$upstream" ] && "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify origin/main >/dev/null 2>&1; then
-      upstream=origin/main
+    if [ -z "$upstream" ]; then
+      branch="$("$GIT" -C "$NIXOS_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+      if [ -n "$branch" ] && "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify "origin/$branch" >/dev/null 2>&1; then
+        upstream="origin/$branch"
+      elif "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify origin/main >/dev/null 2>&1; then
+        upstream=origin/main
+      fi
     fi
     if [ -n "$upstream" ]; then
       behind="$("$GIT" -C "$NIXOS_DIR" rev-list --count "HEAD..$upstream" 2>/dev/null || printf 0)"
