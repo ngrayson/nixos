@@ -20,9 +20,14 @@ the historical record of the flake migration (phases 0-5, complete).
 | Jellyfin | This node only | Tawa also serves Jellyfin today — **Tawa's will be disabled** (H3) |
 
 Current live facts (2026-08-21): hostname `Hearth`, generation on
-`26.05.20260819`, Wi-Fi only (`GiGstreem`, 172.16.141.38), sshd **inactive**,
-no Tailscale, `/srv/media` on the boot NVMe (52 GB free), two movies (~12 GB)
-in the library, playback confirmed from a LAN client.
+`26.05.20260819`, Wi-Fi only (`GiGstreem`, 172.16.141.38), sshd **inactive**
+until H0 switch, no Tailscale until `tailscale up`, `/srv/media` on the boot
+NVMe (52 GB free), two movies (~12 GB) in the library, playback confirmed
+from a LAN client.
+
+H1 reservation target: Wi-Fi `wlp0s20f3` MAC `c8:34:8e:21:97:1b`, current
+DHCP `172.16.141.38/24` via `172.16.141.1`. Reserve that IP on the GiGstreem
+router so the TV's Jellyfin URL stays stable.
 
 ## 2. Confirmed decisions (2026-08-21)
 
@@ -128,8 +133,8 @@ desktop is currently the only recovery console.
 
 ### H1 — Wired network + DNS (deferred until better router)
 - Interim (now): Hearth and the LG TV both on GiGstreem Wi-Fi, no static
-  route. Reserve a DHCP address for Hearth on the GiGstreem router if its UI
-  allows, so the Jellyfin IP stays stable for the TV.
+  route. Reserve **172.16.141.38** for MAC `c8:34:8e:21:97:1b` (`wlp0s20f3`)
+  on the GiGstreem router so the TV's Jellyfin URL stays stable.
 - Later (new router acquired): USB-A gigabit ethernet adapter (decision 15)
   → switch → TP-Link LAN; static lease; prefer wired over Wi-Fi.
 - Pi Zero W: Pi-hole as LAN DNS (`hearth.home` etc.) when the wired LAN

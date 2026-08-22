@@ -6,6 +6,7 @@
     ./hardware-configuration.nix
     ./host.nix
     ./jellyfin.nix
+    ./remote-access.nix
     ./home.nix
   ];
 }
