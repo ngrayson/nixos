@@ -3,9 +3,14 @@
   lib,
   config,
   pkgs,
+  nixosConfig ? null,
   ...
 }: let
   hs = import ../hypr/scripts.nix {inherit config lib pkgs;};
+  hostName =
+    if nixosConfig == null
+    then ""
+    else nixosConfig.networking.hostName;
 in {
   services.hypridle = {
     enable = true;
@@ -15,7 +20,11 @@ in {
       beforeSleep = lib.getExe hs.hyprBeforeSleep;
       dpmsOff = lib.getExe hs.hyprDpmsAllOffGuarded;
       dpmsOn = lib.getExe hs.hyprDpmsAllOn;
-      suspendGuarded = lib.getExe hs.hyprSuspendGuarded;
+      # Theseus only: match logind suspend-then-hibernate. Tawa/Hearth stay on suspend.
+      suspendGuarded =
+        if hostName == "Theseus"
+        then lib.getExe hs.hyprSuspendThenHibernateGuarded
+        else lib.getExe hs.hyprSuspendGuarded;
     in {
       general = {
         lock_cmd = lock;
