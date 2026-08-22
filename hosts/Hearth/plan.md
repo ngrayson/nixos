@@ -1,0 +1,272 @@
+# Hearth Home Server — Source of Truth
+
+**v2 — 2026-08-21.** This document supersedes the original "NixOS Home Server
+System Canvas" (written with incomplete context: wrong hardware, three-tier
+storage, pre-migration state) and consolidates it with the 2026-08-21 audit
+and the decisions confirmed the same day. When this file and older docs
+disagree, this file wins. The `documentation/hearth-migration/` docs remain as
+the historical record of the flake migration (phases 0-5, complete).
+
+---
+
+## 1. Corrected context
+
+| Item | Original plan said | Actual |
+|------|--------------------|--------|
+| Machine | Surface Pro 4 | **Surface Laptop 3** (i5-1035G7 Ice Lake, 8 GB RAM, 238 GB NVMe) |
+| State | Greenfield | Already migrated to this flake as host `Hearth`; Jellyfin running and verified on LAN |
+| Storage tiers | 3 (NVMe + 500 GB SSD + 2 TB HDD) | **2 (NVMe + HDD)** — no 500 GB SSD tier |
+| Session | Assumed headless | Currently Hyprland desktop (from migration phase 2) — to be **converted to headless** (see H4) |
+| Jellyfin | This node only | Tawa also serves Jellyfin today — **Tawa's will be disabled** (H3) |
+
+Current live facts (2026-08-21): hostname `Hearth`, generation on
+`26.05.20260819`, Wi-Fi only (`GiGstreem`, 172.16.141.38), sshd **inactive**,
+no Tailscale, `/srv/media` on the boot NVMe (52 GB free), two movies (~12 GB)
+in the library, playback confirmed from a LAN client.
+
+## 2. Confirmed decisions (2026-08-21)
+
+1. **Role: headless home server.** The Hyprland desktop from the migration is
+   transitional and will be removed once remote access is proven.
+2. **Hardware on hand:** 2 TB HDD, ethernet switch, spare TP-Link router,
+   Raspberry Pi Zero W (Pi-hole/DNS). Two-tier storage.
+3. **Jellyfin consolidates on Hearth.** `hosts/Tawa/jellyfin.nix` will be
+   removed from Tawa's imports (deliberate, coordinated change — not a parity
+   violation).
+4. **Media never lives on the NVMe** (238 GB is too small). NVMe = OS, Nix
+   store, service state, Jellyfin metadata + transcode cache. HDD = media
+   library + local archives.
+5. **NixOS modules over Docker** for every service.
+6. **Secrets:** Bitwarden Pro (and/or GitHub) as the human vault. See H5 for
+   how that reaches the host (sops-nix recommended as the delivery mechanism —
+   a vault alone cannot decrypt secrets at activation time).
+7. **Tailscale** for remote streaming and the special website. No WAN port
+   forwarding, ever.
+8. **Updates:** automatic remote-dev deployment wanted ("something strong"),
+   but **no unsupervised switching of shared files on `main`** — guardrails in
+   H7. Builds may run on-box (after freeing NVMe space) or on a stronger host
+   with only the switch happening on Hearth.
+9. **Acquisition: seedbox-first.** Local downloads allowed only through a VPN.
+   Zero local seeding regardless of path.
+
+### Decisions round 2 (2026-08-21 PM)
+
+10. **USB topology:** one high-quality **powered USB hub with UASP** plugs
+    into the **USB-C port** (best bandwidth; Surface Connect handles
+    charging), hosting the HDD and the server-rack fans (fans on the hub's
+    power rail, not a data port; PSU must cover HDD spin-up + fans). The
+    **USB-A port stays free** as the recovery/expansion port (keyboard for
+    console rescue post-headless, or a gigabit ethernet adapter later).
+11. **GitOps:** start **push-based (deploy-rs over Tailscale)**; graduate to
+    **comin on `deploy/hearth`** once the health-check script exists.
+12. **Secrets:** **sops-nix** on-host, **Bitwarden Pro as master vault** for
+    one-time setup/re-keying. Confirmed.
+13. **Network interim:** TV and Hearth both stay on **GiGstreem Wi-Fi, no
+    static route**. The TP-Link/switch wired LAN is **deferred until a better
+    router is acquired** (H1 re-scoped accordingly).
+14. **Jellyfin migration:** **fresh start** on Hearth — no `/var/lib/jellyfin`
+    state copy from Tawa; only media files transfer.
+
+### Decisions round 3 (2026-08-21 eve)
+
+15. **Wired NIC:** a separate **USB-A gigabit ethernet adapter** (to buy) —
+    the hub keeps all its ports for storage/fans; USB-A stops being the
+    rescue port once the machine is wired, which is fine post-H0 (SSH is the
+    recovery path by then).
+16. **Public web presence:** a **serverless webapp on Vercel (or similar) at
+    `wiztow.org`**; parts of the intranet exposed as subdomains, e.g.
+    **`hms.wiztow.org`** for the home media surface. H6 re-scoped around
+    this.
+17. **Idle behavior (verified in config):** Hearth never suspends on idle —
+    `hypridle` only locks (300 s) and turns the display off (600 s); logind's
+    `IdleAction` is at its default of ignore. The only suspend trigger is
+    **lid close while on battery**. Confirmed streaming works lid-closed on
+    AC. The sole remaining H4 policy choice is what to do on battery.
+
+## 3. Target architecture
+
+```
+Interim (now, decision 13):
+Internet ── GiGstreem router ── Wi-Fi: Hearth + LG TV (no static route)
+
+Final (after better router acquired):
+Internet ── new router ── TP-Link router (NAT, dedicated server LAN)
+                               │
+                         ethernet switch
+                         ┌─────┼──────────┐
+                      Hearth  Pi Zero W  (future wired clients)
+                    (USB-A NIC (Pi-hole
+                     or hub NIC) DNS)
+Tailscale mesh: Hearth ⇄ Surface Go 2 ⇄ phones ⇄ (seedbox?)
+LG TV: local LAN path to Jellyfin (cannot run Tailscale) — same LAN as Hearth
+```
+
+- **Tier 1 (NVMe 238 GB):** `/`, Nix store, `/var/lib/jellyfin` (metadata,
+  transcode temp), service state, Syncthing staging if space allows.
+- **Tier 2 (HDD 2 TB, USB):** `/mnt/media` — library (`movies/ tv/ music/`),
+  Restic/local snapshots. Mounted by UUID with `nofail` so boot never hangs
+  on a missing USB disk.
+- **Services (NixOS modules only):** jellyfin, tailscale, caddy (tailnet-only
+  vhosts), syncthing, restic, openssh, and later the notification hook +
+  deployment agent.
+
+## 4. Phases
+
+Ordering rule: **do not remove the desktop (H4) until H0-H1 give two
+independent remote paths in** (SSH over LAN + SSH over Tailscale). The
+desktop is currently the only recovery console.
+
+### H0 — Remote access + prerequisites (before anything else)
+- Enable `services.openssh` (key-only, same settings as `profiles/server.nix`)
+  in the Hearth profile; install `wiz`'s pubkeys from Go 2 / Tawa / Theseus.
+- Add `services.tailscale`; join the tailnet; verify SSH from Surface Go 2
+  over Tailscale with Wi-Fi as the only link.
+- Free NVMe space: `nix-collect-garbage --delete-older-than 14d` once the
+  current generation is trusted (old Plasma generations are large).
+- Acceptance: reboot; reach Hearth over LAN SSH and Tailscale SSH without
+  touching the machine.
+
+### H1 — Wired network + DNS (deferred until better router)
+- Interim (now): Hearth and the LG TV both on GiGstreem Wi-Fi, no static
+  route. Reserve a DHCP address for Hearth on the GiGstreem router if its UI
+  allows, so the Jellyfin IP stays stable for the TV.
+- Later (new router acquired): USB-A gigabit ethernet adapter (decision 15)
+  → switch → TP-Link LAN; static lease; prefer wired over Wi-Fi.
+- Pi Zero W: Pi-hole as LAN DNS (`hearth.home` etc.) when the wired LAN
+  lands. Out of scope for this flake unless we NixOS-ify the Pi later.
+- Acceptance (interim): TV plays from Hearth's reserved GiGstreem IP.
+  Acceptance (final): Jellyfin reachable via wired IP; LAN DNS resolves.
+
+### H2 — Storage (HDD tier)
+- Powered UASP hub into the **USB-C** port; HDD and fans on the hub (fans on
+  its power rail). Verify UASP is active: `lsusb -t` shows driver `uas`, not
+  `usb-storage`.
+- Partition/format HDD (ext4), add `fileSystems."/mnt/media"` by UUID with
+  `options = ["nofail" "x-systemd.device-timeout=10s"]` to `host.nix`.
+- Move `/srv/media/*` → `/mnt/media/`; repoint Jellyfin libraries; keep
+  tmpfiles ownership rules (`jellyfin:jellyfin`, group-writable for `wiz`).
+- Delete media from NVMe after verification.
+- Acceptance: playback works from HDD; NVMe holds no media; unplugging the
+  HDD does not block boot.
+
+### H3 — Jellyfin consolidation (Tawa → Hearth)
+- Copy Tawa's media files into `/mnt/media` (rsync over LAN/tailnet).
+- Remove `./jellyfin.nix` from `hosts/Tawa/host.nix` imports (keep the file
+  or delete it — imports list is the switch). Rebuild Tawa.
+- **Fresh start** for server state (decision 14): no `/var/lib/jellyfin`
+  copy; users/watch history recreated on Hearth.
+- Acceptance: one Jellyfin on the network; clients repointed.
+
+### H4 — Headless flip
+- New `profiles/media-server.nix`: base.nix + openssh + tailscale + jellyfin
+  prerequisites; **no** SDDM/Hyprland/PipeWire-desktop/HM GUI modules.
+- Slim HM shrinks to shell-only (`zsh`, `git`, `fastfetch`, `micro`) — the
+  Ghost theme survives in kitty/fastfetch rendered by *client* terminals over
+  SSH; wallpaper/Hyprland/quickshell/dunst/albert are dropped.
+- Keep `boot` + reboot for the flip; previous desktop generation remains in
+  systemd-boot as the recovery path.
+- Lid policy: with no session, logind still governs — keep
+  `HandleLidSwitchExternalPower = ignore`; consider `HandleLidSwitch =
+  ignore` too since the battery-as-UPS role means AC loss should not suspend
+  the server (revisit: suspend-on-battery kills streams but saves the cell).
+- Acceptance: boots to multi-user (no greeter), all services up, SSH +
+  Tailscale reachable, power draw acceptable.
+
+### H5 — Secrets
+- **Confirmed (decision 12):** **sops-nix** with an age key per host; the age
+  private keys and all master copies live in **Bitwarden Pro** (one-time
+  setup / re-keying vault). GitHub (Actions secrets) only for CI builds,
+  never as host-side secret delivery.
+- First consumers: Tailscale auth key (if pre-auth used), Discord webhook
+  URL, Restic repo password, seedbox credentials, Syncthing device IDs.
+- Acceptance: no plaintext secret in the repo; a fresh Hearth install can be
+  re-keyed from Bitwarden alone.
+
+### H6 — Remote surface (wiztow.org + streaming)
+- **Public site (decision 16):** serverless webapp on Vercel (or similar) at
+  `wiztow.org`. Lives outside this flake; Hearth is not a public web server.
+- **Intranet subdomain:** `hms.wiztow.org` fronts the home-media surface.
+  Two candidate wirings, pick when H6 lands:
+  - **Tailnet-only:** `hms.wiztow.org` CNAME/A → tailnet address; resolves
+    for everyone but only *connects* for tailnet members. Simplest, private.
+  - **Public via Tailscale Funnel:** CNAME → the Funnel hostname; Jellyfin's
+    own auth becomes the only gate. More exposed — decide deliberately.
+- On Hearth: Caddy bound to the **tailnet interface only** (or `tailscale
+  serve`), reverse-proxying Jellyfin under the `hms` hostname.
+- Remote streaming path: Jellyfin over Tailscale (Go 2, phones). LG TV stays
+  on a local path — same GiGstreem LAN as Hearth (decision 13).
+- Acceptance: `https://hms.wiztow.org` serves Jellyfin for tailnet devices;
+  nothing on Hearth listens on WAN.
+
+### H7 — Automatic remote-dev updates (GitOps)
+**Decided (decision 11):** start **push-based with deploy-rs over Tailscale**
+(no agent on the server; deploys are deliberate acts from Go 2 or CI), then
+graduate to **comin polling `deploy/hearth`** once a health-check script
+exists. The custom-timer agent from the original plan is dropped.
+
+Guardrails that answer "unsupervised switch on main" regardless of tool:
+1. Hearth deploys from a **dedicated branch** (e.g. `deploy/hearth`), never
+   `main`. Promotion = fast-forwarding that branch, a deliberate human act
+   that can still be done remotely in seconds.
+2. Agent refuses to auto-apply commits touching `common/`, `home/`,
+   `profiles/`, `flake.nix`, or `flake.lock` unless the commit is explicitly
+   tagged for deployment (path filter before build).
+3. Kernel/initrd/disk changes use `boot` + scheduled reboot, not `switch`
+   (matches the repo's existing os-rebuild rule).
+4. Builds: on-box is acceptable after H2 frees the NVMe (media off, GC run);
+   preferred long-term is build on Tawa/CI + `nix copy` over the tailnet,
+   with Hearth only switching. `nixos-rebuild test` is *not* a rollback
+   mechanism — health-check failures trigger `switch` back to the previous
+   generation explicitly.
+5. Notifications (Discord webhook via H5 secret) on start/success/rollback.
+
+### H8 — Acquisition pipeline (seedbox-first)
+- Seedbox downloads; **Syncthing** pulls completed files to Hearth
+  (staging on NVMe if small, direct to HDD otherwise); tag-based routing to
+  `/mnt/media/{movies,tv,music}` via a small systemd path unit or the future
+  homepage API.
+- VPN-piped local download as fallback only: reuse the repo's existing VPN
+  stack (`common/vpn-vortix.nix` stunnel/FrootVPN — server-safe subset) or a
+  dedicated namespace so torrent traffic cannot leak; upload hard-capped at 0.
+- Zero local seeding in both paths.
+- The homepage/ingest UI from the original plan stays **last**, after H6-H7.
+
+## 5. Risk register (from the audit)
+
+| Audit risk | Status |
+|------------|--------|
+| Wrong hardware (Pro 4 vs Laptop 3) | **Resolved** — this doc is the corrected baseline |
+| Role conflict (desktop vs headless) | **Resolved** — headless confirmed; H4 sequences the flip safely |
+| Three-tier storage doesn't exist | **Resolved** — two-tier confirmed; HDD on hand (H2) |
+| Media on NVMe | **Resolved by decision** — H2 moves it; until H2 lands, do not ingest more |
+| Two Jellyfin servers | **Resolved** — Tawa's will be disabled (H3) |
+| Docker creep | **Resolved** — NixOS modules only |
+| Unsupervised switch on main | **Resolved** — deploy-rs first, comin on `deploy/hearth` later, plus H7 guardrails |
+| On-box builds vs 8 GB RAM / small disk | **Mitigated** — space freed + headless RAM headroom; build-elsewhere preferred |
+| No secrets story | **Resolved** — sops-nix + Bitwarden Pro vault confirmed (H5) |
+| TV cannot run Tailscale | **Resolved** — TV + Hearth share GiGstreem (decision 13); wired LAN later |
+| Jellyfin state migration | **Resolved** — fresh start (decision 14) |
+| sshd inactive / no remote path | **Open until H0 lands** — first work item |
+| HDD on USB | **Mitigated** — powered UASP hub on USB-C, `nofail` mount, USB-A kept free for rescue |
+| Battery-as-UPS vs suspend-on-battery | **Narrowed** — idle suspend ruled out (decision 17); only lid-close-on-battery policy left for H4 |
+
+## 6. Open questions
+
+1. **Better router:** which model / when — gates the final H1 wired topology.
+   (TBD.)
+2. **Seedbox:** which provider/host, and is it joined to the tailnet for
+   Syncthing, or synced over its own protocol? **Decide before H8.**
+3. **`hms.wiztow.org` exposure:** tailnet-only (private, simplest) or public
+   via Tailscale Funnel (Jellyfin auth is the only gate)? Pick when H6 lands.
+4. **Battery policy after headless (H4):** keep lid-close-on-battery =
+   suspend (preserves the cell, kills streams in an outage) or ignore it and
+   treat the battery as a small UPS? Idle suspend is already ruled out
+   (decision 17).
+
+## 7. What already matches (no rework needed)
+
+Named flake host with generated hardware config; Jellyfin module pattern
+(host-local, `openFirewall`, tmpfiles, VAAPI packages for Ice Lake); lid
+ignore-on-AC; libinput/palm work (moot after H4 but harmless); parity
+guardrail discipline for shared files; `legacy/surface-standalone` rollback
+branch; systemd-boot generation rollback.
