@@ -1,38 +1,18 @@
 # Slim Hyprland desktop for a media-host laptop. Imports only base.nix — not
-# common/system.nix — so Steam, Slippi, VPN, Plasma, and the workstation
+# profiles/workstation.nix — so Steam, Slippi, VPN, Plasma, and the workstation
 # package pile stay off this closure. Tawa/Theseus are unaffected.
 {
   inputs,
   pkgs,
-  unstablePkgs,
   ...
 }: let
-  sddmLoginBg = builtins.path {
-    path = ../login-bg.png;
-    name = "login-bg.png";
-  };
-  sddmThemeBreezeLogin = pkgs.runCommand "sddm-theme-breeze-login" {} ''
-    mkdir -p $out/share/sddm/themes
-    cp -r ${pkgs.kdePackages.plasma-desktop}/share/sddm/themes/breeze $out/share/sddm/themes/breeze-login
-    chmod -R u+w $out/share/sddm/themes/breeze-login
-    sed -i "s|^background=.*|background=${sddmLoginBg}|" $out/share/sddm/themes/breeze-login/theme.conf
-  '';
-  # Same override as common/system.nix (AppImages that need CURL_OPENSSL_4).
-  appimageRunWithCurl = pkgs.appimage-run.override {
-    extraPkgs = p: [p.curl];
-  };
+  sddmThemeBreezeLogin = import ../common/sddm-breeze-login.nix {inherit pkgs;};
+  appimageRunWithCurl = import ../common/appimage-run-curl.nix {inherit pkgs;};
 in {
   imports = [
     ../common/base.nix
     ../common/mime.nix
-  ];
-
-  # Albert: release NixOS pins an older Albert without the bundled Firefox
-  # Python plugin. Unstable ships 34.x. Same overlay as common/system.nix.
-  nixpkgs.overlays = [
-    (final: prev: {
-      albert = unstablePkgs.albert;
-    })
+    ../common/albert-overlay.nix
   ];
 
   programs.dconf.enable = true;

@@ -6,7 +6,7 @@
   ...
 }: {
   imports = [
-    ../../common/system.nix
+    ../../profiles/workstation.nix
     ./hardware-configuration.nix
     ./host.nix
   ];

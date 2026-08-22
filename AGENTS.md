@@ -15,4 +15,4 @@ Canonical tree: `~/.config/nixos` (flake `github:ngrayson/nixos`). Hosts: **Tawa
 - Hardware / kernel / disk / Hearth headless flip: `boot`, then reboot. `test` is not a rollback.
 - Do not `nix flake update` unless asked. Do not copy hardware UUIDs, LUKS mappings, or swap devices between hosts.
 
-Until a `profiles/workstation.nix` exists, the Tawa/Theseus desktop stack lives in `common/system.nix`. Do not grow `common/base.nix` with display managers, gaming, VPN, or Home Manager. Hearth uses `profiles/media-desktop.nix`. Gcp uses `profiles/server.nix` and has no `hardware-configuration.nix`.
+Tawa/Theseus import `profiles/workstation.nix`. Do not grow `common/base.nix` with display managers, gaming, VPN, or Home Manager. Hearth uses `profiles/media-desktop.nix`. Gcp uses `profiles/server.nix` and has no `hardware-configuration.nix`.
