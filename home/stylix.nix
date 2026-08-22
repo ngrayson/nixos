@@ -105,6 +105,10 @@ in {
   # plus `gtk-application-prefer-dark-theme` / `gtk-interface-color-scheme` in both settings.ini files.
   gtk.colorScheme = "dark";
 
+  # Plasma rewrites ~/.gtkrc-2.0 as a regular file. Without force, HM tries to
+  # rename it to .gtkrc-2.0.hm-backup and fails if that backup already exists.
+  gtk.gtk2.force = true;
+
   # Leftover files from the reverted Wallust experiment; not referenced by Stylix HM `gtk.css` but confuse
   # inspection and could interact badly if GTK ever loads them from the config dir.
   home.activation.stylixRemoveStaleGtkCss = lib.hm.dag.entryAfter ["writeBoundary"] ''
