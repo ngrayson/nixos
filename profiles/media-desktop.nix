@@ -42,6 +42,12 @@ in {
 
   networking.networkmanager.enable = true;
   networking.networkmanager.wifi.powersave = false;
+  # Secrets agent for nmgui / nmcli. AncientGlade's PSK is agent-owned;
+  # without this, "Activate" fails with "No agents were available".
+  programs.nm-applet.enable = true;
+  programs.nm-applet.indicator = false;
+  services.gnome.gnome-keyring.enable = true;
+  security.pam.services.sddm.enableGnomeKeyring = true;
 
   security.polkit.enable = true;
   security.rtkit.enable = true;
@@ -139,6 +145,7 @@ in {
     ++ (with pkgs; [
       # Xcursor looks in the system profile; extraPackages only wrap QML.
       kdePackages.breeze
+      adwaita-icon-theme
       wget
       micro
       gh

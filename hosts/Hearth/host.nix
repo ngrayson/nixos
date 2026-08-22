@@ -19,11 +19,12 @@ in {
   zramSwap.enable = true;
   zramSwap.memoryPercent = 25;
 
-  # Lid closed on AC: keep serving Jellyfin. On battery, still suspend.
+  # Media host: lid-down is the normal pose. Never suspend on lid, even if
+  # logind still thinks we are on battery (Surface ADP1 can lag the plug-in).
   services.logind.settings.Login = {
-    HandleLidSwitch = "suspend";
-    HandleLidSwitchExternalPower = "ignore";
-    HandleLidSwitchDocked = "ignore";
+    HandleLidSwitch = lib.mkForce "ignore";
+    HandleLidSwitchExternalPower = lib.mkForce "ignore";
+    HandleLidSwitchDocked = lib.mkForce "ignore";
     HandlePowerKey = "ignore";
     HandlePowerKeyLongPress = "poweroff";
   };
@@ -68,14 +69,17 @@ in {
         fi
         method=$("$nmcli" -g ipv4.method connection show GiGstreem)
         addrs=$("$nmcli" -g ipv4.addresses connection show GiGstreem)
-        if [ "$method" = manual ] && [ "$addrs" = "${hearthCidr}" ]; then
+        dns=$("$nmcli" -g ipv4.dns connection show GiGstreem)
+        prio=$("$nmcli" -g connection.autoconnect-priority connection show GiGstreem)
+        if [ "$method" = manual ] && [ "$addrs" = "${hearthCidr}" ] && [ "$dns" = "${lan.dns}" ] && [ "$prio" = "100" ]; then
           exit 0
         fi
         "$nmcli" connection modify GiGstreem \
+          connection.autoconnect-priority 100 \
           ipv4.method manual \
           ipv4.addresses ${hearthCidr} \
           ipv4.gateway ${lan.gateway} \
-          ipv4.dns ${lan.dns}
+          ipv4.dns "${lan.dns}"
         if "$nmcli" -t -f NAME connection show --active | grep -qx GiGstreem; then
           "$nmcli" connection up GiGstreem
         fi

@@ -14,6 +14,7 @@
     ./wayland/hyprland.nix
     ./services/dunst.nix
     ./services/polkit-agent.nix
+    ./services/nm-applet.nix
     ./services/hypridle.nix
     ./xdg/config.nix
     ./xdg/data.nix

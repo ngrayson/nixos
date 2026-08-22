@@ -11,7 +11,9 @@ heading() { printf "\n\033[1m%s\033[0m\n" "$*"; }
 NIXOS_HOST="Hearth"
 TARGET_USER="wiz"
 TARGET_HOSTNAME="${HEARTH_SSH_HOSTNAME:-hearth.tail6cd822.ts.net}"
-TARGET="${HEARTH_SSH_TARGET:-${TARGET_USER}@${TARGET_HOSTNAME}}"
+# Use the Host hearth alias so known_hosts / ssh config match. Raw MagicDNS
+# (hearth.tail6cd822.ts.net) is a different name and fails host-key checks.
+TARGET="${HEARTH_SSH_TARGET:-hearth}"
 FLAKE_OUTPUT="Hearth"
 
 DOC_SSH="unknown"
@@ -83,8 +85,8 @@ Options:
 
 Environment:
   NIXOS_DIR               Flake directory (default: ~/.config/nixos)
-  HEARTH_SSH_TARGET       Override user@host (default: wiz@hearth.tail6cd822.ts.net)
-  HEARTH_SSH_HOSTNAME     Override MagicDNS / IP
+  HEARTH_SSH_TARGET       Override ssh destination (default: hearth)
+  HEARTH_SSH_HOSTNAME     Override MagicDNS / IP written into ~/.ssh/config.d/hearth
   HEARTH_DEPLOY_LOG_DIR   Log directory (default: ~/.cache/hearth-deploy)
 
 Run this on Tawa (or another strong builder). Do not run switch/boot on Hearth.
@@ -435,15 +437,22 @@ run_doctor() {
   DOC_HINT=""
   ensure_ssh_include
 
-  if ! ssh_hearth -o BatchMode=yes -o ConnectTimeout=8 true; then
+  local ssh_err
+  ssh_err="$(ssh_hearth -o BatchMode=yes -o ConnectTimeout=8 true 2>&1)" || {
     DOC_SSH="fail"
     DOC_SSH_KIND=""
     DOC_SUDO="fail"
     DOC_TRUST="fail"
     DOC_REMOTE=""
-    DOC_HINT="Cannot reach ${TARGET} on port 22. Use OpenSSH to sshd, not Tailscale SSH."
+    if [[ "$ssh_err" == *"Host key verification failed"* ]]; then
+      DOC_HINT="Host key check failed for ${TARGET}. Trust the key under this name (ssh hearth) or connect via the Host hearth alias, not raw MagicDNS."
+    elif [[ "$ssh_err" == *"Connection timed out"* || "$ssh_err" == *"Connection refused"* || "$ssh_err" == *"Could not resolve"* ]]; then
+      DOC_HINT="Cannot reach ${TARGET} on port 22. Use OpenSSH to sshd, not Tailscale SSH."
+    else
+      DOC_HINT="SSH to ${TARGET} failed: ${ssh_err%%$'\n'*}"
+    fi
     return 1
-  fi
+  }
   DOC_SSH="ok"
 
   local report
@@ -630,11 +639,60 @@ run_deploy() {
       heading "Closure changes"
       nix store diff-closures "$before" "$after" | filter_rebuild_output || true
     fi
+    notify_hearth_if_visible "Hearth switch OK" "$(short_store "${after:-activated}")"
   fi
 
   command_exists notify-send &&
     notify-send -e "Hearth ${action} OK" "$TARGET" \
       --icon=software-update-available 2>/dev/null || true
+}
+
+# Switch only: tell the seated Hyprland session. Skip SDDM, SSH-only, or DPMS-off.
+notify_hearth_if_visible() {
+  local summary="$1"
+  local body="$2"
+  ssh_hearth -o BatchMode=yes bash -s -- "$summary" "$body" <<'EOS' || true
+set +e
+summary="$1"
+body="$2"
+uid="$(id -u)"
+runtime="${XDG_RUNTIME_DIR:-/run/user/${uid}}"
+export XDG_RUNTIME_DIR="$runtime"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${runtime}/bus"
+
+graphical=0
+if command -v loginctl >/dev/null 2>&1; then
+  for sid in $(loginctl show-user "$USER" -p Sessions --value 2>/dev/null); do
+    [ -n "$sid" ] || continue
+    class="$(loginctl show-session "$sid" -p Class --value 2>/dev/null)"
+    typ="$(loginctl show-session "$sid" -p Type --value 2>/dev/null)"
+    state="$(loginctl show-session "$sid" -p State --value 2>/dev/null)"
+    [ "$class" = user ] || continue
+    case "$typ" in
+      wayland | x11) ;;
+      *) continue ;;
+    esac
+    case "$state" in
+      active | online) graphical=1; break ;;
+    esac
+  done
+fi
+[ "$graphical" = 1 ] || exit 0
+[ -S "${runtime}/bus" ] || exit 0
+
+json="$(hyprctl -i 0 monitors -j 2>/dev/null)" || exit 0
+awake=0
+if command -v jq >/dev/null 2>&1; then
+  awake="$(printf '%s' "$json" | jq '[.[] | select((.dpmsStatus // false) == true and (.disabled // false) != true)] | length' 2>/dev/null)" || awake=0
+elif printf '%s' "$json" | grep -q '"dpmsStatus":[[:space:]]*true'; then
+  awake=1
+fi
+[ "$awake" -gt 0 ] 2>/dev/null || exit 0
+
+command -v notify-send >/dev/null 2>&1 || exit 0
+notify-send -e -a hearth-deploy -i software-update-available -- \
+  "$summary" "$body" >/dev/null 2>&1 || true
+EOS
 }
 
 open_ssh() {
