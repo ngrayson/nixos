@@ -11,7 +11,9 @@ heading() { printf "\n\033[1m%s\033[0m\n" "$*"; }
 NIXOS_HOST="Hearth"
 TARGET_USER="wiz"
 TARGET_HOSTNAME="${HEARTH_SSH_HOSTNAME:-hearth.tail6cd822.ts.net}"
-TARGET="${HEARTH_SSH_TARGET:-${TARGET_USER}@${TARGET_HOSTNAME}}"
+# Use the Host hearth alias so known_hosts / ssh config match. Raw MagicDNS
+# (hearth.tail6cd822.ts.net) is a different name and fails host-key checks.
+TARGET="${HEARTH_SSH_TARGET:-hearth}"
 FLAKE_OUTPUT="Hearth"
 
 DOC_SSH="unknown"
@@ -83,8 +85,8 @@ Options:
 
 Environment:
   NIXOS_DIR               Flake directory (default: ~/.config/nixos)
-  HEARTH_SSH_TARGET       Override user@host (default: wiz@hearth.tail6cd822.ts.net)
-  HEARTH_SSH_HOSTNAME     Override MagicDNS / IP
+  HEARTH_SSH_TARGET       Override ssh destination (default: hearth)
+  HEARTH_SSH_HOSTNAME     Override MagicDNS / IP written into ~/.ssh/config.d/hearth
   HEARTH_DEPLOY_LOG_DIR   Log directory (default: ~/.cache/hearth-deploy)
 
 Run this on Tawa (or another strong builder). Do not run switch/boot on Hearth.
@@ -390,15 +392,22 @@ run_doctor() {
   DOC_HINT=""
   ensure_ssh_include
 
-  if ! ssh_hearth -o BatchMode=yes -o ConnectTimeout=8 true; then
+  local ssh_err
+  ssh_err="$(ssh_hearth -o BatchMode=yes -o ConnectTimeout=8 true 2>&1)" || {
     DOC_SSH="fail"
     DOC_SSH_KIND=""
     DOC_SUDO="fail"
     DOC_TRUST="fail"
     DOC_REMOTE=""
-    DOC_HINT="Cannot reach ${TARGET} on port 22. Use OpenSSH to sshd, not Tailscale SSH."
+    if [[ "$ssh_err" == *"Host key verification failed"* ]]; then
+      DOC_HINT="Host key check failed for ${TARGET}. Trust the key under this name (ssh hearth) or connect via the Host hearth alias, not raw MagicDNS."
+    elif [[ "$ssh_err" == *"Connection timed out"* || "$ssh_err" == *"Connection refused"* || "$ssh_err" == *"Could not resolve"* ]]; then
+      DOC_HINT="Cannot reach ${TARGET} on port 22. Use OpenSSH to sshd, not Tailscale SSH."
+    else
+      DOC_HINT="SSH to ${TARGET} failed: ${ssh_err%%$'\n'*}"
+    fi
     return 1
-  fi
+  }
   DOC_SSH="ok"
 
   local report
