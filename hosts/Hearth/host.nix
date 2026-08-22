@@ -98,6 +98,15 @@
     ];
   };
 
+  # Cursor CLI: `~/.local/bin/cursor-agent` (and `agent`) are vendor ELF shims
+  # pointing at ~/.local/share/cursor-agent/versions/*/cursor-agent. They are
+  # dynamically linked against FHS glibc, not Nix store paths. nix-ld provides
+  # ld.so + a default lib set (same as Tawa/Theseus in common/system.nix).
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [];
+
+  environment.systemPackages = [pkgs.code-cursor];
+
   # First install of this machine was 24.05 — never bump.
   system.stateVersion = "24.05";
 }
