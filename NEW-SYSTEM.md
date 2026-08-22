@@ -14,15 +14,23 @@ Create `hosts/<hostname>/configuration.nix`, `host.nix`, and the generated `hard
 
 ## 3. Machine-specific options: `hosts/<hostname>/`
 
+Host **shapes differ**. Do not copy the Tawa/Theseus import list onto Hearth or Gcp.
+
+| Host | `configuration.nix` imports | Hardware file |
+|------|-----------------------------|---------------|
+| **Tawa**, **Theseus** | `../../common/system.nix`, `./hardware-configuration.nix`, `./host.nix` | Required (`nixos-generate-config` for that machine) |
+| **Hearth** | `../../profiles/media-desktop.nix`, `./hardware-configuration.nix`, `./host.nix`, plus host modules (Jellyfin, remote-access) | Required |
+| **Gcp** | `../../profiles/server.nix`, GCE image module, `./host.nix` | **None** — see [`scripts/gcp/`](./scripts/gcp/) |
+
 Under **`hosts/<hostname>/`** for **this** machine:
 
 - **`host.nix`**: **`networking.hostName`**, host-only modules, **`boot.initrd.luks.devices`**, **`boot.kernelParams`**
-- **`hardware-configuration.nix`**: from **`nixos-generate-config`** for this host only
-- **`configuration.nix`**: imports **`../../common/system.nix`**, `./hardware-configuration.nix`, `./host.nix`
+- **`hardware-configuration.nix`**: from **`nixos-generate-config`** for this host only (omit on Gcp)
+- **`configuration.nix`**: the import list for that host's shape (table above)
 
 Hardware modules from `nixos-hardware` belong in that host's module list in [`flake.nix`](./flake.nix), not in a channel-style `<nixos-hardware/...>` import.
 
-Shared **system** options live in **[`common/system.nix`](./common/system.nix)**. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.).
+Until `profiles/workstation.nix` exists, the Tawa/Theseus desktop stack lives in **[`common/system.nix`](./common/system.nix)**. Server-safe defaults stay in **[`common/base.nix`](./common/base.nix)**. VPN is **[`common/vpn-vortix.nix`](./common/vpn-vortix.nix)** (imported from the workstation stack), not `environment.etc` in `common/system.nix`. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.). Hearth uses the slimmer [`home/media.nix`](./home/media.nix).
 
 ## 4. `system.stateVersion`
 
@@ -50,7 +58,7 @@ Home Manager runs as part of that for **`wiz`** (no separate `home-manager switc
 
 ## 6. After boot
 
-- Re-enrol **fingerprint**, reconnect **Wi‑Fi**, fix **VPN** paths if you use them (`environment.etc` in [`common/system.nix`](./common/system.nix)).
+- Re-enrol **fingerprint** on Theseus when `fprintd` is enabled, reconnect **Wi‑Fi**, fix **VPN** paths if you use them ([`common/vpn-vortix.nix`](./common/vpn-vortix.nix); example files under `vpn/ovpn/`).
 - **Cursor**: [CURSOR_SETUP.md](./CURSOR_SETUP.md) so `~/.local/bin/cursor` matches shell aliases in [`home/programs/zsh.nix`](./home/programs/zsh.nix).
 - Custom **`.desktop`** files: already in [`desktop/applications/`](./desktop/applications/); they land in `~/.local/share/applications/` via Home Manager.
 - **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in **`hosts/<hostname>/host.nix`**, and extend [`home/lib/host-xdg.nix`](./home/lib/host-xdg.nix) / [`home/xdg/config.nix`](./home/xdg/config.nix) if your theme includes extra paths beyond those already wired (see **Tawa** / **Theseus** under `kvantum/`).
