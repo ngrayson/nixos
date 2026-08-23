@@ -6,6 +6,7 @@
 // Preview (not a session lock, Esc dismisses): `ipc call lock preview` (see `quickshell-lock-preview`).
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
 // Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
+// Power menu: `qs-quickshell-ipc call power toggle` (short XF86PowerOff; no-op while locked).
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
@@ -723,6 +724,17 @@ ShellRoot {
 		function cancelPreview(): void {
 			shellRoot.lockPreview = false;
 			lockContext.currentText = "";
+		}
+	}
+
+	IpcHandler {
+		target: "power"
+
+		// Return type required or quickshell will not register this for `ipc call power toggle`.
+		function toggle(): void {
+			if (sessionLock.locked)
+				return;
+			shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
 		}
 	}
 
