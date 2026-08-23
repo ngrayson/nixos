@@ -18,4 +18,7 @@ if [[ -z "${CONVEYOR_API_URL:-}" || -z "${CONVEYOR_USER_TOKEN:-}${CONVEYOR_PROJE
   exit 1
 fi
 
+if [[ -x "${HOME}/.local/bin/conveyor-mcp" ]]; then
+  exec "${HOME}/.local/bin/conveyor-mcp" "$@"
+fi
 exec /run/current-system/sw/bin/npx -y @rallycry/conveyor-mcp@latest "$@"

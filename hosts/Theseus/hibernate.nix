@@ -11,33 +11,76 @@
     if builtins.length swaps == 1
     then builtins.head swaps
     else null;
-  # Keyboard/trackpad/USB stay Linux wakeup sources through S4 *entry*. A touch
-  # then aborts hibernate (`Wakeup event detected during hibernation, rolling
-  # back`) and often leaves eDP dark. True S4 is powered off; those devices
-  # cannot wake it anyway. Mask them only for hibernate; restore on the way up
-  # so s2idle suspend still wakes from the trackpad.
-  maskHibernateWakeup = pkgs.writeShellScript "theseus-hibernate-wakeup" ''
-    set -euo pipefail
-    state=/run/theseus-hibernate-wakeup.list
-    case "''${1:-}:''${2:-}" in
-      pre:hibernate)
-        : >"$state"
-        find /sys/devices -path '*/power/wakeup' 2>/dev/null | while read -r f; do
-          [ "$(cat "$f" 2>/dev/null || true)" = enabled ] || continue
-          printf '%s\n' "$f" >>"$state"
-          echo disabled >"$f" || true
-        done
-        ;;
-      post:hibernate)
-        [ -f "$state" ] || exit 0
-        while read -r f; do
-          [ -e "$f" ] || continue
-          echo enabled >"$f" || true
-        done <"$state"
-        rm -f "$state"
-        ;;
-    esac
-  '';
+  # Keyboard/trackpad/USB/power-button stay Linux wakeup sources through S4
+  # *entry*. A press then aborts hibernate (`Wakeup event detected during
+  # hibernation, rolling back`) and often leaves eDP dark. True S4 is powered
+  # off; firmware still honors the power button to turn the machine on.
+  # systemd-sleep's PATH has no coreutils, so the first hook died with 127
+  # (`find`/`rm` not found) and never masked anything.
+  maskHibernateWakeup = pkgs.writeShellApplication {
+    name = "theseus-hibernate-wakeup";
+    runtimeInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep pkgs.gawk pkgs.systemd];
+    text = ''
+      set -euo pipefail
+      sysfs_state=/run/theseus-hibernate-wakeup.list
+      acpi_state=/run/theseus-hibernate-acpi-wakeup.list
+
+      # Next boot must load the kernel that wrote the image. After `os-rebuild
+      # switch` without reboot, systemd-boot's default is already the new
+      # generation; a cold pick of that entry skips resume. One-shot pins this
+      # session's loader entry and skips the menu once (timeout 0).
+      pin_boot_entry() {
+        local entry
+        entry="$(bootctl status | awk -F': *' '/Current Entry:/ {print $2; exit}')"
+        if [ -z "$entry" ]; then
+          echo "theseus-hibernate: could not read systemd-boot Current Entry" >&2
+          return 1
+        fi
+        bootctl set-oneshot "$entry"
+        bootctl set-timeout-oneshot 0
+        echo "theseus-hibernate: next boot oneshot $entry (menu timeout 0)"
+      }
+
+      case "''${1:-}:''${2:-}" in
+        pin:)
+          pin_boot_entry
+          ;;
+        pre:hibernate)
+          pin_boot_entry
+          : >"$sysfs_state"
+          : >"$acpi_state"
+          find /sys/devices -path '*/power/wakeup' 2>/dev/null | while read -r f; do
+            [ "$(cat "$f" 2>/dev/null || true)" = enabled ] || continue
+            printf '%s\n' "$f" >>"$sysfs_state"
+            echo disabled >"$f" || true
+          done
+          if [ -w /proc/acpi/wakeup ]; then
+            grep -E '[[:space:]]\*enabled' /proc/acpi/wakeup | while read -r dev _; do
+              [ -n "$dev" ] || continue
+              printf '%s\n' "$dev" >>"$acpi_state"
+              echo "$dev" >/proc/acpi/wakeup || true
+            done || true
+          fi
+          ;;
+        post:hibernate)
+          if [ -f "$sysfs_state" ]; then
+            while read -r f; do
+              [ -e "$f" ] || continue
+              echo enabled >"$f" || true
+            done <"$sysfs_state"
+            rm -f "$sysfs_state"
+          fi
+          if [ -f "$acpi_state" ] && [ -w /proc/acpi/wakeup ]; then
+            while read -r dev; do
+              [ -n "$dev" ] || continue
+              echo "$dev" >/proc/acpi/wakeup || true
+            done <"$acpi_state"
+            rm -f "$acpi_state"
+          fi
+          ;;
+      esac
+    '';
+  };
 in {
   assertions = [
     {
@@ -69,6 +112,15 @@ in {
 
   environment.etc."systemd/system-sleep/theseus-hibernate-wakeup" = {
     mode = "0755";
-    source = maskHibernateWakeup;
+    source = "${maskHibernateWakeup}/bin/theseus-hibernate-wakeup";
   };
+
+  # systemd-sleep ignores a non-zero sleep.d exit. Fail the unit instead so we
+  # never write an image that the next default generation cannot resume.
+  systemd.services.systemd-hibernate.serviceConfig.ExecStartPre = [
+    "${maskHibernateWakeup}/bin/theseus-hibernate-wakeup pin"
+  ];
+  systemd.services.systemd-suspend-then-hibernate.serviceConfig.ExecStartPre = [
+    "${maskHibernateWakeup}/bin/theseus-hibernate-wakeup pin"
+  ];
 }
