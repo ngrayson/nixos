@@ -43,17 +43,28 @@
         done
       }
 
-      # Next boot must load the kernel that wrote the image. After `os-rebuild
-      # switch` without reboot, systemd-boot's default is already the new
-      # generation; a cold pick of that entry skips resume. One-shot pins this
-      # session's loader entry and skips the menu once (timeout 0).
+      # Next boot must load the kernel that wrote the image (`/run/booted-system`),
+      # not `bootctl`'s Current Entry (can disagree) and not `/run/current-system`
+      # (already the new generation after `os-rebuild switch` without reboot).
+      # One-shot selects that loader entry. Timeout 0 skips the menu unless a key
+      # is pressed — Framework's EC often injects one, so the menu may still appear;
+      # the pinned entry stays the default highlight.
       pin_boot_entry() {
-        local entry
-        entry="$(bootctl status | awk -F': *' '/Current Entry:/ {print $2; exit}')"
-        if [ -z "$entry" ]; then
-          notify_pin_failed "no systemd-boot Current Entry"
+        local booted gen entry link
+        booted="$(readlink -f /run/booted-system)"
+        gen=""
+        for link in /nix/var/nix/profiles/system-*-link; do
+          [ -e "$link" ] || continue
+          [ "$(readlink -f "$link")" = "$booted" ] || continue
+          gen="''${link##*/system-}"
+          gen="''${gen%-link}"
+          break
+        done
+        if [ -z "$gen" ]; then
+          notify_pin_failed "no profile generation for $booted"
           return 1
         fi
+        entry="nixos-generation-''${gen}.conf"
         if ! bootctl set-oneshot "$entry"; then
           notify_pin_failed "bootctl set-oneshot $entry"
           return 1
@@ -62,7 +73,7 @@
           notify_pin_failed "bootctl set-timeout-oneshot 0"
           return 1
         fi
-        echo "theseus-hibernate: next boot oneshot $entry (menu timeout 0)"
+        echo "theseus-hibernate: next boot oneshot $entry (booted gen $gen, menu timeout 0)"
       }
 
       case "''${1:-}:''${2:-}" in
