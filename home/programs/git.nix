@@ -5,7 +5,8 @@
     settings = {
       user = {
         name = "wiz";
-        email = "intercomman14@gmail.com";
+        # Public identity. Human mailbox is an H5 sops consumer — do not commit it here.
+        email = "25495643+ngrayson@users.noreply.github.com";
       };
       core = {
         editor = "micro";
