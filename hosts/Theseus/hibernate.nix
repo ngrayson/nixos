@@ -19,11 +19,29 @@
   # (`find`/`rm` not found) and never masked anything.
   maskHibernateWakeup = pkgs.writeShellApplication {
     name = "theseus-hibernate-wakeup";
-    runtimeInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep pkgs.gawk pkgs.systemd];
+    runtimeInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep pkgs.gawk pkgs.systemd pkgs.libnotify pkgs.util-linux];
     text = ''
       set -euo pipefail
       sysfs_state=/run/theseus-hibernate-wakeup.list
       acpi_state=/run/theseus-hibernate-acpi-wakeup.list
+
+      # systemd-hibernate runs as root; talk to each graphical session bus.
+      # dunst urgency_critical timeout is 0 (stays until dismissed).
+      notify_pin_failed() {
+        local reason=$1 uid user runtime
+        echo "theseus-hibernate: pin failed: $reason" >&2
+        loginctl list-sessions --no-legend | awk '{print $2, $3}' | sort -u | while read -r uid user; do
+          runtime=/run/user/"$uid"
+          [ -S "$runtime/bus" ] || continue
+          runuser -u "$user" -- env \
+            XDG_RUNTIME_DIR="$runtime" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+            notify-send --urgency=critical --expire-time=0 -a Hibernate -i dialog-error \
+              "Hibernate cancelled" \
+              "Could not pin this generation for resume (''${reason}). Reboot into the running system, then try again." \
+            || true
+        done
+      }
 
       # Next boot must load the kernel that wrote the image. After `os-rebuild
       # switch` without reboot, systemd-boot's default is already the new
@@ -33,11 +51,17 @@
         local entry
         entry="$(bootctl status | awk -F': *' '/Current Entry:/ {print $2; exit}')"
         if [ -z "$entry" ]; then
-          echo "theseus-hibernate: could not read systemd-boot Current Entry" >&2
+          notify_pin_failed "no systemd-boot Current Entry"
           return 1
         fi
-        bootctl set-oneshot "$entry"
-        bootctl set-timeout-oneshot 0
+        if ! bootctl set-oneshot "$entry"; then
+          notify_pin_failed "bootctl set-oneshot $entry"
+          return 1
+        fi
+        if ! bootctl set-timeout-oneshot 0; then
+          notify_pin_failed "bootctl set-timeout-oneshot 0"
+          return 1
+        fi
         echo "theseus-hibernate: next boot oneshot $entry (menu timeout 0)"
       }
 
