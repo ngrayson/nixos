@@ -6,7 +6,8 @@
 }: {
   imports = [
     ../../common/tailscale.nix
-    ./jellyfin.nix
+    # Jellyfin lives on Hearth (`hosts/Hearth/jellyfin.nix`). This file stays
+    # on disk; the import list is the switch. Do not copy /var/lib/jellyfin.
     ./docker.nix
     ./lan.nix
   ];
