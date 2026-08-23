@@ -17,6 +17,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Master tracks nixpkgs; follows our 26.05 pin. Lockfile holds the rev.
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     slippi-nix = {
       url = "github:lytedev/slippi-nix";
       flake = false;
