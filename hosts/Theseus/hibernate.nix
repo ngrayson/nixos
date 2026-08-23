@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   swaps = config.swapDevices;
@@ -10,6 +11,33 @@
     if builtins.length swaps == 1
     then builtins.head swaps
     else null;
+  # Keyboard/trackpad/USB stay Linux wakeup sources through S4 *entry*. A touch
+  # then aborts hibernate (`Wakeup event detected during hibernation, rolling
+  # back`) and often leaves eDP dark. True S4 is powered off; those devices
+  # cannot wake it anyway. Mask them only for hibernate; restore on the way up
+  # so s2idle suspend still wakes from the trackpad.
+  maskHibernateWakeup = pkgs.writeShellScript "theseus-hibernate-wakeup" ''
+    set -euo pipefail
+    state=/run/theseus-hibernate-wakeup.list
+    case "''${1:-}:''${2:-}" in
+      pre:hibernate)
+        : >"$state"
+        find /sys/devices -path '*/power/wakeup' 2>/dev/null | while read -r f; do
+          [ "$(cat "$f" 2>/dev/null || true)" = enabled ] || continue
+          printf '%s\n' "$f" >>"$state"
+          echo disabled >"$f" || true
+        done
+        ;;
+      post:hibernate)
+        [ -f "$state" ] || exit 0
+        while read -r f; do
+          [ -e "$f" ] || continue
+          echo enabled >"$f" || true
+        done <"$state"
+        rm -f "$state"
+        ;;
+    esac
+  '';
 in {
   assertions = [
     {
@@ -37,5 +65,10 @@ in {
   services.logind.settings.Login = {
     HandleLidSwitch = lib.mkForce "suspend-then-hibernate";
     HandleLidSwitchExternalPower = lib.mkForce "suspend-then-hibernate";
+  };
+
+  environment.etc."systemd/system-sleep/theseus-hibernate-wakeup" = {
+    mode = "0755";
+    source = maskHibernateWakeup;
   };
 }
