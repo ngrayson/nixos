@@ -3,6 +3,7 @@
 {...}: {
   imports = [
     ../../profiles/media-desktop.nix
+    ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
     ./jellyfin.nix

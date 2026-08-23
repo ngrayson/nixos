@@ -7,6 +7,7 @@
 }: {
   imports = [
     ../../profiles/workstation.nix
+    ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
   ];
