@@ -117,7 +117,21 @@ function HugCard({ id, onHeight, children }) {
           parseFloat(style.borderTopWidth) +
           parseFloat(style.borderBottomWidth)
         : 0;
-      const px = inner.scrollHeight + chrome;
+      const width = (card || inner).getBoundingClientRect().width;
+      const probe = inner.cloneNode(true);
+      probe.style.cssText = [
+        "position:absolute",
+        "left:-99999px",
+        "top:0",
+        "visibility:hidden",
+        "height:auto",
+        "overflow:visible",
+        `width:${Math.max(0, width)}px`,
+        "pointer-events:none",
+      ].join(";");
+      document.body.appendChild(probe);
+      const px = probe.scrollHeight + chrome;
+      document.body.removeChild(probe);
       if (px < 16) return;
       onHeight(id, pxToRows(px));
     };
