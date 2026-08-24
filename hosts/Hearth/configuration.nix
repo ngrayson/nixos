@@ -18,5 +18,6 @@
     ./intranet-transit.nix
     ./intranet-gallery.nix
     ./intranet-calendar.nix
+    ./restic.nix
   ];
 }
