@@ -3,9 +3,14 @@
   lib,
   config,
   pkgs,
+  nixosConfig ? null,
   ...
 }: let
   hs = import ../hypr/scripts.nix {inherit config lib pkgs;};
+  hostName =
+    if nixosConfig == null
+    then ""
+    else nixosConfig.networking.hostName;
 in {
   services.hypridle = {
     enable = true;
