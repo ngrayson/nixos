@@ -35,16 +35,18 @@ export default function App() {
             <Icon code={ICO.home} />
             Home
           </a>
-          <a id="tv-jellyfin" className="site-nav-item" href="https://tv.wizt.org">
-            <Icon code={ICO.tv} />
-            TV Jellyfin
-          </a>
-          {lan ? (
-            <a className="site-nav-item" href={tvHref}>
+          <span className="site-nav-ctas">
+            <a id="tv-jellyfin" className="site-nav-item site-nav-cta" href="https://tv.wizt.org">
               <Icon code={ICO.tv} />
-              TV (LAN)
+              TV Jellyfin
             </a>
-          ) : null}
+            {lan ? (
+              <a className="site-nav-item site-nav-cta" href={tvHref}>
+                <Icon code={ICO.tv} />
+                TV (LAN)
+              </a>
+            ) : null}
+          </span>
         </nav>
         <WidgetGrid />
       </main>

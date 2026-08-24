@@ -84,7 +84,7 @@ export default function Calendar() {
   return (
     <>
       <Heading title="Calendar" code={ICO.calendar} />
-      <p>{cap}</p>
+      <p className="cal-caption">{cap}</p>
       <MonthGrid marked={marked} />
     </>
   );

@@ -38,7 +38,9 @@ export default function Gallery({ onPresence }) {
   return (
     <>
       <Heading title="Gallery" code={ICO.gallery} />
-      <img alt="" src={hrefs[index % hrefs.length]} />
+      <div className="gallery-frame">
+        <img alt="" src={hrefs[index % hrefs.length]} />
+      </div>
     </>
   );
 }

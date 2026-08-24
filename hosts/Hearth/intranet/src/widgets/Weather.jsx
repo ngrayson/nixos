@@ -123,7 +123,7 @@ function Place({ place, unit }) {
   const aqi = place.air && place.air.current ? place.air.current.us_aqi : null;
   const phase = moonPhase(daily.moon_phase && daily.moon_phase[0]);
   return (
-    <article>
+    <article className="weather-place">
       <h3>{place.loc.name || "Location"}</h3>
       <p className="facts">
         <Fact
