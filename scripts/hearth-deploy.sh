@@ -358,6 +358,24 @@ require_local_intranet_config() {
   return "$missing"
 }
 
+# After activate: copy gitignored widget config.nix onto Hearth for restic.
+# Do not git add those files. Skip widgets that have no local config.nix.
+copy_intranet_config_for_restic() {
+  local base="$NIXOS_DIR/hosts/Hearth/intranet/config"
+  local remote_dir="/var/lib/hearth-intranet/config"
+  local widget src copied=0
+  ssh_hearth -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
+  for widget in clock weather transit health gallery calendar; do
+    src="$base/$widget/config.nix"
+    [[ -f "$src" ]] || continue
+    scp -q "$src" "${TARGET}:/tmp/hearth-${widget}.nix" || return 1
+    ssh_hearth -o BatchMode=yes sudo mv "/tmp/hearth-${widget}.nix" "${remote_dir}/${widget}.nix" || return 1
+    ssh_hearth -o BatchMode=yes sudo chmod 0640 "${remote_dir}/${widget}.nix" || return 1
+    copied=$((copied + 1))
+  done
+  ok "Copied ${copied} intranet config.nix file(s) to ${remote_dir} for restic."
+}
+
 offer_stage_untracked() {
   ((STAGE == 0)) && return 0
   untracked_flake_inputs
@@ -666,6 +684,10 @@ run_deploy() {
     error "nixos-rebuild ${action} failed. Full log: $(short_home "$LOG_FILE")"
     warn "If SSH dropped, reconnect and: ssh ${TARGET} readlink /run/current-system"
     return 1
+  fi
+
+  if [[ "$action" == "switch" || "$action" == "boot" ]]; then
+    copy_intranet_config_for_restic || warn "Intranet config.nix copy for restic failed."
   fi
 
   if [[ "$action" == "boot" ]]; then

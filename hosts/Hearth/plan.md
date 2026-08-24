@@ -208,6 +208,15 @@ desktop is currently the only recovery console.
   URL, Restic repo password, seedbox credentials, Syncthing device IDs.
 - Acceptance: no plaintext secret in the repo; a fresh Hearth install can be
   re-keyed from Bitwarden alone.
+- **Restic (v1):** `hosts/Hearth/restic.nix` backups Jellyfin state (no
+  transcodes/cache), Tailscale identity, ACME certs, the host age key, and
+  builder `config.nix` copies under `/var/lib/hearth-intranet/config/`.
+  Repo is `/mnt/cold/backups/hearth-restic` (7 daily + 4 weekly). Restore is
+  `restic restore` plus placing files; the flake still builds the OS. Do not
+  snapshot `/mnt/cold/media` or `/nix/store`. Password is
+  `secrets/hearth-restic-password.yaml` (Bitwarden → sops). Missing COLD
+  fails only the backup unit. `hearth-deploy` copies gitignored widget
+  `config.nix` files after switch/boot.
 
 ### H6 — Remote surface (wiztow.org + streaming)
 - **Public site (decision 16):** serverless webapp on Vercel (or similar) at
