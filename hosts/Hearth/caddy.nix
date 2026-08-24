@@ -15,19 +15,38 @@
   ...
 }: let
   lan = import ../../common/lan.nix;
+  intranetCfg = import ./intranet-config.nix;
   tailnetIPv4 = "100.84.222.78";
+  json = builtins.toJSON;
+  optJson = v:
+    if v == null
+    then "null"
+    else json v;
   intranetRoot =
     pkgs.runCommand "hearth-intranet" {
       index = ./intranet/index.html;
       css = ./intranet/style.css;
+      widgets = ./intranet/widgets.js;
       lanJs = pkgs.writeText "lan.js" ''
         window.hearthLan = "${lan.hosts.Hearth}";
+      '';
+      cfgJs = pkgs.writeText "intranet-config.js" ''
+        window.hearthIntranet = {
+          latitude: ${optJson intranetCfg.latitude},
+          longitude: ${optJson intranetCfg.longitude},
+          routeFrom: ${json intranetCfg.routeFrom},
+          routeTo: ${json intranetCfg.routeTo},
+          busStopIds: ${json intranetCfg.busStopIds},
+          calendarIcsUrl: ${optJson intranetCfg.calendarIcsUrl}
+        };
       '';
     } ''
       mkdir -p "$out"
       cp "$index" "$out/index.html"
       cp "$css" "$out/style.css"
+      cp "$widgets" "$out/widgets.js"
       cp "$lanJs" "$out/lan.js"
+      cp "$cfgJs" "$out/intranet-config.js"
     '';
 in {
   sops.secrets.acme-cloudflare-env = {
@@ -71,6 +90,10 @@ in {
       listenAddresses = [tailnetIPv4];
       useACMEHost = "home.wizt.org";
       extraConfig = ''
+        handle_path /gallery/* {
+          root * ${intranetCfg.galleryDir}
+          file_server browse
+        }
         root * ${intranetRoot}
         file_server
       '';
