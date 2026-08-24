@@ -7,6 +7,14 @@
   lan = import ../../common/lan.nix;
   hearthCidr = lan.cidrFor "Hearth";
 in {
+  imports = [
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "14d";
+      configurationLimit = 5;
+    })
+  ];
+
   networking.hostName = "Hearth";
 
   # Patched linux-surface kernel (module wired in flake.nix).
