@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "conveyor": {
+      "command": "/home/wiz/.config/nixos/scripts/conveyor-mcp.sh"
+    }
+  }
+}

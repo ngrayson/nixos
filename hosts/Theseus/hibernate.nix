@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   swaps = config.swapDevices;
@@ -10,6 +11,111 @@
     if builtins.length swaps == 1
     then builtins.head swaps
     else null;
+  # Keyboard/trackpad/USB/power-button stay Linux wakeup sources through S4
+  # *entry*. A press then aborts hibernate (`Wakeup event detected during
+  # hibernation, rolling back`) and often leaves eDP dark. True S4 is powered
+  # off; firmware still honors the power button to turn the machine on.
+  # systemd-sleep's PATH has no coreutils, so the first hook died with 127
+  # (`find`/`rm` not found) and never masked anything.
+  maskHibernateWakeup = pkgs.writeShellApplication {
+    name = "theseus-hibernate-wakeup";
+    runtimeInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep pkgs.gawk pkgs.systemd pkgs.libnotify pkgs.util-linux];
+    text = ''
+      set -euo pipefail
+      sysfs_state=/run/theseus-hibernate-wakeup.list
+      acpi_state=/run/theseus-hibernate-acpi-wakeup.list
+
+      # systemd-hibernate runs as root; talk to each graphical session bus.
+      # dunst urgency_critical timeout is 0 (stays until dismissed).
+      notify_pin_failed() {
+        local reason=$1 uid user runtime
+        echo "theseus-hibernate: pin failed: $reason" >&2
+        loginctl list-sessions --no-legend | awk '{print $2, $3}' | sort -u | while read -r uid user; do
+          runtime=/run/user/"$uid"
+          [ -S "$runtime/bus" ] || continue
+          runuser -u "$user" -- env \
+            XDG_RUNTIME_DIR="$runtime" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+            notify-send --urgency=critical --expire-time=0 -a Hibernate -i dialog-error \
+              "Hibernate cancelled" \
+              "Could not pin this generation for resume (''${reason}). Reboot into the running system, then try again." \
+            || true
+        done
+      }
+
+      # Next boot must load the kernel that wrote the image (`/run/booted-system`),
+      # not `bootctl`'s Current Entry (can disagree) and not `/run/current-system`
+      # (already the new generation after `os-rebuild switch` without reboot).
+      # One-shot selects that loader entry. Timeout 0 skips the menu unless a key
+      # is pressed — Framework's EC often injects one, so the menu may still appear;
+      # the pinned entry stays the default highlight.
+      pin_boot_entry() {
+        local booted gen entry link
+        booted="$(readlink -f /run/booted-system)"
+        gen=""
+        for link in /nix/var/nix/profiles/system-*-link; do
+          [ -e "$link" ] || continue
+          [ "$(readlink -f "$link")" = "$booted" ] || continue
+          gen="''${link##*/system-}"
+          gen="''${gen%-link}"
+          break
+        done
+        if [ -z "$gen" ]; then
+          notify_pin_failed "no profile generation for $booted"
+          return 1
+        fi
+        entry="nixos-generation-''${gen}.conf"
+        if ! bootctl set-oneshot "$entry"; then
+          notify_pin_failed "bootctl set-oneshot $entry"
+          return 1
+        fi
+        if ! bootctl set-timeout-oneshot 0; then
+          notify_pin_failed "bootctl set-timeout-oneshot 0"
+          return 1
+        fi
+        echo "theseus-hibernate: next boot oneshot $entry (booted gen $gen, menu timeout 0)"
+      }
+
+      case "''${1:-}:''${2:-}" in
+        pin:)
+          pin_boot_entry
+          ;;
+        pre:hibernate)
+          pin_boot_entry
+          : >"$sysfs_state"
+          : >"$acpi_state"
+          find /sys/devices -path '*/power/wakeup' 2>/dev/null | while read -r f; do
+            [ "$(cat "$f" 2>/dev/null || true)" = enabled ] || continue
+            printf '%s\n' "$f" >>"$sysfs_state"
+            echo disabled >"$f" || true
+          done
+          if [ -w /proc/acpi/wakeup ]; then
+            grep -E '[[:space:]]\*enabled' /proc/acpi/wakeup | while read -r dev _; do
+              [ -n "$dev" ] || continue
+              printf '%s\n' "$dev" >>"$acpi_state"
+              echo "$dev" >/proc/acpi/wakeup || true
+            done || true
+          fi
+          ;;
+        post:hibernate)
+          if [ -f "$sysfs_state" ]; then
+            while read -r f; do
+              [ -e "$f" ] || continue
+              echo enabled >"$f" || true
+            done <"$sysfs_state"
+            rm -f "$sysfs_state"
+          fi
+          if [ -f "$acpi_state" ] && [ -w /proc/acpi/wakeup ]; then
+            while read -r dev; do
+              [ -n "$dev" ] || continue
+              echo "$dev" >/proc/acpi/wakeup || true
+            done <"$acpi_state"
+            rm -f "$acpi_state"
+          fi
+          ;;
+      esac
+    '';
+  };
 in {
   assertions = [
     {
@@ -38,4 +144,18 @@ in {
     HandleLidSwitch = lib.mkForce "suspend-then-hibernate";
     HandleLidSwitchExternalPower = lib.mkForce "suspend-then-hibernate";
   };
+
+  environment.etc."systemd/system-sleep/theseus-hibernate-wakeup" = {
+    mode = "0755";
+    source = "${maskHibernateWakeup}/bin/theseus-hibernate-wakeup";
+  };
+
+  # systemd-sleep ignores a non-zero sleep.d exit. Fail the unit instead so we
+  # never write an image that the next default generation cannot resume.
+  systemd.services.systemd-hibernate.serviceConfig.ExecStartPre = [
+    "${maskHibernateWakeup}/bin/theseus-hibernate-wakeup pin"
+  ];
+  systemd.services.systemd-suspend-then-hibernate.serviceConfig.ExecStartPre = [
+    "${maskHibernateWakeup}/bin/theseus-hibernate-wakeup pin"
+  ];
 }
