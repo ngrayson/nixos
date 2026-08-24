@@ -6,9 +6,9 @@
 # obaApiKey "TEST" is the public OBA development key; it 429s if polled hard.
 # Poll no faster than 60s (Hearth-side; not per browser).
 {
-  # Waze Live Map (traffic on, no API key). `mapQuery` is "lat,lon".
-  # Google's Maps iframe cannot show traffic without a JS API key.
-  # Do not put a real home map center here.
+  # Waze iframe (`lat,lon`). Official params have no traffic toggle.
+  # Livemap georss 403s as of 2026-08, so the embed is a basemap only.
+  # Do not swap providers here. Do not put a real home map center here.
   mapQuery = "";
   mapZoom = 10;
   obaApiKey = "TEST";
