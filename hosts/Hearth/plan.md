@@ -219,12 +219,12 @@ desktop is currently the only recovery console.
 - **DNS (operator):** A `tv.wizt.org` → `100.84.222.78`. Tailnet split DNS
   forwards `wizt.org` to Cloudflare. The name may resolve off-tailnet; TCP/TLS only
   works for tailnet members. TLS is Let's Encrypt DNS-01 (`security.acme` +
-  lego `gcloud`) because the public apex sends
+  lego `cloudflare`) because the public apex sends
   `HSTS includeSubDomains` — Caddy `tls internal` cannot be excepted in
-  Firefox. Secret: `secrets/acme-gce-sa.json` (Cloud DNS Admin SA).
-  Apex `wizt.org` A records still point at Rebrandly; disconnect that
-  service in the DNS panel when the public site has a new home. Do not
-  keep `tls internal` on a `wizt.org` name.
+  Firefox. Secret: `secrets/acme-cloudflare.env` (`CLOUDFLARE_DNS_API_TOKEN`).
+  Host the `wizt.org` zone on Cloudflare (no GCP). Apex A records may still
+  point at Rebrandly until the public site has a new home. Do not keep
+  `tls internal` on a `wizt.org` name.
 - **TV:** still `http://172.16.141.38:8096` on GiGstreem (Jellyfin
   `openFirewall` unchanged). Put that LAN IP on the intranet page later so
   local users do not need DHCP reservations.
