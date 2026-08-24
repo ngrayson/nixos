@@ -557,6 +557,7 @@ choose_action() {
       "Dry-activate" \
       "Switch" \
       "Boot" \
+      "Health" \
       "Recheck" \
       "SSH" \
       "Quit"
@@ -564,8 +565,8 @@ choose_action() {
   fi
 
   printf '\n  [b] Build          [d] Dry-activate    [s] Switch\n'
-  printf '  [o] Boot           [r] Recheck         [h] SSH\n'
-  printf '  [q] Quit\n'
+  printf '  [o] Boot           [e] Health          [r] Recheck\n'
+  printf '  [h] SSH            [q] Quit\n'
   printf '\nAction: '
   local reply
   read -r reply || true
@@ -574,6 +575,7 @@ choose_action() {
     d | D | dry | Dry-activate) printf 'Dry-activate' ;;
     s | S | switch | Switch) printf 'Switch' ;;
     o | O | boot | Boot) printf 'Boot' ;;
+    e | E | health | Health) printf 'Health' ;;
     r | R | recheck | Recheck) printf 'Recheck' ;;
     h | H | ssh | SSH) printf 'SSH' ;;
     q | Q | quit | Quit | '') printf 'Quit' ;;
@@ -664,11 +666,11 @@ run_deploy() {
       heading "Closure changes"
       nix store diff-closures "$before" "$after" | filter_rebuild_output || true
     fi
-    notify_hearth_if_visible "Hearth switch OK" "$(short_store "${after:-activated}")"
     if ! run_healthcheck; then
       error "Activate succeeded but health check failed — do not treat this generation as good."
       return 1
     fi
+    notify_hearth_if_visible "Hearth switch OK" "$(short_store "${after:-activated}")"
   fi
 
   command_exists notify-send &&
@@ -759,6 +761,10 @@ interactive_loop() {
       Boot)
         new_log boot
         run_deploy boot || true
+        ;;
+      Health)
+        run_doctor || true
+        run_healthcheck || true
         ;;
       Recheck)
         run_doctor || true
