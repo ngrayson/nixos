@@ -12,5 +12,6 @@
     ./jellyfin.nix
     ./remote-access.nix
     ./home.nix
+    ./caddy.nix
   ];
 }
