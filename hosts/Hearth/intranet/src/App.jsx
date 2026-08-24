@@ -1,11 +1,6 @@
 import { hearthLan } from "./lib/config.js";
+import WidgetGrid from "./components/WidgetGrid.jsx";
 import Clock from "./widgets/Clock.jsx";
-import Weather from "./widgets/Weather.jsx";
-import Transit from "./widgets/Transit.jsx";
-import Buses from "./widgets/Buses.jsx";
-import Health from "./widgets/Health.jsx";
-import Gallery from "./widgets/Gallery.jsx";
-import Calendar from "./widgets/Calendar.jsx";
 
 export default function App() {
   const lan = hearthLan();
@@ -22,22 +17,7 @@ export default function App() {
           TV Jellyfin
         </a>
       </p>
-      <section id="weather">
-        <Weather />
-      </section>
-      <section id="transit">
-        <Transit />
-        <Buses />
-      </section>
-      <section id="health">
-        <Health />
-      </section>
-      <section id="gallery">
-        <Gallery />
-      </section>
-      <section id="calendar">
-        <Calendar />
-      </section>
+      <WidgetGrid />
     </main>
   );
 }

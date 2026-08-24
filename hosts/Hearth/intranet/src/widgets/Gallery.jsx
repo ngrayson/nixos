@@ -5,7 +5,7 @@ function isImage(name) {
   return /\.(jpe?g|png|gif|webp|avif)$/i.test(name);
 }
 
-export default function Gallery() {
+export default function Gallery({ onPresence }) {
   const [hrefs, setHrefs] = useState(null);
   const [index, setIndex] = useState(0);
 
@@ -35,6 +35,11 @@ export default function Gallery() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (hrefs == null) return;
+    onPresence?.(hrefs.length > 0);
+  }, [hrefs, onPresence]);
 
   useEffect(() => {
     if (!hrefs || !hrefs.length) return undefined;

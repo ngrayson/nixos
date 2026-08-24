@@ -34,7 +34,7 @@
     pname = "hearth-intranet";
     version = "0.0.1";
     src = intranetSrc;
-    npmDepsHash = "sha256-3WpALDOJrkeCVheZqJB6mymL6lpbuEd//oU64JIclQo=";
+    npmDepsHash = "sha256-MmSP6EVHiDc77qm19H2Lh51YwXAH+7M7jfQRYFqunVw=";
     npmBuildScript = "build";
     installPhase = ''
       runHook preInstall
