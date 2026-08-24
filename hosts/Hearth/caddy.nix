@@ -43,13 +43,38 @@
       runHook postInstall
     '';
   };
+  intranetPublic = {
+    clock = intranetCfg.clock or {};
+    weather = {
+      locations = (intranetCfg.weather or {}).locations or [];
+      temperatureUnit = (intranetCfg.weather or {}).temperatureUnit or "F";
+    };
+    transit = {
+      busStops = (intranetCfg.transit or {}).busStops or [];
+      mapQuery = (intranetCfg.transit or {}).mapQuery or "";
+      mapZoom = (intranetCfg.transit or {}).mapZoom or 10;
+    };
+    health = intranetCfg.health or {};
+    gallery = {};
+    calendar = {};
+  };
+  hudHeaders = ''
+    header {
+      X-Content-Type-Options nosniff
+      Referrer-Policy strict-origin-when-cross-origin
+      Permissions-Policy "camera=(), microphone=(), geolocation=()"
+      Strict-Transport-Security "max-age=31536000; includeSubDomains"
+      X-Robots-Tag "noindex, nofollow"
+      Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://air-quality-api.open-meteo.com; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    }
+  '';
   intranetRoot =
     pkgs.runCommand "hearth-intranet" {
       lanJs = pkgs.writeText "lan.js" ''
         window.hearthLan = "${lan.hosts.Hearth}";
       '';
       cfgJs = pkgs.writeText "intranet-config.js" ''
-        window.hearthIntranet = ${builtins.toJSON intranetCfg};
+        window.hearthIntranet = ${builtins.toJSON intranetPublic};
       '';
       nerdFont = "${pkgs.nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFont-Regular.ttf";
       faviconSvg = ./intranet/favicon.svg;
@@ -108,6 +133,7 @@ in {
       listenAddresses = [tailnetIPv4];
       useACMEHost = "home.wizt.org";
       extraConfig = ''
+        ${hudHeaders}
         handle /status.json {
           root * /run/hearth-intranet
           file_server
@@ -116,10 +142,24 @@ in {
           root * /run/hearth-intranet
           file_server
         }
-        handle_path /gallery/* {
-          root * ${intranetCfg.gallery.galleryDir}
-          file_server browse
+        handle /gallery.json {
+          root * /run/hearth-intranet
+          file_server
         }
+        handle /calendar.ics {
+          root * /run/hearth-intranet
+          file_server
+        }
+        ${
+    if (intranetCfg.gallery.galleryDir or "") != ""
+    then ''
+      handle_path /gallery/* {
+        root * ${intranetCfg.gallery.galleryDir}
+        file_server
+      }
+    ''
+    else ""
+  }
         root * ${intranetRoot}
         file_server
       '';
