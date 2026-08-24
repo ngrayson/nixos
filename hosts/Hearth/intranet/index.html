@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hearth</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Hearth</h1>
+        <time id="clock"></time>
+      </header>
+
+      <p>
+        <a id="tv-jellyfin" class="cta" href="#">TV Jellyfin</a>
+      </p>
+
+      <!-- Stable anchors for later widget cards. Keep these ids. -->
+      <section id="weather"></section>
+      <section id="transit"></section>
+      <section id="health"></section>
+      <section id="gallery"></section>
+      <section id="calendar"></section>
+    </main>
+
+    <!-- lan.js is generated from common/lan.nix — do not hardcode the IP here. -->
+    <script src="./lan.js"></script>
+    <script>
+      (function () {
+        var link = document.getElementById("tv-jellyfin");
+        if (link && window.hearthLan) {
+          link.href = "http://" + window.hearthLan + ":8096";
+        }
+
+        var clock = document.getElementById("clock");
+        function tick() {
+          var now = new Date();
+          clock.dateTime = now.toISOString();
+          clock.textContent = now.toLocaleString(undefined, {
+            weekday: "short",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+        }
+        tick();
+        setInterval(tick, 1000);
+      })();
+    </script>
+  </body>
+</html>
