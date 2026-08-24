@@ -2,12 +2,11 @@
 #   os-rebuild build --host Hearth
 {...}: {
   imports = [
-    ../../profiles/media-desktop.nix
+    ../../profiles/media-server.nix
     ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
     ./jellyfin.nix
     ./remote-access.nix
-    ./home.nix
   ];
 }
