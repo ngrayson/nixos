@@ -342,6 +342,8 @@ section h3 {
   border: 0;
   border-radius: 0.5rem;
   background: var(--depth);
+  /* Waze iframe has no dark theme. Invert + hue-rotate keeps jam hues. */
+  filter: invert(1) hue-rotate(180deg);
 }
 
 .bus-stop {
