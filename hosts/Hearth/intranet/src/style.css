@@ -12,7 +12,7 @@
 
 @font-face {
   font-family: "Symbols Nerd Font";
-  src: url("./SymbolsNerdFont.ttf") format("truetype");
+  src: url("/SymbolsNerdFont.ttf") format("truetype");
   font-display: swap;
 }
 

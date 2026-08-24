@@ -24,11 +24,32 @@
     })
     widgetNames);
   tailnetIPv4 = "100.84.222.78";
+  intranetSrc = lib.fileset.toSource {
+    root = ./intranet;
+    fileset = lib.fileset.unions [
+      ./intranet/package.json
+      ./intranet/package-lock.json
+      ./intranet/vite.config.js
+      ./intranet/index.html
+      ./intranet/src
+      ./intranet/public
+    ];
+  };
+  intranetApp = pkgs.buildNpmPackage {
+    pname = "hearth-intranet";
+    version = "0.0.1";
+    src = intranetSrc;
+    npmDepsHash = "sha256-3WpALDOJrkeCVheZqJB6mymL6lpbuEd//oU64JIclQo=";
+    npmBuildScript = "build";
+    installPhase = ''
+      runHook preInstall
+      mkdir -p "$out"
+      cp -r dist/. "$out/"
+      runHook postInstall
+    '';
+  };
   intranetRoot =
     pkgs.runCommand "hearth-intranet" {
-      index = ./intranet/index.html;
-      css = ./intranet/style.css;
-      widgets = ./intranet/widgets.js;
       lanJs = pkgs.writeText "lan.js" ''
         window.hearthLan = "${lan.hosts.Hearth}";
       '';
@@ -40,9 +61,8 @@
       nativeBuildInputs = [pkgs.resvg pkgs.imagemagick];
     } ''
       mkdir -p "$out"
-      cp "$index" "$out/index.html"
-      cp "$css" "$out/style.css"
-      cp "$widgets" "$out/widgets.js"
+      cp -r ${intranetApp}/. "$out/"
+      chmod -R u+w "$out"
       cp "$lanJs" "$out/lan.js"
       cp "$cfgJs" "$out/intranet-config.js"
       cp "$nerdFont" "$out/SymbolsNerdFont.ttf"
