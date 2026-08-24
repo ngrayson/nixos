@@ -16,13 +16,8 @@
   ...
 }: let
   lan = import ../../common/lan.nix;
-  # Only config.example.nix is imported. Sibling config.nix files are ignored.
-  widgetNames = ["clock" "weather" "transit" "health" "gallery" "calendar"];
-  intranetCfg = lib.listToAttrs (map (name: {
-      inherit name;
-      value = import (./intranet/config + "/${name}/config.example.nix");
-    })
-    widgetNames);
+  # Gitignored config.nix per widget (see intranet/config/default.nix).
+  intranetCfg = import ./intranet/config;
   tailnetIPv4 = "100.84.222.78";
   intranetSrc = lib.fileset.toSource {
     root = ./intranet;

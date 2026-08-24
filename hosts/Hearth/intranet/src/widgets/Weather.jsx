@@ -178,7 +178,7 @@ export default function Weather() {
   if (!valid.length) {
     return (
       <Empty
-        text="set locations in intranet/config/weather/config.example.nix"
+        text="set locations in intranet/config/weather/config.nix"
         title="Weather"
         code={ICO.weather}
       />

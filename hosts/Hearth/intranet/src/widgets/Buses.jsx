@@ -89,7 +89,7 @@ export default function Buses() {
   } else {
     const stops = payload.stops || [];
     if (!stops.length) {
-      list = <p className="empty">add busStops in intranet/config/transit/config.example.nix</p>;
+      list = <p className="empty">add busStops in intranet/config/transit/config.nix</p>;
     } else {
       list = (
         <>

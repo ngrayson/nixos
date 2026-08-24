@@ -1,10 +1,7 @@
 # Oneshot + timer: one Hearth poll of OneBusAway → /run/hearth-intranet/transit.json.
 # Browsers only read that file. Do not proxy OBA per client (TEST key 429s).
-{
-  pkgs,
-  ...
-}: let
-  transitCfg = import ./intranet/config/transit/config.example.nix;
+{pkgs, ...}: let
+  transitCfg = (import ./intranet/config).transit;
   pollSeconds = let
     n = transitCfg.obaPollSeconds or 60;
   in
