@@ -1,0 +1,1 @@
+window.hearthIntranet = window.hearthIntranet || {};

@@ -1,0 +1,1 @@
+window.hearthLan = window.hearthLan || "";
