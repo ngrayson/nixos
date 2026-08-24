@@ -59,10 +59,61 @@ time {
   outline-offset: 3px;
 }
 
-#weather,
-#transit,
-#health,
-#gallery,
-#calendar {
-  min-height: 0;
+section {
+  margin-top: 1.75rem;
+}
+
+section h2 {
+  margin: 0 0 0.4rem;
+  color: var(--strong);
+  font-size: 1.05rem;
+  text-transform: capitalize;
+}
+
+.empty {
+  margin: 0;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+#gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  background: var(--depth);
+}
+
+.cal {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.cal th,
+.cal td {
+  padding: 0.35rem 0.15rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal th {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.cal td.today {
+  outline: 1px solid var(--accent);
+  border-radius: 0.25rem;
+}
+
+.cal td.marked {
+  color: var(--strong);
+  font-weight: 650;
+}
+
+#health:empty,
+#gallery:empty {
+  display: none;
 }
