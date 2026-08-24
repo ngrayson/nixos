@@ -1,32 +1,19 @@
 import { useEffect, useState } from "react";
 import { Heading, ICO } from "../lib/icons.jsx";
 
-function isImage(name) {
-  return /\.(jpe?g|png|gif|webp|avif)$/i.test(name);
-}
-
 export default function Gallery({ onPresence }) {
   const [hrefs, setHrefs] = useState(null);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/gallery/", { headers: { Accept: "text/html" } })
+    fetch("/gallery.json")
       .then((res) => {
         if (!res.ok) throw new Error("gallery " + res.status);
-        return res.text();
+        return res.json();
       })
-      .then((html) => {
-        if (cancelled) return;
-        const docs = new DOMParser().parseFromString(html, "text/html");
-        const next = [];
-        docs.querySelectorAll("a[href]").forEach((a) => {
-          const href = a.getAttribute("href");
-          if (!href || href === "../" || href.slice(-1) === "/") return;
-          const name = href.split("/").pop();
-          if (isImage(name)) next.push("/gallery/" + name);
-        });
-        setHrefs(next);
+      .then((data) => {
+        if (!cancelled) setHrefs(Array.isArray(data.hrefs) ? data.hrefs : []);
       })
       .catch(() => {
         if (!cancelled) setHrefs([]);

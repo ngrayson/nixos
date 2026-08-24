@@ -81,6 +81,16 @@ else
   fail "curl is not on PATH"
 fi
 
+require_unit caddy
+if command -v curl >/dev/null 2>&1; then
+  if curl -fsS --max-time 5 --resolve home.wizt.org:443:100.84.222.78 \
+    https://home.wizt.org/status.json | grep -q '"root"'; then
+    ok "home.wizt.org/status.json has root"
+  else
+    fail "home.wizt.org/status.json missing or has no root (Caddy is on 100.84.222.78)"
+  fi
+fi
+
 if ((failed)); then
   printf 'Hearth health check failed\n' >&2
   exit 1

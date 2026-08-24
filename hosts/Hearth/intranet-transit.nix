@@ -117,17 +117,20 @@
     '';
   };
 in {
-  systemd.tmpfiles.rules = [
-    "d /run/hearth-intranet 0755 root root -"
-  ];
-
   systemd.services.hearth-intranet-transit = {
     description = "Write Hearth intranet transit.json from OneBusAway";
     after = ["network-online.target"];
     wants = ["network-online.target"];
     serviceConfig = {
       Type = "oneshot";
+      User = "hearth-intranet";
+      Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-transit";
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      ReadWritePaths = ["/run/hearth-intranet"];
     };
   };
 

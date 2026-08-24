@@ -72,16 +72,20 @@
     '';
   };
 in {
-  systemd.tmpfiles.rules = [
-    "d /run/hearth-intranet 0755 root root -"
-  ];
-
   systemd.services.hearth-intranet-status = {
     description = "Write Hearth intranet status.json";
     after = ["local-fs.target"];
     serviceConfig = {
       Type = "oneshot";
+      User = "hearth-intranet";
+      Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-status";
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      ReadWritePaths = ["/run/hearth-intranet"];
+      RestrictAddressFamilies = ["AF_UNIX"];
     };
   };
 

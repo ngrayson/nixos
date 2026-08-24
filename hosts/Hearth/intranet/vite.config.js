@@ -11,6 +11,8 @@ export default defineConfig({
     proxy: {
       "/status.json": { target: "https://home.wizt.org", changeOrigin: true },
       "/transit.json": { target: "https://home.wizt.org", changeOrigin: true },
+      "/gallery.json": { target: "https://home.wizt.org", changeOrigin: true },
+      "/calendar.ics": { target: "https://home.wizt.org", changeOrigin: true },
       "/gallery": { target: "https://home.wizt.org", changeOrigin: true },
     },
   },
