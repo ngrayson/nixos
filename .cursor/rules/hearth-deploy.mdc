@@ -9,8 +9,9 @@ alwaysApply: false
 `scripts/hearth-deploy.sh`, exposed as `hearth-deploy` via `~/.local/bin` (and a zsh alias). Daily loop for host **Hearth**: evaluate and build on Tawa, copy + activate over OpenSSH. If a shell says command-not-found, run `bash ~/.config/nixos/scripts/hearth-deploy.sh` — the alias only exists after a Tawa Home Manager switch.
 
 - Run it on **Tawa** (or Theseus). Refuse activation if `hostname` is `Hearth`.
-- Use the builder's current checkout. Status and the pre-activate prompt must name the branch and lane (`main` = stable, `dev` = unstable). Do not switch branches.
-- Command: `nixos-rebuild <switch|boot|dry-activate> --flake ~/.config/nixos#Hearth --target-host hearth --use-remote-sudo`. Omit `--build-host` so the build stays local. `hearth` is the SSH Host alias (`~/.ssh/config.d/hearth`); do not pass the raw MagicDNS name or host-key checks fail.
+- `build` / `health` / `doctor` use the builder checkout and must print its branch and lane. `switch` / `boot` / `dry-activate` default to `origin/deploy/hearth`, not Tawa's dirty tree. Print both the pin and the checkout. `--from-checkout` is the loud escape hatch.
+- Path filter: refuse `origin/main...<pin>` if it touches `common/`, `home/`, `profiles/`, `flake.nix`, or `flake.lock`, unless `HEARTH_DEPLOY_ALLOW_SHARED=1` or trailer `Hearth-Deploy: allow-shared`.
+- Command: `nixos-rebuild <switch|boot|dry-activate> --flake <pin-or-checkout>#Hearth --target-host hearth --use-remote-sudo`. deploy-rs is not the activator (`boot` is unsupported). Omit `--build-host` so the build stays local. `hearth` is the SSH Host alias (`~/.ssh/config.d/hearth`); do not pass the raw MagicDNS name or host-key checks fail.
 - Talk to `sshd` on port 22 (MagicDNS / tailnet), not Tailscale SSH.
 - Do not `os-rebuild switch --host Hearth` on Tawa (activates the wrong machine). Do not write Tawa's `applied.json` after a Hearth deploy.
 - After a successful `switch`, run `scripts/hearth-healthcheck.sh` on Hearth over OpenSSH (`sshd`, Tailscale `Self.Online`, `jellyfin`, `/mnt/cold` UUID, Jellyfin `/health`). Non-zero check fails `hearth-deploy`. `hearth-deploy health` runs the same probes without a rebuild. After `boot`, skip the live check until Hearth reboots. Do not auto-rollback.
