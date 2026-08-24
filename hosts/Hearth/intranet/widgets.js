@@ -71,12 +71,34 @@
     node.appendChild(h);
   }
 
-  function fact(parent, code, text) {
+  function fact(parent, code, text, tone) {
     var span = document.createElement("span");
-    span.className = "fact";
+    span.className = tone ? "fact " + tone : "fact";
     span.appendChild(iconEl(code));
     span.appendChild(document.createTextNode(text));
     parent.appendChild(span);
+  }
+
+  function tempTone(deg, unit) {
+    if (deg == null || isNaN(deg)) return "";
+    var f = unit === "C" ? Number(deg) * (9 / 5) + 32 : Number(deg);
+    if (f <= 32) return "tone-cold";
+    if (f <= 50) return "tone-cool";
+    if (f <= 75) return "";
+    if (f <= 85) return "tone-warm";
+    if (f <= 95) return "tone-hot";
+    return "tone-extreme";
+  }
+
+  function aqiTone(aqi) {
+    if (aqi == null || isNaN(aqi)) return "";
+    var n = Number(aqi);
+    if (n <= 50) return "tone-aqi-good";
+    if (n <= 100) return "tone-aqi-moderate";
+    if (n <= 150) return "tone-aqi-usg";
+    if (n <= 200) return "tone-aqi-unhealthy";
+    if (n <= 300) return "tone-aqi-very";
+    return "tone-aqi-hazard";
   }
 
   function weatherLabel(code) {
@@ -182,6 +204,10 @@
     });
   }
 
+  function placeDetail(loc) {
+    return String((loc && loc.detail) || "long").toLowerCase() === "short" ? "short" : "long";
+  }
+
   function renderPlace(node, place, unit) {
     var cur = (place.forecast && place.forecast.current) || {};
     var daily = (place.forecast && place.forecast.daily) || {};
@@ -194,28 +220,26 @@
 
     var summary = document.createElement("p");
     summary.className = "facts";
-    fact(summary, ICO.thermometer, Math.round(cur.temperature_2m) + "°" + unit);
+    fact(summary, ICO.thermometer, Math.round(cur.temperature_2m) + "°" + unit, tempTone(cur.temperature_2m, unit));
     fact(summary, weatherIcon(cur.weather_code), weatherLabel(cur.weather_code));
     fact(summary, ICO.wind, String(Math.round(cur.wind_speed_10m)));
+    fact(summary, ICO.aci, "ACI " + (aqi == null ? "—" : aqi), aqiTone(aqi));
     article.appendChild(summary);
 
-    var sun = document.createElement("p");
-    sun.className = "facts";
-    fact(sun, ICO.sunrise, fmtClock(daily.sunrise && daily.sunrise[0]));
-    fact(sun, ICO.sunset, fmtClock(daily.sunset && daily.sunset[0]));
-    article.appendChild(sun);
+    if (placeDetail(place.loc) === "long") {
+      var sun = document.createElement("p");
+      sun.className = "facts";
+      fact(sun, ICO.sunrise, fmtClock(daily.sunrise && daily.sunrise[0]));
+      fact(sun, ICO.sunset, fmtClock(daily.sunset && daily.sunset[0]));
+      article.appendChild(sun);
 
-    var moon = document.createElement("p");
-    moon.className = "facts";
-    fact(moon, phase.code, phase.label);
-    fact(moon, ICO.moonrise, fmtClock(daily.moonrise && daily.moonrise[0]));
-    fact(moon, ICO.moonset, fmtClock(daily.moonset && daily.moonset[0]));
-    article.appendChild(moon);
-
-    var aci = document.createElement("p");
-    aci.className = "facts";
-    fact(aci, ICO.aci, "ACI " + (aqi == null ? "—" : aqi));
-    article.appendChild(aci);
+      var moon = document.createElement("p");
+      moon.className = "facts";
+      fact(moon, phase.code, phase.label);
+      fact(moon, ICO.moonrise, fmtClock(daily.moonrise && daily.moonrise[0]));
+      fact(moon, ICO.moonset, fmtClock(daily.moonset && daily.moonset[0]));
+      article.appendChild(moon);
+    }
     node.appendChild(article);
   }
 

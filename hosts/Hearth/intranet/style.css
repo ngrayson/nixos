@@ -114,6 +114,54 @@ section {
   gap: 0.35rem;
 }
 
+.fact[class*="tone-"] .nf {
+  color: inherit;
+}
+
+.tone-cold {
+  color: #6eb6ff;
+}
+
+.tone-cool {
+  color: #7fd4e8;
+}
+
+.tone-warm {
+  color: #e6c35c;
+}
+
+.tone-hot {
+  color: #f08a4b;
+}
+
+.tone-extreme {
+  color: #ef5b5b;
+}
+
+.tone-aqi-good {
+  color: #5fd68a;
+}
+
+.tone-aqi-moderate {
+  color: #e6c35c;
+}
+
+.tone-aqi-usg {
+  color: #f08a4b;
+}
+
+.tone-aqi-unhealthy {
+  color: #ef5b5b;
+}
+
+.tone-aqi-very {
+  color: #c084fc;
+}
+
+.tone-aqi-hazard {
+  color: #e879a8;
+}
+
 section h3 {
   margin: 0.85rem 0 0.25rem;
   color: var(--strong);
