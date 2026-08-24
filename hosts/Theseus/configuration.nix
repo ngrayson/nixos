@@ -3,6 +3,7 @@
 # hardware-configuration.nix is the real disk map (/, /boot, partition swap).
 # Confirm UUIDs on-box before activate. Prefer `os-rebuild boot` on Theseus
 # for resume-device changes, then reboot.
+# After switch, join the tailnet once: `sudo tailscale up` (browser login).
 {
   config,
   pkgs,

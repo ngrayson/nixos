@@ -43,7 +43,9 @@ in {
           on-resume = dpmsOn;
         }
         {
-          timeout = 1800;
+          # Theseus laptop: 30m. Tawa desktop: 150m (9000s) so a short step-away
+          # is lock+DPMS only — S3 resume is what hangs the lock after password.
+          timeout = if hostName == "Theseus" then 1800 else 9000;
           on-timeout = suspendGuarded;
         }
       ];
