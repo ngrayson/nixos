@@ -78,7 +78,7 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
     recovery path by then).
 16. **Public web presence:** a **serverless webapp on Vercel (or similar) at
     `wiztow.org`**; parts of the intranet exposed as subdomains, e.g.
-    **`hms.wiztow.org`** for the home media surface. H6 re-scoped around
+    **`hms.wizt.org`** for the home media surface. H6 re-scoped around
     this.
 17. **Idle behavior (verified in config):** Hearth never suspends on idle —
     `hypridle` only locks (300 s) and turns the display off (600 s); logind's
@@ -214,9 +214,9 @@ desktop is currently the only recovery console.
   `wiztow.org`. Lives outside this flake; Hearth is not a public web server.
 - **Intranet subdomain (landed, tailnet-only — not Funnel):** Caddy on Hearth
   (`hosts/Hearth/caddy.nix`) reverse-proxies Jellyfin at
-  `https://hms.wiztow.org`, bound to tailnet IPv4 `100.84.222.78:443` only.
+  `https://hms.wizt.org`, bound to tailnet IPv4 `100.84.222.78:443` only.
   Funnel stays a future card.
-- **DNS (operator):** CNAME `hms.wiztow.org` → `hearth.tail6cd822.ts.net`
+- **DNS (operator):** CNAME `hms.wizt.org` → `hearth.tail6cd822.ts.net`
   (or A `100.84.222.78`). The name may resolve off-tailnet; TCP/TLS only
   works for tailnet members. TLS is Caddy `tls internal` until a Tailscale
   or ACME cert is issued.
@@ -224,7 +224,7 @@ desktop is currently the only recovery console.
   `openFirewall` unchanged). Put that LAN IP on the intranet page later so
   local users do not need DHCP reservations.
 - Remote streaming path: Jellyfin over Tailscale (Go 2, phones).
-- Acceptance: `https://hms.wiztow.org` serves Jellyfin for tailnet devices;
+- Acceptance: `https://hms.wizt.org` serves Jellyfin for tailnet devices;
   nothing on Hearth listens on WAN for this vhost.
 
 ### H7 — Automatic remote-dev updates (GitOps)
@@ -286,7 +286,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
    sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
    decided).
-3. **`hms.wiztow.org` exposure:** tailnet-only (private, simplest) or public
+3. **`hms.wizt.org` exposure:** tailnet-only (private, simplest) or public
    via Tailscale Funnel (Jellyfin auth is the only gate)? Pick when H6 lands.
 4. **Battery policy after headless (H4):** keep lid-close-on-battery =
    suspend (preserves the cell, kills streams in an outage) or ignore it and
