@@ -242,10 +242,11 @@ desktop is currently the only recovery console.
   nothing on Hearth listens on WAN for this vhost.
 
 ### H7 — Automatic remote-dev updates (GitOps)
-**Decided (decision 11):** start **push-based with deploy-rs over Tailscale**
-(no agent on the server; deploys are deliberate acts from Go 2 or CI), then
-graduate to **comin polling `deploy/hearth`** once a health-check script
-exists. The custom-timer agent from the original plan is dropped.
+**Decided (decision 11):** push-based deploys via `hearth-deploy` over
+OpenSSH/Tailscale (no agent on the server). The pin is **`deploy/hearth`**.
+Activator is `nixos-rebuild --target-host` (deploy-rs cannot `boot`; same
+path filter). **comin** on `deploy/hearth` only after health-check is
+trusted. Do not auto-switch `main`.
 
 Guardrails that answer "unsupervised switch on main" regardless of tool:
 1. Hearth deploys from a **dedicated branch** (e.g. `deploy/hearth`), never

@@ -11,7 +11,7 @@
 
 - New system: clone defaults to `main`, stay there until you opt into daily work (`git switch dev`).
 - Daily driver (Tawa today): check out `dev`. Post-rebuild commits stay on `dev`.
-- `hearth-deploy` builds the **builder's** checkout (usually Tawa). Hearth gets that lane — the script will say so before switch/boot. That script is the H7 v1 deploy path; there is no `deploy/hearth` branch yet.
+- `hearth-deploy` **builds** the builder's checkout. **switch / boot / dry-activate** default to `origin/deploy/hearth` (Hearth's deploy pin), not Tawa's dirty `dev`. Promotion = fast-forward `deploy/hearth`. Escape hatch: `hearth-deploy switch --from-checkout` (warns; still path-filters). Shared-tree touches (`common/`, `home/`, `profiles/`, `flake.nix`, `flake.lock`) vs `origin/main` are refused unless `HEARTH_DEPLOY_ALLOW_SHARED=1` or a commit trailer `Hearth-Deploy: allow-shared`. Activator is still `nixos-rebuild --target-host` (deploy-rs cannot `boot`).
 - `legacy/surface-standalone` is named above as the pre-flake Surface rollback. It is **not** on `origin` today.
 - Promote: merge or fast-forward `dev` → `main` (Conveyor release, or a deliberate local merge), then hosts that should be stable `git switch main`.
 
