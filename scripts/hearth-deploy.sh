@@ -345,6 +345,19 @@ untracked_flake_inputs() {
   done < <(git -C "$NIXOS_DIR" status --porcelain=v1 --untracked-files=all)
 }
 
+require_local_intranet_config() {
+  local base="$NIXOS_DIR/hosts/Hearth/intranet/config"
+  local widget missing=0
+  for widget in weather transit; do
+    if [[ ! -f "$base/$widget/config.nix" ]]; then
+      error "Missing $base/$widget/config.nix"
+      error "Copy config.example.nix to config.nix and add local settings (gitignored)."
+      missing=1
+    fi
+  done
+  return "$missing"
+}
+
 offer_stage_untracked() {
   ((STAGE == 0)) && return 0
   untracked_flake_inputs
@@ -585,9 +598,10 @@ choose_action() {
 
 run_build() {
   offer_stage_untracked
+  require_local_intranet_config
   heading "Build #Hearth on $(local_hostname)"
-  info "nixos-rebuild build --flake ${FLAKE}"
-  if (cd "$NIXOS_DIR" && run_logged nixos-rebuild build --flake "$FLAKE"); then
+  info "nixos-rebuild build --flake ${FLAKE} --impure"
+  if (cd "$NIXOS_DIR" && run_logged nixos-rebuild build --flake "$FLAKE" --impure); then
     ok "Build finished. Store path is in ./result (if cwd is the flake) or the nixos-rebuild result link."
     return 0
   fi
@@ -598,6 +612,7 @@ run_build() {
 run_deploy() {
   local action="$1"
   offer_stage_untracked
+  require_local_intranet_config
 
   if [[ "$DOC_SSH" != "ok" ]]; then
     run_doctor || true
@@ -635,11 +650,12 @@ run_deploy() {
   fi
 
   heading "${action} on Hearth (build on $(local_hostname), $(branch_summary))"
-  info "nixos-rebuild ${action} --flake ${FLAKE} --target-host ${TARGET} --use-remote-sudo"
+  info "nixos-rebuild ${action} --flake ${FLAKE} --impure --target-host ${TARGET} --use-remote-sudo"
 
   local -a cmd=(
     nixos-rebuild "$action"
     --flake "$FLAKE"
+    --impure
     --target-host "$TARGET"
     --use-remote-sudo
   )
@@ -818,6 +834,7 @@ main() {
     error "NixOS directory does not exist: ${NIXOS_DIR:-<unset>}"
     return 2
   }
+  export NIXOS_DIR
   FLAKE="${NIXOS_DIR}#${FLAKE_OUTPUT}"
   mkdir -p "$LOG_DIR"
 
