@@ -7,10 +7,22 @@
   # short: temp, sky, wind, ACI only.
   locations = [
     {
-      name = "Houston";
-      latitude = 29.7604;
-      longitude = -95.3698;
+      name = "Kirkland";
+      latitude = 47.6774;
+      longitude = -122.1982;
       detail = "long";
+    }
+    {
+      name = "Seattle";
+      latitude = 47.6062;
+      longitude = -122.3321;
+      detail = "short";
+    }
+    {
+      name = "Crystal Mountain";
+      latitude = 46.9369;
+      longitude = -121.4891;
+      detail = "short";
     }
   ];
 }
