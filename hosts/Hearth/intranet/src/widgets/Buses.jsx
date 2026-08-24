@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import MeterBar from "../components/MeterBar.jsx";
 import { Heading, ICO } from "../lib/icons.jsx";
 
 function arrivalMs(row) {
@@ -143,7 +144,7 @@ export default function Buses() {
       <div className={awaiting ? "poll is-awaiting" : "poll"}>
         <Heading title="Bus Schedule" code={ICO.bus} />
         <div className="poll-track">
-          <div className="poll-fill" style={{ width: awaiting ? "100%" : `${pct}%` }} />
+          <MeterBar variant="poll" percent={pct} awaiting={awaiting} />
         </div>
         <div className="poll-value">
           {awaiting ? "awaiting response" : `refresh in ${Math.ceil(left / 1000)}s`}

@@ -29,7 +29,16 @@ body {
   font: 18px/1.45 system-ui, sans-serif;
 }
 
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
 main {
+  position: relative;
+  z-index: 1;
   max-width: 80rem;
   margin: 0 auto;
   padding: 2.5rem 1.25rem 3rem;
@@ -298,15 +307,25 @@ section h3 {
   background: var(--chrome);
 }
 
-.meter-fill {
+.meter-fill,
+.poll-fill {
   height: 100%;
-  width: 0;
+  width: 100%;
+  transform: scaleX(var(--meter-pct, 0));
+  transform-origin: left center;
   background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 65%, transparent);
+  will-change: transform;
+}
+
+.meter-fill {
+  transition: transform 0.7s ease, filter 0.4s ease;
 }
 
 .meter-fill.is-off {
-  width: 0;
+  transform: scaleX(0);
   background: transparent;
+  box-shadow: none;
 }
 
 .meter-value {
@@ -369,15 +388,22 @@ section h3 {
 }
 
 .poll-fill {
-  height: 100%;
-  width: 0;
-  background: var(--accent);
-  transition: width 0.2s linear;
+  transition: transform 0.25s linear, opacity 0.3s ease;
 }
 
-.poll.is-awaiting .poll-fill {
-  width: 100%;
+.poll-fill.is-awaiting {
   animation: poll-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill,
+  .poll-fill {
+    transition: none;
+  }
+
+  .poll-fill.is-awaiting {
+    animation: none;
+  }
 }
 
 .poll-value {
