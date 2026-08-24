@@ -33,6 +33,7 @@
     hddOff: "f104c", // md-harddisk_remove
     battery: "f0079",
     batteryOff: "f008e",
+    bus: "f00e7", // md-bus
   };
 
   function nfChar(code) {
@@ -275,24 +276,220 @@
     node.appendChild(note);
   }
 
+  function configuredStops(transit) {
+    var raw = transit.busStops;
+    if (!Array.isArray(raw) || !raw.length) {
+      raw = (transit.busStopIds || []).map(function (id) {
+        return { id: id };
+      });
+    }
+    return raw
+      .map(function (s) {
+        var posted = typeof s === "string" ? s : String((s && (s.id || s.stopId)) || "");
+        var name = typeof s === "string" ? "" : (s && s.name) || "";
+        if (!posted) return null;
+        return {
+          id: posted,
+          obaId: posted.indexOf("_") >= 0 ? posted : "1_" + posted,
+          name: name,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function arrivalMs(row) {
+    var pred = Number(row.predictedArrivalTime || 0);
+    if (pred > 0) return pred;
+    return Number(row.scheduledArrivalTime || 0);
+  }
+
+  function minutesAway(row, nowMs) {
+    var t = arrivalMs(row);
+    if (!t) return null;
+    return Math.round((t - nowMs) / 60000);
+  }
+
+  function stopName(data, id) {
+    var refs = (((data || {}).references || {}).stops) || [];
+    var i;
+    for (i = 0; i < refs.length; i++) {
+      if (refs[i].id === id) return refs[i].name || id;
+    }
+    return id;
+  }
+
   function renderBuses() {
-    // BUS_ENDPOINT: no public agency JSON is configured (no Bitwarden key).
-    // When Nick names a GTFS/agency URL, fetch it here with transit.busStopIds.
+    // BUS_ENDPOINT: Caddy /transit/oba/* → api.pugetsound.onebusaway.org
+    //   /api/where/arrivals-and-departures-for-stop/{id}.json?key=…
     var mounts = el("transit");
     if (!mounts) return;
-    var stops = widget("transit").busStopIds || [];
+    var transit = widget("transit");
+    var stops = configuredStops(transit);
     var bus = document.createElement("div");
     bus.id = "buses";
-    if (!stops.length) {
-      bus.innerHTML =
-        "<p class=\"empty\">add stop IDs in intranet/config/transit/config.example.nix</p>";
-    } else {
-      bus.innerHTML =
-        "<p class=\"empty\">bus stop IDs: " +
-        stops.join(", ") +
-        " — no agency endpoint is wired yet</p>";
-    }
     mounts.appendChild(bus);
+
+    var list = document.createElement("div");
+    list.className = "bus-list";
+    bus.appendChild(list);
+
+    if (!stops.length) {
+      list.innerHTML =
+        "<p class=\"empty\">add busStops in intranet/config/transit/config.example.nix</p>";
+      return;
+    }
+
+    var pollMs = Number(transit.obaPollSeconds || 60) * 1000;
+    if (!(pollMs >= 60000)) pollMs = 60000;
+
+    var poll = document.createElement("div");
+    poll.className = "poll";
+    var pollLabel = document.createElement("div");
+    pollLabel.className = "poll-label";
+    pollLabel.appendChild(iconEl(ICO.bus));
+    pollLabel.appendChild(document.createTextNode("Schedule"));
+    var track = document.createElement("div");
+    track.className = "poll-track";
+    var fill = document.createElement("div");
+    fill.className = "poll-fill";
+    track.appendChild(fill);
+    var pollValue = document.createElement("div");
+    pollValue.className = "poll-value";
+    poll.appendChild(pollLabel);
+    poll.appendChild(track);
+    poll.appendChild(pollValue);
+    bus.appendChild(poll);
+
+    var awaiting = false;
+    var nextAt = 0;
+
+    function setPollUi() {
+      if (awaiting) {
+        poll.classList.add("is-awaiting");
+        fill.style.width = "100%";
+        pollValue.textContent = "awaiting response";
+        return;
+      }
+      poll.classList.remove("is-awaiting");
+      var left = Math.max(0, nextAt - Date.now());
+      var pct = nextAt ? Math.max(0, Math.min(100, (left / pollMs) * 100)) : 0;
+      fill.style.width = pct + "%";
+      pollValue.textContent = "refresh in " + Math.ceil(left / 1000) + "s";
+    }
+
+    function draw(results) {
+      list.innerHTML = "";
+      var limited = results.some(function (r) {
+        return r.status === 429 || (r.data && r.data.code === 429);
+      });
+      if (limited) {
+        var rate = document.createElement("p");
+        rate.className = "empty";
+        rate.textContent = "rate limited — waiting to try again";
+        list.appendChild(rate);
+      }
+      results.forEach(function (r) {
+        if (r.status === 429 || (r.data && r.data.code === 429)) return;
+        var wrap = document.createElement("div");
+        wrap.className = "bus-stop";
+        var h = document.createElement("h3");
+        h.textContent =
+          r.name || (r.data ? stopName(r.data.data, r.obaId || r.id) : r.id);
+        wrap.appendChild(h);
+        if (!r.ok || !r.data || r.data.code !== 200) {
+          var miss = document.createElement("p");
+          miss.className = "empty";
+          miss.textContent = r.status === 404 || (r.data && r.data.code === 404) ? "stop not found" : "arrivals unavailable";
+          wrap.appendChild(miss);
+          list.appendChild(wrap);
+          return;
+        }
+        var nowMs = r.data.currentTime || Date.now();
+        var rows = ((r.data.data || {}).entry || {}).arrivalsAndDepartures || [];
+        rows = rows.slice().sort(function (a, b) {
+          return arrivalMs(a) - arrivalMs(b);
+        }).slice(0, 6);
+        if (!rows.length) {
+          var none = document.createElement("p");
+          none.className = "empty";
+          none.textContent = "no arrivals in the next hour";
+          wrap.appendChild(none);
+          list.appendChild(wrap);
+          return;
+        }
+        var ul = document.createElement("ul");
+        ul.className = "arrivals";
+        rows.forEach(function (row) {
+          var li = document.createElement("li");
+          var left = document.createElement("span");
+          var route = document.createElement("span");
+          route.className = "route";
+          route.textContent = row.routeShortName || "?";
+          left.appendChild(route);
+          left.appendChild(document.createTextNode(" " + (row.tripHeadsign || "")));
+          var mins = minutesAway(row, nowMs);
+          var right = document.createElement("span");
+          right.className = "mins";
+          if (mins == null) right.textContent = "—";
+          else if (mins <= 0) right.textContent = "due";
+          else right.textContent = mins + " min" + (row.predicted ? "" : " sched");
+          li.appendChild(left);
+          li.appendChild(right);
+          ul.appendChild(li);
+        });
+        wrap.appendChild(ul);
+        list.appendChild(wrap);
+      });
+    }
+
+    function fetchStop(stop) {
+      return fetch(
+        "/transit/oba/arrivals-and-departures-for-stop/" +
+          encodeURIComponent(stop.obaId) +
+          ".json?minutesAfter=60"
+      )
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return {
+              id: stop.id,
+              obaId: stop.obaId,
+              name: stop.name,
+              ok: res.ok,
+              status: res.status,
+              data: data,
+            };
+          });
+        })
+        .catch(function () {
+          return {
+            id: stop.id,
+            obaId: stop.obaId,
+            name: stop.name,
+            ok: false,
+            status: 0,
+            data: null,
+          };
+        });
+    }
+
+    function tick() {
+      if (awaiting) return;
+      awaiting = true;
+      setPollUi();
+      Promise.all(stops.map(fetchStop))
+        .then(draw)
+        .finally(function () {
+          awaiting = false;
+          nextAt = Date.now() + pollMs;
+          setPollUi();
+        });
+    }
+
+    tick();
+    setInterval(function () {
+      if (!awaiting && nextAt && Date.now() >= nextAt) tick();
+    }, 1000);
+    setInterval(setPollUi, 250);
   }
 
   function monthGrid(marked) {

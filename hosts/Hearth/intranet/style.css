@@ -205,3 +205,74 @@ section h3 {
   font-size: 0.85rem;
   opacity: 0.85;
 }
+
+.bus-stop {
+  margin-top: 0.75rem;
+}
+
+.arrivals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arrivals li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.15rem 0;
+}
+
+.arrivals .route {
+  color: var(--strong);
+  font-weight: 650;
+}
+
+.arrivals .mins {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.poll {
+  margin-top: 0.85rem;
+}
+
+.poll-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--strong);
+  font-size: 0.85rem;
+}
+
+.poll-track {
+  height: 0.45rem;
+  margin: 0.3rem 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--chrome);
+}
+
+.poll-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.poll.is-awaiting .poll-fill {
+  width: 100%;
+  animation: poll-pulse 1s ease-in-out infinite;
+}
+
+.poll-value {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+@keyframes poll-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

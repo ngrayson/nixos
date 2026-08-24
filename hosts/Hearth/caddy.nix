@@ -101,6 +101,12 @@ in {
           root * ${intranetCfg.gallery.galleryDir}
           file_server browse
         }
+        handle_path /transit/oba/* {
+          rewrite * /api/where{path}?key=${intranetCfg.transit.obaApiKey}&{query}
+          reverse_proxy https://api.pugetsound.onebusaway.org {
+            header_up Host api.pugetsound.onebusaway.org
+          }
+        }
         root * ${intranetRoot}
         file_server
       '';
