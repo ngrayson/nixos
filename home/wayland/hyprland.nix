@@ -143,6 +143,11 @@ in {
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
       ];
+      # Locked (inhibitors): short power still reaches us. logind HandlePowerKey is ignore;
+      # long-press stays kernel/logind poweroff. Locked session: IPC is a no-op (lock has its own row).
+      bindl = [
+        ", XF86PowerOff, exec, ${lib.getExe hs.hyprQuickshellIpc} call power toggle"
+      ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
       windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
