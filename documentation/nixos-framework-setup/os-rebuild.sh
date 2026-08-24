@@ -463,6 +463,20 @@ check_placeholder_hardware() {
   fi
 }
 
+require_hearth_local_intranet_config() {
+  [[ "$NIXOS_HOST" == "Hearth" ]] || return 0
+  local base="$NIXOS_DIR/hosts/Hearth/intranet/config"
+  local widget missing=0
+  for widget in weather transit; do
+    if [[ ! -f "$base/$widget/config.nix" ]]; then
+      error "Missing $base/$widget/config.nix"
+      error "Copy config.example.nix to config.nix and add local settings (gitignored)."
+      missing=1
+    fi
+  done
+  return "$missing"
+}
+
 print_untracked_add_hint() {
   printf '  git -C %q add' "$NIXOS_DIR" >&2
   printf ' %q' "${UNTRACKED_FLAKE_INPUTS[@]}" >&2
@@ -661,6 +675,7 @@ main() {
     error "NixOS directory does not exist: ${NIXOS_DIR:-<unset>}"
     return 2
   }
+  export NIXOS_DIR
   # Keep this Git-backed: unlike path:, it cannot accidentally copy ignored
   # secrets into the world-readable Nix store. Untracked inputs are offered
   # for staging (and still blocked if declined).
@@ -733,6 +748,9 @@ main() {
   fi
 
   offer_stage_untracked_flake_inputs
+  if [[ "$ACTION" != "check" ]]; then
+    require_hearth_local_intranet_config
+  fi
 
   if [[ "$ACTION" == "check" ]]; then
     info "Validating all tracked/staged flake outputs"
@@ -778,6 +796,9 @@ main() {
   fi
 
   local -a rebuild=(nixos-rebuild "$ACTION" --flake "$FLAKE")
+  if [[ "$NIXOS_HOST" == "Hearth" ]]; then
+    rebuild+=(--impure)
+  fi
   if [[ "$ACTION" != "build" ]]; then
     rebuild=(sudo "${rebuild[@]}")
   fi

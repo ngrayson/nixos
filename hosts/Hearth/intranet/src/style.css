@@ -30,19 +30,47 @@ body {
 }
 
 main {
-  max-width: 36rem;
+  max-width: 80rem;
   margin: 0 auto;
   padding: 2.5rem 1.25rem 3rem;
 }
 
-h1 {
-  margin: 0 0 0.35rem;
-  color: var(--strong);
-  font-weight: 650;
-  letter-spacing: 0.02em;
+.site-nav {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin: 0 0 1.25rem;
+  border-bottom: 1px solid var(--chrome);
 }
 
-.clock h2,
+.site-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.95rem 0.65rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--text);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.site-nav-item .nf {
+  color: var(--accent);
+}
+
+.site-nav-item:hover,
+.site-nav-item:focus-visible {
+  color: var(--strong);
+}
+
+.site-nav-item[aria-current="page"] {
+  color: var(--strong);
+  border-bottom-color: var(--accent);
+}
+
+.widget-card h2,
 section h2,
 .poll h2 {
   display: flex;
@@ -55,40 +83,73 @@ section h2,
   text-transform: none;
 }
 
-.clock h2 {
-  margin: 0;
-  color: var(--accent);
-}
-
-.clock time {
-  display: inline;
-  color: inherit;
+.widget-card time {
   font-variant-numeric: tabular-nums;
 }
 
 #clock-date {
-  margin: 0.2rem 0 0;
-}
-
-.cta {
-  display: inline-block;
-  margin-top: 1.25rem;
-  padding: 0.7rem 1.15rem;
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.cta:hover,
-.cta:focus-visible {
-  outline: 2px solid var(--link);
-  outline-offset: 3px;
+  margin: 0;
 }
 
 section {
   margin-top: 1.75rem;
+}
+
+.widget-grid {
+  margin-top: 0;
+}
+
+.widget-card {
+  height: 100%;
+  overflow: auto;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--chrome);
+  border-radius: 0.5rem;
+  background: var(--depth);
+}
+
+.react-grid-item > div {
+  height: 100%;
+}
+
+.widget-hug {
+  height: 100%;
+}
+
+.widget-card-hug {
+  height: 100%;
+  overflow: hidden;
+}
+
+.widget-hug-measure {
+  height: auto;
+}
+
+.widget-card-fill {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.widget-card-fill h2 {
+  flex: 0 0 auto;
+}
+
+.widget-card-fill .local-map {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.react-grid-item {
+  transition: none;
+}
+
+.react-grid-item > .react-resizable-handle,
+.react-resizable-handle {
+  display: none;
 }
 
 .nf {
@@ -175,12 +236,12 @@ section h3 {
   opacity: 0.75;
 }
 
-#gallery img {
+.widget-card img {
   display: block;
   width: 100%;
   height: auto;
   border-radius: 0.5rem;
-  background: var(--depth);
+  background: var(--void);
 }
 
 .cal {
@@ -210,10 +271,6 @@ section h3 {
 .cal td.marked {
   color: var(--strong);
   font-weight: 650;
-}
-
-#gallery:empty {
-  display: none;
 }
 
 .health {

@@ -9,6 +9,6 @@ age-key.txt
 secrets/*.plain.yaml
 secrets/*.plaintext.yaml
 
-# Hearth intranet: flake imports only config.example.nix per widget
+# Hearth intranet: local widget settings (build reads these; not the examples)
 /hosts/Hearth/intranet/config/*/config.nix
 
