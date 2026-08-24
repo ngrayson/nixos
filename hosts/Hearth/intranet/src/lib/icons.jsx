@@ -24,6 +24,8 @@ export const ICO = {
   batteryOff: "f008e",
   bus: "f00e7",
   clock: "f0954",
+  home: "f02dc",
+  tv: "f0502",
   calendar: "f00ed",
   gallery: "f02e9",
   server: "f048b",

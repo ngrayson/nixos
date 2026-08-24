@@ -1,6 +1,6 @@
 import { hearthLan } from "./lib/config.js";
 import WidgetGrid from "./components/WidgetGrid.jsx";
-import Clock from "./widgets/Clock.jsx";
+import { ICO, Icon } from "./lib/icons.jsx";
 
 export default function App() {
   const lan = hearthLan();
@@ -8,15 +8,16 @@ export default function App() {
 
   return (
     <main>
-      <header>
-        <h1>Hearth</h1>
-        <Clock />
-      </header>
-      <p>
-        <a id="tv-jellyfin" className="cta" href={tvHref}>
+      <nav className="site-nav" aria-label="Hearth">
+        <a href="/" className="site-nav-item" aria-current="page">
+          <Icon code={ICO.home} />
+          Home
+        </a>
+        <a id="tv-jellyfin" className="site-nav-item" href={tvHref}>
+          <Icon code={ICO.tv} />
           TV Jellyfin
         </a>
-      </p>
+      </nav>
       <WidgetGrid />
     </main>
   );

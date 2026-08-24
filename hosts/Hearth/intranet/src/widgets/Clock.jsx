@@ -10,7 +10,7 @@ export default function Clock() {
   }, []);
 
   return (
-    <div className="clock">
+    <>
       <h2>
         <Icon code={ICO.clock} />
         <time dateTime={now.toISOString()}>
@@ -30,6 +30,6 @@ export default function Clock() {
           day: "numeric",
         })}
       </p>
-    </div>
+    </>
   );
 }
