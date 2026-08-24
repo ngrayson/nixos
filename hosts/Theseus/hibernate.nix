@@ -125,10 +125,11 @@ in {
         && swap ? device
         && lib.hasPrefix "/dev/" swap.device;
       message = ''
-        Theseus hibernation requires exactly one partition-backed swap device.
-        Replace the placeholder hardware-configuration.nix, then verify
-        swapDevices before importing hosts/Theseus/hibernate.nix. Swap files
-        additionally require a resume offset and are intentionally rejected.
+        Theseus hibernation requires exactly one partition-backed swap device
+        in hosts/Theseus/hardware-configuration.nix (currently
+        /dev/disk/by-uuid/c42d065c-1419-42c6-b230-c46632922e7f). Confirm that
+        UUID on-box before activate. Swap files additionally require a resume
+        offset and are intentionally rejected.
       '';
     }
   ];

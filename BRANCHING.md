@@ -2,12 +2,20 @@
 
 | Branch | Purpose |
 |--------|---------|
-| **`main`** | All hosts as named flake outputs: **Tawa** (desktop), **Theseus** (Framework laptop), **Hearth** (Surface Laptop 3 media host), **Gcp** (cloud). Each machine builds its own `nixosConfigurations.<hostname>`. Conveyor delivers generated files (devcontainer, prebake workflow) here. |
-| **`dev`** | Conveyor integration branch. Cloud-agent PRs target this; promote to `main` through Conveyor review/release. Keep it an ancestor of `main` after generated-file deliveries. |
+| **`main`** | **Stable.** New hosts start here. Promoted, reviewed work only. Conveyor releases and generated-file deliveries land here. Each machine builds `nixosConfigurations.<hostname>`. |
+| **`dev`** | **Unstable.** Daily host work and Conveyor agent PRs. A machine stays on `dev` until you decide to promote it back to `main`. |
 | **`legacy/previous-machine`** | Snapshot of **GitHub `main` before 2026-04** (prior NixOS install history). |
 | **`legacy/surface-standalone`** | Pre-flake standalone Surface Laptop 3 config (hostname `nixos`, Plasma 6, stateVersion 24.05). |
 
-Remote: **`https://github.com/ngrayson/nixos.git`** (`git remote rename nixos origin` if you prefer the usual name).
+`os-rebuild` and `hearth-deploy` use **whatever branch is checked out** in `~/.config/nixos`. They print the branch and whether it is stable (`main`) or unstable (`dev`). They do not switch branches.
+
+- New system: clone defaults to `main`, stay there until you opt into daily work (`git switch dev`).
+- Daily driver (Tawa today): check out `dev`. Post-rebuild commits stay on `dev`.
+- `hearth-deploy` builds the **builder's** checkout (usually Tawa). Hearth gets that lane — the script will say so before switch/boot. That script is the H7 v1 deploy path; there is no `deploy/hearth` branch yet.
+- `legacy/surface-standalone` is named above as the pre-flake Surface rollback. It is **not** on `origin` today.
+- Promote: merge or fast-forward `dev` → `main` (Conveyor release, or a deliberate local merge), then hosts that should be stable `git switch main`.
+
+Remote: **`https://github.com/ngrayson/nixos.git`**.
 
 To compare against the old tree: `git log legacy/previous-machine --oneline` (after `git fetch`).
 
@@ -16,7 +24,7 @@ To compare against the old tree: `git log legacy/previous-machine --oneline` (af
 Use the guided helper (zsh alias `os-rebuild`):
 
 ```bash
-os-rebuild switch                     # current hostname
+os-rebuild switch                     # current hostname, current branch
 os-rebuild build --host Theseus       # another host, build only
 ```
 

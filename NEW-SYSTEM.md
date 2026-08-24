@@ -14,21 +14,49 @@ Create `hosts/<hostname>/configuration.nix`, `host.nix`, and the generated `hard
 
 ## 3. Machine-specific options: `hosts/<hostname>/`
 
+Host **shapes differ**. Do not copy the Tawa/Theseus import list onto Hearth or Gcp.
+
+| Host | `configuration.nix` imports | Hardware file |
+|------|-----------------------------|---------------|
+| **Tawa**, **Theseus** | `../../profiles/workstation.nix`, `./hardware-configuration.nix`, `./host.nix` | Required (`nixos-generate-config` for that machine) |
+| **Hearth** | `../../profiles/media-desktop.nix`, `./hardware-configuration.nix`, `./host.nix`, plus host modules (Jellyfin, remote-access) | Required |
+| **Gcp** | `../../profiles/server.nix`, GCE image module, `./host.nix` | **None** — see [`scripts/gcp/`](./scripts/gcp/) |
+
 Under **`hosts/<hostname>/`** for **this** machine:
 
 - **`host.nix`**: **`networking.hostName`**, host-only modules, **`boot.initrd.luks.devices`**, **`boot.kernelParams`**
-- **`hardware-configuration.nix`**: from **`nixos-generate-config`** for this host only
-- **`configuration.nix`**: imports **`../../common/system.nix`**, `./hardware-configuration.nix`, `./host.nix`
+- **`hardware-configuration.nix`**: from **`nixos-generate-config`** for this host only (omit on Gcp)
+- **`configuration.nix`**: the import list for that host's shape (table above)
 
 Hardware modules from `nixos-hardware` belong in that host's module list in [`flake.nix`](./flake.nix), not in a channel-style `<nixos-hardware/...>` import.
 
-Shared **system** options live in **[`common/system.nix`](./common/system.nix)**. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.).
+The Tawa/Theseus desktop stack lives in **[`profiles/workstation.nix`](./profiles/workstation.nix)**. Server-safe defaults stay in **[`common/base.nix`](./common/base.nix)**. VPN is **[`common/vpn-vortix.nix`](./common/vpn-vortix.nix)** (imported from the workstation profile). Shared SDDM/Albert/appimage helpers live under **`common/`**. Per-user **Home Manager** config: root **[`home.nix`](./home.nix)** imports the modular **[`./home/`](./home/)** directory ([`home/default.nix`](./home/default.nix) orchestrates `session.nix`, `programs/`, `wayland/`, `services/`, `xdg/`, etc.). Hearth uses the slimmer [`home/media.nix`](./home/media.nix).
 
-## 4. `system.stateVersion`
+## 4. Host secrets (sops-nix)
+
+Tawa, Theseus, and Hearth decrypt secrets at activation with a **per-host age key**. Master copies and private keys live in **Bitwarden Pro**, not Git. Gcp is not wired yet.
+
+The public halves are listed in [`.sops.yaml`](./.sops.yaml). Encrypted files live under [`secrets/`](./secrets/). Do not commit `keys.txt`, `*.agekey`, or plaintext.
+
+**One-time bootstrap on each host** (after the private key is in Bitwarden):
+
+```bash
+sudo install -d -m 0755 /var/lib/sops-nix
+# paste that host's AGE-SECRET-KEY-1 line only
+sudo install -m 0400 /dev/stdin /var/lib/sops-nix/key.txt
+```
+
+Then activate: `os-rebuild switch` on Tawa or Theseus; `hearth-deploy switch` from Tawa for Hearth. `os-rebuild switch --host Hearth` on Tawa is still wrong.
+
+`sops -d secrets/placeholder.yaml` works only on a machine that has the matching private key; it must fail without it.
+
+Do not invent extra age keys. Add Gcp to `.sops.yaml` only when that host exists.
+
+## 5. `system.stateVersion`
 
 Set **`system.stateVersion`** in `hosts/<hostname>/host.nix` to the release used for that machine's **first** install. Do not bump it during routine NixOS upgrades.
 
-## 5. Build and switch
+## 6. Build and switch
 
 Use the guided helper:
 
@@ -48,14 +76,14 @@ sudo nixos-rebuild switch --flake ~/.config/nixos#<hostname>
 
 Home Manager runs as part of that for **`wiz`** (no separate `home-manager switch` when using the NixOS HM module).
 
-## 6. After boot
+## 7. After boot
 
-- Re-enrol **fingerprint**, reconnect **Wi‑Fi**, fix **VPN** paths if you use them (`environment.etc` in [`common/system.nix`](./common/system.nix)).
+- Re-enrol **fingerprint** on Theseus when `fprintd` is enabled, reconnect **Wi‑Fi**, fix **VPN** paths if you use them ([`common/vpn-vortix.nix`](./common/vpn-vortix.nix); example files under `vpn/ovpn/`).
 - **Cursor**: [CURSOR_SETUP.md](./CURSOR_SETUP.md) so `~/.local/bin/cursor` matches shell aliases in [`home/programs/zsh.nix`](./home/programs/zsh.nix).
 - Custom **`.desktop`** files: already in [`desktop/applications/`](./desktop/applications/); they land in `~/.local/share/applications/` via Home Manager.
 - **Kvantum (Qt):** add [`kvantum/<hostname>/`](./kvantum/README.md) matching **`networking.hostName`** in **`hosts/<hostname>/host.nix`**, and extend [`home/lib/host-xdg.nix`](./home/lib/host-xdg.nix) / [`home/xdg/config.nix`](./home/xdg/config.nix) if your theme includes extra paths beyond those already wired (see **Tawa** / **Theseus** under `kvantum/`).
 
-## 7. Full detail and history
+## 8. Full detail and history
 
 Use **[MIGRATION.md](./MIGRATION.md)** for a full checklist, migration log, and path-ownership table.
 See **“Idle policy (lock / display off / suspend) + Slippi rule”** there for Hypridle timing and the Slippi emulation exception.

@@ -17,6 +17,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Master tracks nixpkgs; follows our 26.05 pin. Lockfile holds the rev.
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     slippi-nix = {
       url = "github:lytedev/slippi-nix";
       flake = false;
@@ -46,7 +52,7 @@
           ]
           ++ modules;
       };
-  in {
+  in rec {
     nixosConfigurations = {
       Tawa = mkHost [
         ./hosts/Tawa/configuration.nix
@@ -68,5 +74,26 @@
     };
 
     formatter.${system} = nixpkgs.legacyPackages.${system}.alejandra;
+
+    # Hostname-only evals, not toplevel. A full nixosSystem closure is too
+    # heavy for 8 GB Conveyor codespaces; this still fails `nix flake check`
+    # if any host module graph cannot evaluate.
+    checks.${system} = let
+      pkgs = nixpkgs.legacyPackages.${system};
+      # Assert at eval time so `nix flake check --no-build` actually fails.
+      checkHost = name: expected: let
+        got = nixosConfigurations.${name}.config.networking.hostName;
+      in
+        assert nixpkgs.lib.assertMsg (got == expected)
+        "nixosConfigurations.${name}.config.networking.hostName is '${got}', want '${expected}'";
+          pkgs.runCommand "check-${name}-hostname" {} ''
+            touch "$out"
+          '';
+    in {
+      tawa-hostname = checkHost "Tawa" "Tawa";
+      theseus-hostname = checkHost "Theseus" "Theseus";
+      hearth-hostname = checkHost "Hearth" "Hearth";
+      gcp-hostname = checkHost "Gcp" "Gcp";
+    };
   };
 }

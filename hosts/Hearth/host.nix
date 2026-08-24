@@ -7,6 +7,14 @@
   lan = import ../../common/lan.nix;
   hearthCidr = lan.cidrFor "Hearth";
 in {
+  imports = [
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "14d";
+      configurationLimit = 5;
+    })
+  ];
+
   networking.hostName = "Hearth";
 
   # Patched linux-surface kernel (module wired in flake.nix).
@@ -108,7 +116,7 @@ in {
   # Cursor CLI: `~/.local/bin/cursor-agent` (and `agent`) are vendor ELF shims
   # pointing at ~/.local/share/cursor-agent/versions/*/cursor-agent. They are
   # dynamically linked against FHS glibc, not Nix store paths. nix-ld provides
-  # ld.so + a default lib set (same as Tawa/Theseus in common/system.nix).
+  # ld.so + a default lib set (same as Tawa/Theseus in profiles/workstation.nix).
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [];
 

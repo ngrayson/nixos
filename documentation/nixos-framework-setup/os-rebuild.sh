@@ -111,6 +111,50 @@ is_activation_action() {
   esac
 }
 
+# The flake is the checkout. main = stable, dev = daily/unstable.
+repo_branch() {
+  command_exists git || {
+    printf 'unknown'
+    return
+  }
+  git -C "$NIXOS_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    printf 'unknown'
+    return
+  }
+  local ref
+  ref="$(git -C "$NIXOS_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  if [[ -n "$ref" ]]; then
+    printf '%s' "$ref"
+    return
+  fi
+  local short
+  short="$(git -C "$NIXOS_DIR" rev-parse --short HEAD 2>/dev/null || printf '?')"
+  printf 'detached@%s' "$short"
+}
+
+branch_lane() {
+  case "$1" in
+    main) printf 'stable' ;;
+    dev) printf 'unstable' ;;
+    detached@*) printf 'detached' ;;
+    unknown) printf 'unknown' ;;
+    *) printf 'topic' ;;
+  esac
+}
+
+branch_summary() {
+  local branch lane
+  branch="$(repo_branch)"
+  lane="$(branch_lane "$branch")"
+  case "$lane" in
+    stable) printf '%s (stable)' "$branch" ;;
+    unstable) printf '%s (unstable — daily host work)' "$branch" ;;
+    detached) printf '%s (not a branch)' "$branch" ;;
+    topic) printf '%s (topic — not main/dev)' "$branch" ;;
+    *) printf '%s' "$branch" ;;
+  esac
+}
+
 classify_path() {
   local path="$1"
   local host="${NIXOS_HOST:-$(hostname)}"
@@ -298,7 +342,7 @@ show_repository_diff() {
 
   heading "Build vs commit"
   printf "  - Docs/tooling-only edits do not change the running system.\n"
-  printf "  - After a successful rebuild, dirty changes are committed by default.\n"
+  printf "  - After a successful rebuild, dirty changes are committed by default on %s.\n" "$(repo_branch)"
   printf "  - Pass --no-commit to leave the working tree dirty.\n"
 }
 
@@ -384,7 +428,14 @@ EOF
     base) EDIT_FILE="$NIXOS_DIR/common/system.nix" ;;
     flake) EDIT_FILE="$NIXOS_DIR/flake.nix" ;;
     host) EDIT_FILE="$NIXOS_DIR/hosts/$NIXOS_HOST/host.nix" ;;
-    hardware) EDIT_FILE="$NIXOS_DIR/hosts/$NIXOS_HOST/hardware-configuration.nix" ;;
+    hardware)
+      if [[ "$NIXOS_HOST" == "Gcp" ]]; then
+        info "Gcp has no hardware-configuration.nix — image path is scripts/gcp/"
+        EDIT_FILE="$NIXOS_DIR/scripts/gcp/build-image.sh"
+      else
+        EDIT_FILE="$NIXOS_DIR/hosts/$NIXOS_HOST/hardware-configuration.nix"
+      fi
+      ;;
     home) EDIT_FILE="$NIXOS_DIR/home/default.nix" ;;
     *)
       error "Unknown edit scope '$scope' (use base, flake, host, hardware, or home)"
@@ -654,9 +705,24 @@ main() {
   printf "  action:      %s\n" "$ACTION"
   printf "  host output: nixosConfigurations.%s\n" "$NIXOS_HOST"
   printf "  flake:       %s\n" "$(short_home "$FLAKE_ROOT")"
+  printf "  branch:      %s\n" "$(branch_summary)"
   if [[ "$ACTION" != "explain" && "$ACTION" != "check" ]]; then
     printf "  log:         %s\n" "$(short_home "$LOG_FILE")"
   fi
+  case "$(branch_lane "$(repo_branch)")" in
+    unstable)
+      info "This checkout is on dev (unstable). Activation and any post-rebuild commit stay here until you promote to main."
+      ;;
+    stable)
+      info "This checkout is on main (stable). New hosts stay here; daily work usually moves to dev."
+      ;;
+    detached)
+      warn "Detached HEAD — the build uses this commit; os-rebuild will not create a branch commit."
+      ;;
+    topic)
+      warn "Topic branch $(repo_branch) — not main or dev. Commit and activation still use this checkout."
+      ;;
+  esac
 
   show_change_scope
   show_repository_diff
@@ -706,7 +772,7 @@ main() {
   local default_answer="yes"
   is_activation_action "$ACTION" && default_answer="no"
   if [[ "$NO_PROMPT" != "1" ]] &&
-    ! prompt_confirm "Run '$ACTION' for $configured_host?" "$default_answer"; then
+    ! prompt_confirm "Run '$ACTION' for $configured_host from $(branch_summary)?" "$default_answer"; then
     warn "Aborted"
     return 0
   fi
@@ -769,8 +835,8 @@ main() {
       fi
       if ((do_commit)); then
         git -C "$NIXOS_DIR" add -A
-        git -C "$NIXOS_DIR" commit -m "NixOS $NIXOS_HOST $ACTION"
-        ok "Committed repository changes"
+        git -C "$NIXOS_DIR" commit -m "NixOS $NIXOS_HOST $ACTION ($(repo_branch))"
+        ok "Committed repository changes on $(repo_branch)"
       else
         info "Skipped commit; pass --no-commit next time to silence this prompt."
       fi

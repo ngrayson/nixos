@@ -1,0 +1,335 @@
+:root {
+  color-scheme: dark;
+  --void: #122221;
+  --depth: #182d2b;
+  --chrome: #203d3b;
+  --text: #acdcdd;
+  --strong: #c5fbfc;
+  --accent: #2fc7be;
+  --on-accent: #122221;
+  --link: #70c1f7;
+}
+
+@font-face {
+  font-family: "Symbols Nerd Font";
+  src: url("./SymbolsNerdFont.ttf") format("truetype");
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--void);
+  color: var(--text);
+  font: 18px/1.45 system-ui, sans-serif;
+}
+
+main {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+h1 {
+  margin: 0 0 0.35rem;
+  color: var(--strong);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.clock h2,
+section h2,
+.poll h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  color: var(--strong);
+  font-size: 1.5rem;
+  font-weight: 650;
+  text-transform: none;
+}
+
+.clock h2 {
+  margin: 0;
+  color: var(--accent);
+}
+
+.clock time {
+  display: inline;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+#clock-date {
+  margin: 0.2rem 0 0;
+}
+
+.cta {
+  display: inline-block;
+  margin-top: 1.25rem;
+  padding: 0.7rem 1.15rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.cta:hover,
+.cta:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 3px;
+}
+
+section {
+  margin-top: 1.75rem;
+}
+
+.nf {
+  font-family: "Symbols Nerd Font", sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fact[class*="tone-"] .nf {
+  color: inherit;
+}
+
+.tone-cold {
+  color: #6eb6ff;
+}
+
+.tone-cool {
+  color: #7fd4e8;
+}
+
+.tone-warm {
+  color: #e6c35c;
+}
+
+.tone-hot {
+  color: #f08a4b;
+}
+
+.tone-extreme {
+  color: #ef5b5b;
+}
+
+.tone-aqi-good {
+  color: #5fd68a;
+}
+
+.tone-aqi-moderate {
+  color: #e6c35c;
+}
+
+.tone-aqi-usg {
+  color: #f08a4b;
+}
+
+.tone-aqi-unhealthy {
+  color: #ef5b5b;
+}
+
+.tone-aqi-very {
+  color: #c084fc;
+}
+
+.tone-aqi-hazard {
+  color: #e879a8;
+}
+
+section h3 {
+  margin: 0.85rem 0 0.25rem;
+  color: var(--strong);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.empty {
+  margin: 0;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+#gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  background: var(--depth);
+}
+
+.cal {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.cal th,
+.cal td {
+  padding: 0.35rem 0.15rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal th {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.cal td.today {
+  outline: 1px solid var(--accent);
+  border-radius: 0.25rem;
+}
+
+.cal td.marked {
+  color: var(--strong);
+  font-weight: 650;
+}
+
+#gallery:empty {
+  display: none;
+}
+
+.health {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.meter {
+  margin: 0.7rem 0;
+}
+
+.meter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--strong);
+  font-size: 0.9rem;
+}
+
+.meter-track {
+  height: 0.55rem;
+  margin: 0.3rem 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--chrome);
+}
+
+.meter-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+
+.meter-fill.is-off {
+  width: 0;
+  background: transparent;
+}
+
+.meter-value {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.local-map {
+  display: block;
+  width: 100%;
+  height: 16rem;
+  margin: 0 0 1.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--depth);
+}
+
+.bus-stop {
+  margin-top: 0.75rem;
+}
+
+.arrivals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arrivals li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.15rem 0;
+}
+
+.arrivals .route {
+  color: var(--strong);
+  font-weight: 650;
+}
+
+.arrivals .mins {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.poll {
+  margin: 0 0 0.85rem;
+}
+
+.poll h2 {
+  margin: 0 0 0.4rem;
+}
+
+.poll-track {
+  height: 0.45rem;
+  margin: 0.3rem 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--chrome);
+}
+
+.poll-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.poll.is-awaiting .poll-fill {
+  width: 100%;
+  animation: poll-pulse 1s ease-in-out infinite;
+}
+
+.poll-value {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+@keyframes poll-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

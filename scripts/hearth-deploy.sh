@@ -72,9 +72,10 @@ Usage:
   hearth-deploy                 Interactive TUI
   hearth-deploy status          Connection + flake status
   hearth-deploy doctor          Probe SSH, sudo, and trusted-users
+  hearth-deploy health          Post-activate probes (sshd, Tailscale, Jellyfin, COLD)
   hearth-deploy build           Build only (no copy, no activate)
   hearth-deploy dry-activate    Build, copy, show activation diff
-  hearth-deploy switch          Build, copy, activate now
+  hearth-deploy switch          Build, copy, activate now, then health
   hearth-deploy boot            Build, copy, set next boot generation
   hearth-deploy ssh             Open a shell on Hearth
 
@@ -433,6 +434,29 @@ render_status() {
   fi
 }
 
+run_healthcheck() {
+  local script="$NIXOS_DIR/scripts/hearth-healthcheck.sh"
+  heading "Health check on Hearth ($(branch_summary))"
+  if [[ ! -f "$script" ]]; then
+    error "Missing $(short_home "$script") — git-add it so the flake (and this checkout) can see it."
+    return 1
+  fi
+  if [[ "$DOC_SSH" != "ok" ]]; then
+    run_doctor || true
+  fi
+  if [[ "$DOC_SSH" != "ok" ]]; then
+    error "No SSH path to Hearth; fix doctor before health."
+    return 1
+  fi
+  info "ssh ${TARGET} sudo bash -s < $(short_home "$script")"
+  if ssh_hearth -o BatchMode=yes sudo bash -s <"$script"; then
+    ok "Hearth health check passed"
+    return 0
+  fi
+  error "Hearth health check failed. Previous generation is still in systemd-boot; use hearth-deploy boot or pick it at the console."
+  return 1
+}
+
 run_doctor() {
   DOC_HINT=""
   ensure_ssh_include
@@ -533,6 +557,7 @@ choose_action() {
       "Dry-activate" \
       "Switch" \
       "Boot" \
+      "Health" \
       "Recheck" \
       "SSH" \
       "Quit"
@@ -540,8 +565,8 @@ choose_action() {
   fi
 
   printf '\n  [b] Build          [d] Dry-activate    [s] Switch\n'
-  printf '  [o] Boot           [r] Recheck         [h] SSH\n'
-  printf '  [q] Quit\n'
+  printf '  [o] Boot           [e] Health          [r] Recheck\n'
+  printf '  [h] SSH            [q] Quit\n'
   printf '\nAction: '
   local reply
   read -r reply || true
@@ -550,6 +575,7 @@ choose_action() {
     d | D | dry | Dry-activate) printf 'Dry-activate' ;;
     s | S | switch | Switch) printf 'Switch' ;;
     o | O | boot | Boot) printf 'Boot' ;;
+    e | E | health | Health) printf 'Health' ;;
     r | R | recheck | Recheck) printf 'Recheck' ;;
     h | H | ssh | SSH) printf 'SSH' ;;
     q | Q | quit | Quit | '') printf 'Quit' ;;
@@ -628,6 +654,7 @@ run_deploy() {
 
   if [[ "$action" == "boot" ]]; then
     printf "  Installed as Hearth's next boot generation. Reboot Hearth when ready.\n"
+    info "Skipped live health check (boot generation is not running until Hearth reboots)."
   fi
 
   if [[ "$action" == "switch" ]]; then
@@ -639,6 +666,11 @@ run_deploy() {
       heading "Closure changes"
       nix store diff-closures "$before" "$after" | filter_rebuild_output || true
     fi
+    if ! run_healthcheck; then
+      error "Activate succeeded but health check failed — do not treat this generation as good."
+      return 1
+    fi
+
     notify_hearth_if_visible "Hearth switch OK" "$(short_store "${after:-activated}")"
   fi
 
@@ -731,6 +763,10 @@ interactive_loop() {
         new_log boot
         run_deploy boot || true
         ;;
+      Health)
+        run_doctor || true
+        run_healthcheck || true
+        ;;
       Recheck)
         run_doctor || true
         ;;
@@ -756,7 +792,7 @@ main() {
 
   while (($#)); do
     case "$1" in
-      status | doctor | build | dry-activate | switch | boot | ssh)
+      status | doctor | health | build | dry-activate | switch | boot | ssh)
         action="$1"
         ;;
       --yes)
@@ -793,7 +829,7 @@ main() {
     error "nix is not available"
     return 2
   }
-  if [[ "$action" != "tui" && "$action" != "status" && "$action" != "doctor" && "$action" != "ssh" ]]; then
+  if [[ "$action" != "tui" && "$action" != "status" && "$action" != "doctor" && "$action" != "health" && "$action" != "ssh" ]]; then
     command_exists nixos-rebuild || {
       error "nixos-rebuild is not available"
       return 2
@@ -816,6 +852,11 @@ main() {
       refuse_if_on_hearth
       run_doctor || true
       print_status_report
+      ;;
+    health)
+      refuse_if_on_hearth
+      run_doctor || true
+      run_healthcheck
       ;;
     build)
       refuse_if_on_hearth

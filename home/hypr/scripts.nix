@@ -186,6 +186,19 @@ in rec {
     exec ${lib.getExe' pkgs.systemd "systemctl"} suspend
   '';
 
+  # Theseus lid/idle path: same guards, then suspend-then-hibernate so a dead
+  # battery can resume from the swap partition instead of a cold boot.
+  hyprSuspendThenHibernateGuarded = pkgs.writeShellScriptBin "hypr-suspend-then-hibernate-guarded" ''
+    set -euo pipefail
+    if ${lib.getExe slippiIsEmulating}; then
+      exit 0
+    fi
+    if ${lib.getExe delugeIsRunning}; then
+      exit 0
+    fi
+    exec ${lib.getExe' pkgs.systemd "systemctl"} suspend-then-hibernate
+  '';
+
   # Lock, then re-enable outputs before systemd suspends (quickshell-lock uses exec and
   # cannot be chained). Suspending while the 600s idle listener has DPMS off leaves this
   # eDP panel dark on resume: `dispatch dpms on` then returns ok without lighting it.
@@ -586,8 +599,13 @@ in rec {
 
     behind=0
     upstream="$("$GIT" -C "$NIXOS_DIR" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || true)"
-    if [ -z "$upstream" ] && "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify origin/main >/dev/null 2>&1; then
-      upstream=origin/main
+    if [ -z "$upstream" ]; then
+      branch="$("$GIT" -C "$NIXOS_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+      if [ -n "$branch" ] && "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify "origin/$branch" >/dev/null 2>&1; then
+        upstream="origin/$branch"
+      elif "$GIT" -C "$NIXOS_DIR" rev-parse -q --verify origin/main >/dev/null 2>&1; then
+        upstream=origin/main
+      fi
     fi
     if [ -n "$upstream" ]; then
       behind="$("$GIT" -C "$NIXOS_DIR" rev-list --count "HEAD..$upstream" 2>/dev/null || printf 0)"

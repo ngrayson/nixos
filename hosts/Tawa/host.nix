@@ -1,5 +1,4 @@
-# Tawa (desktop) — hostname, optional nixos-hardware, LUKS, kernelParams.
-# Other hosts: add `hosts/<name>/host.nix` with their `networking.hostName` and imports.
+# Tawa (desktop) — hostname, AMD, SDDM xrandr. Intel desktop, no LUKS.
 {
   pkgs,
   lib,
@@ -7,7 +6,13 @@
 }: {
   imports = [
     ../../common/tailscale.nix
-    ./jellyfin.nix
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "30d";
+      configurationLimit = 15;
+    })
+    # Jellyfin lives on Hearth (`hosts/Hearth/jellyfin.nix`). This file stays
+    # on disk; the import list is the switch. Do not copy /var/lib/jellyfin.
     ./docker.nix
     ./lan.nix
   ];
@@ -43,7 +48,4 @@
       "$XRANDR" --query || true
     } >>"$LOG" 2>&1
   '';
-
-  # boot.initrd.luks.devices."luks-…".device = "/dev/disk/by-uuid/…";
-  # boot.kernelParams = ["amd_pstate=active"];
 }

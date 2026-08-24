@@ -1,6 +1,14 @@
 # GCP-specific overrides. The imported NixOS GCE image module supplies the
 # guest agent, image builder, disk growth, serial console, and network defaults.
 {lib, ...}: {
+  imports = [
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "7d";
+      configurationLimit = 3;
+    })
+  ];
+
   networking.hostName = "Gcp";
 
   # Keep the host firewall active even though the upstream GCE module defaults

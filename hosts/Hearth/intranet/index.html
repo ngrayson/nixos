@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hearth</title>
+    <meta name="theme-color" content="#122221" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Hearth</h1>
+        <div class="clock">
+          <h2>
+            <span class="nf" aria-hidden="true">&#xf0954;</span>
+            <time id="clock-time"></time>
+          </h2>
+          <p id="clock-date"></p>
+        </div>
+      </header>
+
+      <p>
+        <a id="tv-jellyfin" class="cta" href="#">TV Jellyfin</a>
+      </p>
+
+      <!-- Stable anchors for later widget cards. Keep these ids. -->
+      <section id="weather"></section>
+      <section id="transit"></section>
+      <section id="health"></section>
+      <section id="gallery"></section>
+      <section id="calendar"></section>
+    </main>
+
+    <!-- lan.js from common/lan.nix; intranet-config.js from config/*/config.example.nix -->
+    <script src="./lan.js"></script>
+    <script src="./intranet-config.js"></script>
+    <script src="./widgets.js"></script>
+    <script>
+      (function () {
+        var link = document.getElementById("tv-jellyfin");
+        if (link && window.hearthLan) {
+          link.href = "http://" + window.hearthLan + ":8096";
+        }
+
+        var timeEl = document.getElementById("clock-time");
+        var dateEl = document.getElementById("clock-date");
+        function tick() {
+          var now = new Date();
+          timeEl.dateTime = now.toISOString();
+          timeEl.textContent = now.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          });
+          dateEl.textContent = now.toLocaleDateString(undefined, {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+        }
+        tick();
+        setInterval(tick, 1000);
+      })();
+    </script>
+  </body>
+</html>

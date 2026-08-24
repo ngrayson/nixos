@@ -31,7 +31,7 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
 
 1. **Role: headless home server.** The Hyprland desktop from the migration is
    transitional and will be removed once remote access is proven.
-2. **Hardware on hand:** 2 TB HDD, ethernet switch, spare TP-Link router,
+2. **Hardware on hand:** 4 TB Seagate IronWolf HDD (`COLD` at `/mnt/cold`), ethernet switch, spare TP-Link router,
    Raspberry Pi Zero W (Pi-hole/DNS). Two-tier storage.
 3. **Jellyfin consolidates on Hearth.** `hosts/Tawa/jellyfin.nix` will be
    removed from Tawa's imports (deliberate, coordinated change — not a parity
@@ -78,7 +78,7 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
     recovery path by then).
 16. **Public web presence:** a **serverless webapp on Vercel (or similar) at
     `wiztow.org`**; parts of the intranet exposed as subdomains, e.g.
-    **`hms.wiztow.org`** for the home media surface. H6 re-scoped around
+    **`tv.wizt.org`** for the home media surface. H6 re-scoped around
     this.
 17. **Idle behavior (verified in config):** Hearth never suspends on idle —
     `hypridle` only locks (300 s) and turns the display off (600 s); logind's
@@ -121,9 +121,10 @@ LG TV: local LAN path to Jellyfin (cannot run Tailscale) — same LAN as Hearth
 
 - **Tier 1 (NVMe 238 GB):** `/`, Nix store, `/var/lib/jellyfin` (metadata,
   transcode temp), service state, Syncthing staging if space allows.
-- **Tier 2 (HDD 2 TB, USB):** `/mnt/media` — library (`movies/ tv/ music/`),
+- **Tier 2 (HDD 4 TB IronWolf, USB):** `/mnt/cold` — library under
+  `media/{movies,tv,music}`, plus `share/` for seedbox/archives.
   Restic/local snapshots. Mounted by UUID with `nofail` so boot never hangs
-  on a missing USB disk.
+  on a missing USB disk. Never the old `/srv`-style or unprefixed media mount.
 - **Services (NixOS modules only):** jellyfin, tailscale, caddy (tailnet-only
   vhosts), syncthing, restic, openssh, and later the notification hook +
   deployment agent.
@@ -134,21 +135,30 @@ Ordering rule: **do not remove the desktop (H4) until H0-H1 give two
 independent remote paths in** (SSH over LAN + SSH over Tailscale). The
 desktop is currently the only recovery console.
 
-### H0 — Remote access + prerequisites (before anything else)
-- Enable `services.openssh` (key-only, same settings as `profiles/server.nix`)
-  in the Hearth profile; install `wiz`'s pubkeys from Go 2 / Tawa / Theseus.
-- Add `services.tailscale`; join the tailnet; verify SSH from Surface Go 2
-  over Tailscale with Wi-Fi as the only link.
-- Free NVMe space: `nix-collect-garbage --delete-older-than 14d` once the
-  current generation is trusted (old Plasma generations are large).
-- Acceptance: reboot; reach Hearth over LAN SSH and Tailscale SSH without
-  touching the machine.
+### H0 — Remote access + prerequisites — **shipped in config**
+- `hosts/Hearth/remote-access.nix` enables key-only `sshd` and Tailscale
+  (`--ssh`, `--accept-dns=false`). Pubkeys: GitHub `ngrayson` ed25519 and
+  Tawa `wiz@Tawa` (`~/.ssh/id_ed25519` on the builder).
+- **Ops accept (2026-08-22, from Tawa):** Hearth was on GiGstreem
+  `172.16.141.38` (AncientGlade `192.168.0.133` had no route).
+  `sshd` + `tailscaled` + `jellyfin` + `display-manager` active; trusted-users
+  `@wheel` and passwordless sudo already on the running generation (no
+  on-box switch). `ssh hearth` over MagicDNS was **Tailscale SSH** (doctor
+  warned: nix-copy wants sshd). OpenSSH path is LAN `172.16.141.38` with
+  the Tawa key — `Host hearth` in `home/programs/ssh-hearth.nix` now targets
+  that IP. MagicDNS Tailscale SSH remains as `Host hearth-tailnet`.
+  `hearth-deploy doctor` from Tawa is the check. Do not re-open H0 as a
+  flake task.
+- Extra Go 2 / Theseus keys and a recorded GC of old Plasma generations
+  are still leftover ops — not missing modules.
 
 ### H1 — Wired network + DNS (deferred until better router)
 - Interim (now): Hearth and the LG TV both on GiGstreem Wi-Fi. The ISP
   gateway has **no DHCP-reservation UI** (decision 18), so Hearth pins
-  **172.16.141.38/24** on the existing `GiGstreem` NM profile (gateway +
-  DNS `172.16.141.1`). MAC `c8:34:8e:21:97:1b` is informational only.
+  **172.16.141.38/24** on the existing `GiGstreem` NM profile (gateway
+  `172.16.141.1`). DNS is **`1.1.1.1,8.8.8.8`** in `common/lan.nix` on
+  purpose — ISP `172.16.141.1` plus MagicDNS/`accept-dns` hung
+  `cache.nixos.org` on GiGstreem. MAC `c8:34:8e:21:97:1b` is informational only.
 - Later (new router acquired): USB-A gigabit ethernet adapter (decision 15)
   → switch → TP-Link LAN; static lease; prefer wired over Wi-Fi.
 - Pi Zero W: Pi-hole as LAN DNS (`hearth.home` etc.) when the wired LAN
@@ -157,22 +167,17 @@ desktop is currently the only recovery console.
   from that IP.
   Acceptance (final): Jellyfin reachable via wired IP; LAN DNS resolves.
 
-### H2 — Storage (HDD tier)
-- Disk on hand is a **4 TB Seagate IronWolf** (ST4000NE001) NTFS volume
-  **COLD** with a large extant archive. **Do not format.** UASP is active
-  (`Driver=uas`); the hub is currently enumerating at USB2 480 Mb/s — move
-  it to the USB-C SuperSpeed port when convenient.
-- Mount by UUID at `/mnt/cold` with `nofail` + `x-systemd.device-timeout=10s`.
-- New dirs only: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and
-  `/mnt/cold/share` (seedbox mirror + file sharing). Leave Anime/Music/…
-  at the volume root.
-- Move `/srv/media/*` → `/mnt/cold/media/`; repoint Jellyfin libraries.
-- Delete media from NVMe after verification.
-- Acceptance: playback works from HDD; NVMe holds no media; unplugging the
-  HDD does not block boot.
+### H2 — Storage (HDD tier) — **shipped**
+- Disk is a **4 TB Seagate IronWolf** (ST4000NE001) NTFS volume **COLD**.
+  **Do not format.** Mounted at `/mnt/cold` with `nofail` +
+  `x-systemd.device-timeout=10s`. `/srv/media` emptied; unplug drill passed.
+- Leftover ops: hub still enumerating at USB2 480 Mb/s — move it to the
+  USB-C SuperSpeed port when convenient.
+- Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
+  Leave Anime/Music/… at the volume root.
 
 ### H3 — Jellyfin consolidation (Tawa → Hearth)
-- Copy Tawa's media files into `/mnt/media` (rsync over LAN/tailnet).
+- Copy Tawa's media files into `/mnt/cold/media` (rsync over LAN/tailnet).
 - Remove `./jellyfin.nix` from `hosts/Tawa/host.nix` imports (keep the file
   or delete it — imports list is the switch). Rebuild Tawa.
 - **Fresh start** for server state (decision 14): no `/var/lib/jellyfin`
@@ -207,18 +212,25 @@ desktop is currently the only recovery console.
 ### H6 — Remote surface (wiztow.org + streaming)
 - **Public site (decision 16):** serverless webapp on Vercel (or similar) at
   `wiztow.org`. Lives outside this flake; Hearth is not a public web server.
-- **Intranet subdomain:** `hms.wiztow.org` fronts the home-media surface.
-  Two candidate wirings, pick when H6 lands:
-  - **Tailnet-only:** `hms.wiztow.org` CNAME/A → tailnet address; resolves
-    for everyone but only *connects* for tailnet members. Simplest, private.
-  - **Public via Tailscale Funnel:** CNAME → the Funnel hostname; Jellyfin's
-    own auth becomes the only gate. More exposed — decide deliberately.
-- On Hearth: Caddy bound to the **tailnet interface only** (or `tailscale
-  serve`), reverse-proxying Jellyfin under the `hms` hostname.
-- Remote streaming path: Jellyfin over Tailscale (Go 2, phones). LG TV stays
-  on a local path — same GiGstreem LAN as Hearth (decision 13).
-- Acceptance: `https://hms.wiztow.org` serves Jellyfin for tailnet devices;
-  nothing on Hearth listens on WAN.
+- **Intranet subdomain (landed, tailnet-only — not Funnel):** Caddy on Hearth
+  (`hosts/Hearth/caddy.nix`) reverse-proxies Jellyfin at
+  `https://tv.wizt.org`, bound to tailnet IPv4 `100.84.222.78:443` only.
+  Funnel stays a future card.
+- **DNS (operator):** A `tv.wizt.org` → `100.84.222.78`. Tailnet split DNS
+  forwards `wizt.org` to Cloudflare. The name may resolve off-tailnet; TCP/TLS only
+  works for tailnet members. TLS is Let's Encrypt DNS-01 (`security.acme` +
+  lego `cloudflare`) because the public apex sends
+  `HSTS includeSubDomains` — Caddy `tls internal` cannot be excepted in
+  Firefox. Secret: `secrets/acme-cloudflare.env` (`CLOUDFLARE_DNS_API_TOKEN`).
+  Host the `wizt.org` zone on Cloudflare (no GCP). Apex A records may still
+  point at Rebrandly until the public site has a new home. Do not keep
+  `tls internal` on a `wizt.org` name.
+- **TV:** still `http://172.16.141.38:8096` on GiGstreem (Jellyfin
+  `openFirewall` unchanged). Put that LAN IP on the intranet page later so
+  local users do not need DHCP reservations.
+- Remote streaming path: Jellyfin over Tailscale (Go 2, phones).
+- Acceptance: `https://tv.wizt.org` serves Jellyfin for tailnet devices;
+  nothing on Hearth listens on WAN for this vhost.
 
 ### H7 — Automatic remote-dev updates (GitOps)
 **Decided (decision 11):** start **push-based with deploy-rs over Tailscale**
@@ -260,7 +272,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 | Wrong hardware (Pro 4 vs Laptop 3) | **Resolved** — this doc is the corrected baseline |
 | Role conflict (desktop vs headless) | **Resolved** — headless confirmed; H4 sequences the flip safely |
 | Three-tier storage doesn't exist | **Resolved** — two-tier confirmed; HDD on hand (H2) |
-| Media on NVMe | **Resolved by decision** — H2 moves it; until H2 lands, do not ingest more |
+| Media on NVMe | **Resolved** — H2 shipped; media is on `/mnt/cold` |
 | Two Jellyfin servers | **Resolved** — Tawa's will be disabled (H3) |
 | Docker creep | **Resolved** — NixOS modules only |
 | Unsupervised switch on main | **Resolved** — deploy-rs first, comin on `deploy/hearth` later, plus H7 guardrails |
@@ -268,7 +280,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 | No secrets story | **Resolved** — sops-nix + Bitwarden Pro vault confirmed (H5) |
 | TV cannot run Tailscale | **Resolved** — TV + Hearth share GiGstreem (decision 13); wired LAN later |
 | Jellyfin state migration | **Resolved** — fresh start (decision 14) |
-| sshd inactive / no remote path | **Open until H0 lands** — first work item |
+| No remote SSH path | **Resolved** — H0 shipped; Tawa OpenSSH to GiGstreem `.38` proven 2026-08-22 |
 | HDD on USB | **Mitigated** — powered UASP hub on USB-C, `nofail` mount, USB-A kept free for rescue |
 | Battery-as-UPS vs suspend-on-battery | **Narrowed** — idle suspend ruled out (decision 17); only lid-close-on-battery policy left for H4 |
 
@@ -279,7 +291,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
    sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
    decided).
-3. **`hms.wiztow.org` exposure:** tailnet-only (private, simplest) or public
+3. **`tv.wizt.org` exposure:** tailnet-only (private, simplest) or public
    via Tailscale Funnel (Jellyfin auth is the only gate)? Pick when H6 lands.
 4. **Battery policy after headless (H4):** keep lid-close-on-battery =
    suspend (preserves the cell, kills streams in an outage) or ignore it and

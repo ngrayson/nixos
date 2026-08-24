@@ -1,3 +1,14 @@
 # nix-build / nixos-rebuild convenience symlink in cwd
 result
 result-*
+
+# sops-nix / age private material — Bitwarden only, never git
+keys.txt
+*.agekey
+age-key.txt
+secrets/*.plain.yaml
+secrets/*.plaintext.yaml
+
+# Hearth intranet: flake imports only config.example.nix per widget
+/hosts/Hearth/intranet/config/*/config.nix
+
