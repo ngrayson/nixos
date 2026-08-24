@@ -1,3 +1,5 @@
+import MeterBar from "../components/MeterBar.jsx";
+
 // Nerd Font Symbols (hex codepoints). See nerd-fonts glyphnames.json.
 export const ICO = {
   weather: "f0595",
@@ -81,10 +83,7 @@ export function Meter({ label, percent, detail, icon, hideBar, off }) {
       </div>
       {hideBar ? null : (
         <div className="meter-track">
-          <div
-            className={off ? "meter-fill is-off" : "meter-fill"}
-            style={{ width: off ? "0%" : `${pct}%` }}
-          />
+          <MeterBar percent={off ? 0 : pct} off={off} />
         </div>
       )}
       <div className="meter-value">{detail}</div>
