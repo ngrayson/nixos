@@ -13,5 +13,6 @@
     ./remote-access.nix
     ./home.nix
     ./caddy.nix
+    ./intranet-status.nix
   ];
 }

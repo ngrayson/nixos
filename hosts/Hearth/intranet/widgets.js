@@ -256,9 +256,60 @@
       });
   }
 
+  function renderHealth(data) {
+    var node = el("health");
+    if (!node) return;
+    node.hidden = false;
+    node.innerHTML = "";
+    heading(node, "Health");
+    var ul = document.createElement("ul");
+    ul.className = "health";
+    function row(label, value) {
+      var li = document.createElement("li");
+      li.textContent = label + ": " + value;
+      ul.appendChild(li);
+    }
+    if (!data) {
+      row("status", "unavailable");
+      node.appendChild(ul);
+      return;
+    }
+    var root = data.root || {};
+    row("root", (root.usedPercent != null ? root.usedPercent + "% used" : "—") + (root.avail ? " · " + root.avail + " free" : ""));
+    var cold = data.cold || {};
+    if (cold.mounted) {
+      row("cold", (cold.usedPercent != null ? cold.usedPercent + "% used" : "—") + (cold.avail ? " · " + cold.avail + " free" : ""));
+    } else {
+      row("cold", "unplugged");
+    }
+    if (data.battery) {
+      var st = data.battery.status || "unknown";
+      var plug = st === "charging" || st === "full" ? "AC" : "battery";
+      row("battery", data.battery.percent + "% · " + plug);
+    } else {
+      row("battery", "none");
+    }
+    row("Pi-hole", "Pi-hole not on the LAN yet");
+    node.appendChild(ul);
+  }
+
+  function pollHealth() {
+    fetch("/status.json")
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
+      .then(renderHealth)
+      .catch(function () {
+        renderHealth(null);
+      });
+  }
+
   renderWeather();
   renderTransit();
   renderBuses();
   renderCalendar();
   renderGallery();
+  pollHealth();
+  setInterval(pollHealth, 60000);
 })();

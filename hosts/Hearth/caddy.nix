@@ -90,6 +90,10 @@ in {
       listenAddresses = [tailnetIPv4];
       useACMEHost = "home.wizt.org";
       extraConfig = ''
+        handle /status.json {
+          root * /run/hearth-intranet
+          file_server
+        }
         handle_path /gallery/* {
           root * ${intranetCfg.galleryDir}
           file_server browse
