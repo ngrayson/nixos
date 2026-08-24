@@ -132,6 +132,7 @@ section {
 
 .widget-hug-measure {
   height: auto;
+  overflow: visible;
 }
 
 .widget-card-fill {
