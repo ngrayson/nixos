@@ -4,13 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hearth</title>
+    <meta name="theme-color" content="#122221" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <main>
       <header>
         <h1>Hearth</h1>
-        <time id="clock"></time>
+        <div class="clock">
+          <h2><time id="clock-time"></time></h2>
+          <p id="clock-date"></p>
+        </div>
       </header>
 
       <p>
@@ -25,7 +32,7 @@
       <section id="calendar"></section>
     </main>
 
-    <!-- lan.js from common/lan.nix; intranet-config.js from intranet-config.nix -->
+    <!-- lan.js from common/lan.nix; intranet-config.js from config/*/config.example.nix -->
     <script src="./lan.js"></script>
     <script src="./intranet-config.js"></script>
     <script src="./widgets.js"></script>
@@ -36,18 +43,21 @@
           link.href = "http://" + window.hearthLan + ":8096";
         }
 
-        var clock = document.getElementById("clock");
+        var timeEl = document.getElementById("clock-time");
+        var dateEl = document.getElementById("clock-date");
         function tick() {
           var now = new Date();
-          clock.dateTime = now.toISOString();
-          clock.textContent = now.toLocaleString(undefined, {
-            weekday: "short",
-            year: "numeric",
-            month: "short",
-            day: "numeric",
+          timeEl.dateTime = now.toISOString();
+          timeEl.textContent = now.toLocaleTimeString(undefined, {
             hour: "numeric",
             minute: "2-digit",
             second: "2-digit",
+          });
+          dateEl.textContent = now.toLocaleDateString(undefined, {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
           });
         }
         tick();

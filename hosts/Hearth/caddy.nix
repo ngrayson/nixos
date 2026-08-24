@@ -11,17 +11,19 @@
 # Caddy waits on the ACME unit.
 {
   config,
+  lib,
   pkgs,
   ...
 }: let
   lan = import ../../common/lan.nix;
-  intranetCfg = import ./intranet-config.nix;
+  # Only config.example.nix is imported. Sibling config.nix files are ignored.
+  widgetNames = ["clock" "weather" "transit" "health" "gallery" "calendar"];
+  intranetCfg = lib.listToAttrs (map (name: {
+      inherit name;
+      value = import (./intranet/config + "/${name}/config.example.nix");
+    })
+    widgetNames);
   tailnetIPv4 = "100.84.222.78";
-  json = builtins.toJSON;
-  optJson = v:
-    if v == null
-    then "null"
-    else json v;
   intranetRoot =
     pkgs.runCommand "hearth-intranet" {
       index = ./intranet/index.html;
@@ -31,15 +33,11 @@
         window.hearthLan = "${lan.hosts.Hearth}";
       '';
       cfgJs = pkgs.writeText "intranet-config.js" ''
-        window.hearthIntranet = {
-          latitude: ${optJson intranetCfg.latitude},
-          longitude: ${optJson intranetCfg.longitude},
-          routeFrom: ${json intranetCfg.routeFrom},
-          routeTo: ${json intranetCfg.routeTo},
-          busStopIds: ${json intranetCfg.busStopIds},
-          calendarIcsUrl: ${optJson intranetCfg.calendarIcsUrl}
-        };
+        window.hearthIntranet = ${builtins.toJSON intranetCfg};
       '';
+      nerdFont = "${pkgs.nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFont-Regular.ttf";
+      faviconSvg = ./intranet/favicon.svg;
+      nativeBuildInputs = [pkgs.resvg pkgs.imagemagick];
     } ''
       mkdir -p "$out"
       cp "$index" "$out/index.html"
@@ -47,6 +45,11 @@
       cp "$widgets" "$out/widgets.js"
       cp "$lanJs" "$out/lan.js"
       cp "$cfgJs" "$out/intranet-config.js"
+      cp "$nerdFont" "$out/SymbolsNerdFont.ttf"
+      cp "$faviconSvg" "$out/favicon.svg"
+      resvg "$faviconSvg" "$out/favicon-32.png" -w 32 -h 32
+      resvg "$faviconSvg" "$out/apple-touch-icon.png" -w 180 -h 180
+      magick "$out/favicon-32.png" "$out/favicon.ico"
     '';
 in {
   sops.secrets.acme-cloudflare-env = {
@@ -95,7 +98,7 @@ in {
           file_server
         }
         handle_path /gallery/* {
-          root * ${intranetCfg.galleryDir}
+          root * ${intranetCfg.gallery.galleryDir}
           file_server browse
         }
         root * ${intranetRoot}

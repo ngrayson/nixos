@@ -10,6 +10,12 @@
   --link: #70c1f7;
 }
 
+@font-face {
+  font-family: "Symbols Nerd Font";
+  src: url("./SymbolsNerdFont.ttf") format("truetype");
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -36,10 +42,22 @@ h1 {
   letter-spacing: 0.02em;
 }
 
-time {
-  display: block;
+.clock h2 {
+  margin: 0;
   color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 650;
+  text-transform: none;
+}
+
+.clock time {
+  display: inline;
+  color: inherit;
   font-variant-numeric: tabular-nums;
+}
+
+#clock-date {
+  margin: 0.2rem 0 0;
 }
 
 .cta {
@@ -68,6 +86,36 @@ section h2 {
   color: var(--strong);
   font-size: 1.05rem;
   text-transform: capitalize;
+}
+
+.nf {
+  font-family: "Symbols Nerd Font", sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+section h3 {
+  margin: 0.85rem 0 0.25rem;
+  color: var(--strong);
+  font-size: 0.95rem;
+  font-weight: 650;
 }
 
 .empty {
@@ -120,4 +168,40 @@ section h2 {
 .health {
   margin: 0;
   padding-left: 1.1rem;
+}
+
+.meter {
+  margin: 0.7rem 0;
+}
+
+.meter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--strong);
+  font-size: 0.9rem;
+}
+
+.meter-track {
+  height: 0.55rem;
+  margin: 0.3rem 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--chrome);
+}
+
+.meter-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+
+.meter-fill.is-off {
+  width: 0;
+  background: transparent;
+}
+
+.meter-value {
+  font-size: 0.85rem;
+  opacity: 0.85;
 }
