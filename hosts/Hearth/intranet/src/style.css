@@ -8,6 +8,12 @@
   --accent: #2fc7be;
   --on-accent: #122221;
   --link: #70c1f7;
+  --radius: 0.75rem;
+  --shadow: 0 0.7rem 1.6rem color-mix(in srgb, #000 38%, transparent);
+  --blur: 16px;
+  --pad: 1rem;
+  --heading: 1.15rem;
+  --body: 1rem;
 }
 
 @font-face {
@@ -26,7 +32,7 @@ body {
   min-height: 100%;
   background: var(--void);
   color: var(--text);
-  font: 18px/1.45 system-ui, sans-serif;
+  font: var(--body)/1.45 system-ui, sans-serif;
 }
 
 .atmosphere {
@@ -41,24 +47,30 @@ main {
   z-index: 1;
   max-width: 80rem;
   margin: 0 auto;
-  padding: 2.5rem 1.25rem 3rem;
+  padding: 1.5rem 1.25rem 3rem;
 }
 
 .site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.15rem;
+  gap: 0.55rem 0.85rem;
   margin: 0 0 1.25rem;
-  border-bottom: 1px solid var(--chrome);
+  padding: 0.35rem 0.15rem 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--chrome) 80%, var(--accent));
+  background: color-mix(in srgb, var(--void) 72%, transparent);
+  backdrop-filter: blur(var(--blur));
 }
 
 .site-nav-item {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.7rem 0.95rem 0.65rem;
-  margin-bottom: -1px;
+  padding: 0.55rem 0.2rem 0.4rem;
   border-bottom: 2px solid transparent;
   color: var(--text);
   font-weight: 650;
@@ -79,6 +91,26 @@ main {
   border-bottom-color: var(--accent);
 }
 
+.site-nav-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.site-nav-cta {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--chrome));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--depth) 70%, transparent);
+  color: var(--strong);
+}
+
+.site-nav-cta:hover,
+.site-nav-cta:focus-visible {
+  border-color: var(--accent);
+  color: var(--strong);
+}
+
 .widget-card h2,
 section h2,
 .poll h2 {
@@ -87,7 +119,7 @@ section h2,
   gap: 0.45rem;
   margin: 0 0 0.4rem;
   color: var(--strong);
-  font-size: 1.5rem;
+  font-size: var(--heading);
   font-weight: 650;
   text-transform: none;
 }
@@ -96,8 +128,16 @@ section h2,
   font-variant-numeric: tabular-nums;
 }
 
+.clock-face time {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--strong);
+}
+
 #clock-date {
   margin: 0;
+  opacity: 0.85;
 }
 
 section {
@@ -111,10 +151,19 @@ section {
 .widget-card {
   height: 100%;
   overflow: auto;
-  padding: 0.9rem 1rem 1rem;
-  border: 1px solid var(--chrome);
-  border-radius: 0.5rem;
-  background: var(--depth);
+  padding: var(--pad);
+  border: 1px solid color-mix(in srgb, var(--chrome) 75%, var(--accent));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--depth) 78%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(var(--blur));
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.widget-card:hover,
+.widget-card:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--chrome));
+  box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .react-grid-item > div {
@@ -146,8 +195,11 @@ section {
   flex: 0 0 auto;
 }
 
+.widget-card-fill .map-chrome,
 .widget-card-fill .local-map {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   height: auto;
   min-height: 0;
   margin-bottom: 0;
@@ -241,17 +293,49 @@ section h3 {
 }
 
 .empty {
-  margin: 0;
+  margin: 0.35rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--chrome) 70%, var(--accent));
+  border-radius: calc(var(--radius) - 0.2rem);
+  background: color-mix(in srgb, var(--void) 55%, transparent);
   color: var(--text);
-  opacity: 0.75;
+  opacity: 0.9;
 }
 
+.weather-place {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid color-mix(in srgb, var(--chrome) 80%, transparent);
+}
+
+.weather-place:first-of-type {
+  margin-top: 0.15rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.gallery-frame {
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border-radius: calc(var(--radius) - 0.2rem);
+  background: var(--void);
+}
+
+.gallery-frame img,
 .widget-card img {
   display: block;
   width: 100%;
-  height: auto;
-  border-radius: 0.5rem;
+  height: 100%;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 0.2rem);
   background: var(--void);
+}
+
+.cal-caption {
+  margin: 0 0 0.45rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
 }
 
 .cal {
@@ -274,8 +358,10 @@ section h3 {
 }
 
 .cal td.today {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   outline: 1px solid var(--accent);
-  border-radius: 0.25rem;
+  border-radius: 0.35rem;
+  color: var(--strong);
 }
 
 .cal td.marked {
@@ -284,8 +370,11 @@ section h3 {
 }
 
 .health {
-  margin: 0;
-  padding-left: 1.1rem;
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.7rem;
+  list-style: none;
+  border-radius: calc(var(--radius) - 0.25rem);
+  background: color-mix(in srgb, var(--void) 40%, transparent);
 }
 
 .meter {
@@ -334,13 +423,21 @@ section h3 {
   opacity: 0.85;
 }
 
+.map-chrome {
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: calc(var(--radius) - 0.2rem);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chrome) 80%, transparent);
+}
+
 .local-map {
   display: block;
   width: 100%;
   height: 16rem;
-  margin: 0 0 1.25rem;
+  margin: 0;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: calc(var(--radius) - 0.2rem);
   background: var(--depth);
   /* Waze iframe has no dark theme. Invert + hue-rotate keeps jam hues. */
   filter: invert(1) hue-rotate(180deg);
@@ -360,7 +457,13 @@ section h3 {
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.15rem 0;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--chrome) 70%, transparent);
+}
+
+.arrivals li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .arrivals .route {
@@ -400,12 +503,27 @@ section h3 {
 
 @media (prefers-reduced-motion: reduce) {
   .meter-fill,
-  .poll-fill {
+  .poll-fill,
+  .widget-card {
     transition: none;
   }
 
   .poll-fill.is-awaiting {
     animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: 0.85rem 0.75rem 2rem;
+  }
+
+  .site-nav {
+    padding: 0.15rem 0 0.4rem;
+  }
+
+  .clock-face time {
+    font-size: 1.55rem;
   }
 }
 

@@ -42,13 +42,15 @@ export default function Transit() {
   return (
     <>
       <Heading title="Map" code={ICO.map} />
-      <iframe
-        className="local-map"
-        title="Local traffic map"
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        src={src}
-      />
+      <div className="map-chrome">
+        <iframe
+          className="local-map"
+          title="Local traffic map"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          src={src}
+        />
+      </div>
     </>
   );
 }
