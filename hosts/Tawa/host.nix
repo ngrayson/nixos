@@ -7,6 +7,11 @@
 }: {
   imports = [
     ../../common/tailscale.nix
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "30d";
+      configurationLimit = 15;
+    })
     ./jellyfin.nix
     ./docker.nix
     ./lan.nix

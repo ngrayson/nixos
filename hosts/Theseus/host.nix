@@ -1,6 +1,14 @@
 # Theseus (Framework laptop) — hostname, LUKS, hibernation, and host overrides.
 # The Framework AMD AI 300 module is imported by flake.nix.
 {pkgs, ...}: {
+  imports = [
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "30d";
+      configurationLimit = 12;
+    })
+  ];
+
   networking.hostName = "Theseus";
   system.stateVersion = "26.05";
 
