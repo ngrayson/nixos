@@ -12,6 +12,11 @@ function mapSrc(transit) {
   const zoom = Number(transit.mapZoom || 10);
   const ll = parseLatLng(query);
   if (ll) {
+    // Official iframe params are lat, lon, zoom, pin, desc only. Jam tiles
+    // come from Waze livemap georss, which 403s (recaptcha / third-party
+    // cookies) as of 2026-08. Leave the embed; do not swap to Google JS,
+    // Leaflet, or Mapbox on this card (Waze ToS: no Waze chrome on a
+    // non-Waze map).
     return (
       "https://embed.waze.com/iframe?zoom=" +
       encodeURIComponent(String(zoom)) +
