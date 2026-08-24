@@ -3,6 +3,11 @@
 {pkgs, ...}: {
   imports = [
     ../../common/tailscale.nix
+    (import ../../common/nix-maintenance.nix {
+      dates = "weekly";
+      deleteOlderThan = "30d";
+      configurationLimit = 12;
+    })
   ];
 
   networking.hostName = "Theseus";
