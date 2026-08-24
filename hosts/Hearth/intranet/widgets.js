@@ -34,6 +34,11 @@
     battery: "f0079",
     batteryOff: "f008e",
     bus: "f00e7", // md-bus
+    clock: "f0954", // md-clock
+    calendar: "f00ed", // md-calendar
+    gallery: "f02e9", // md-image
+    server: "f048b", // md-server
+    map: "f034d", // md-map
   };
 
   function nfChar(code) {
@@ -61,12 +66,8 @@
 
   function heading(node, title, code) {
     var h = document.createElement("h2");
-    if (code) {
-      h.appendChild(iconEl(code));
-      h.appendChild(document.createTextNode(" " + title));
-    } else {
-      h.textContent = title;
-    }
+    if (code) h.appendChild(iconEl(code));
+    h.appendChild(document.createTextNode(title));
     node.appendChild(h);
   }
 
@@ -249,52 +250,53 @@
       });
   }
 
+  function parseLatLng(query) {
+    var m = String(query || "").match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (!m) return null;
+    return { lat: m[1], lng: m[2] };
+  }
+
+  function mapSrc(transit) {
+    var query = (transit.mapQuery || "").trim();
+    var zoom = Number(transit.mapZoom || 10);
+    var ll = parseLatLng(query);
+    // Waze Live Map shows traffic with no API key. Google's Maps embed cannot.
+    if (ll) {
+      return (
+        "https://embed.waze.com/iframe?zoom=" +
+        encodeURIComponent(String(zoom)) +
+        "&lat=" +
+        encodeURIComponent(ll.lat) +
+        "&lon=" +
+        encodeURIComponent(ll.lng)
+      );
+    }
+    if (!query) return "";
+    return (
+      "https://maps.google.com/maps?q=" +
+      encodeURIComponent(query) +
+      "&z=" +
+      encodeURIComponent(String(zoom)) +
+      "&output=embed"
+    );
+  }
+
   function renderTransit() {
     var node = el("transit");
     if (!node) return;
     var transit = widget("transit");
-    var from = (transit.routeFrom || "").trim();
-    var to = (transit.routeTo || "").trim();
-    if (!from || !to) {
-      empty(node, "set routeFrom / routeTo in intranet/config/transit/config.example.nix", "Transit");
-      return;
-    }
     node.hidden = false;
     node.innerHTML = "";
-    heading(node, "Transit");
-    var query = from + " to " + to;
-    var a = document.createElement("a");
-    a.className = "cta";
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.href = "https://www.openstreetmap.org/search?query=" + encodeURIComponent(query);
-    a.textContent = from + " → " + to;
-    node.appendChild(a);
-    var note = document.createElement("p");
-    note.className = "empty";
-    note.textContent = "OpenStreetMap directions — live congestion is out of scope.";
-    node.appendChild(note);
-  }
-
-  function configuredStops(transit) {
-    var raw = transit.busStops;
-    if (!Array.isArray(raw) || !raw.length) {
-      raw = (transit.busStopIds || []).map(function (id) {
-        return { id: id };
-      });
-    }
-    return raw
-      .map(function (s) {
-        var posted = typeof s === "string" ? s : String((s && (s.id || s.stopId)) || "");
-        var name = typeof s === "string" ? "" : (s && s.name) || "";
-        if (!posted) return null;
-        return {
-          id: posted,
-          obaId: posted.indexOf("_") >= 0 ? posted : "1_" + posted,
-          name: name,
-        };
-      })
-      .filter(Boolean);
+    var src = mapSrc(transit);
+    if (!src) return;
+    heading(node, "Map", ICO.map);
+    var frame = document.createElement("iframe");
+    frame.className = "local-map";
+    frame.title = "Local traffic map";
+    frame.loading = "lazy";
+    frame.referrerPolicy = "no-referrer-when-downgrade";
+    frame.src = src;
+    node.appendChild(frame);
   }
 
   function arrivalMs(row) {
@@ -309,45 +311,21 @@
     return Math.round((t - nowMs) / 60000);
   }
 
-  function stopName(data, id) {
-    var refs = (((data || {}).references || {}).stops) || [];
-    var i;
-    for (i = 0; i < refs.length; i++) {
-      if (refs[i].id === id) return refs[i].name || id;
-    }
-    return id;
-  }
-
   function renderBuses() {
-    // BUS_ENDPOINT: Caddy /transit/oba/* → api.pugetsound.onebusaway.org
-    //   /api/where/arrivals-and-departures-for-stop/{id}.json?key=…
+    // BUS_ENDPOINT: Hearth writes /transit.json once per poll. Browsers only
+    // read that file — OneBusAway is not called from the client.
     var mounts = el("transit");
     if (!mounts) return;
-    var transit = widget("transit");
-    var stops = configuredStops(transit);
     var bus = document.createElement("div");
     bus.id = "buses";
     mounts.appendChild(bus);
 
-    var list = document.createElement("div");
-    list.className = "bus-list";
-    bus.appendChild(list);
-
-    if (!stops.length) {
-      list.innerHTML =
-        "<p class=\"empty\">add busStops in intranet/config/transit/config.example.nix</p>";
-      return;
-    }
-
-    var pollMs = Number(transit.obaPollSeconds || 60) * 1000;
-    if (!(pollMs >= 60000)) pollMs = 60000;
-
+    var pollMs = 60000;
     var poll = document.createElement("div");
     poll.className = "poll";
-    var pollLabel = document.createElement("div");
-    pollLabel.className = "poll-label";
-    pollLabel.appendChild(iconEl(ICO.bus));
-    pollLabel.appendChild(document.createTextNode("Schedule"));
+    var title = document.createElement("h2");
+    title.appendChild(iconEl(ICO.bus));
+    title.appendChild(document.createTextNode("Bus Schedule"));
     var track = document.createElement("div");
     track.className = "poll-track";
     var fill = document.createElement("div");
@@ -355,10 +333,14 @@
     track.appendChild(fill);
     var pollValue = document.createElement("div");
     pollValue.className = "poll-value";
-    poll.appendChild(pollLabel);
+    poll.appendChild(title);
     poll.appendChild(track);
     poll.appendChild(pollValue);
     bus.appendChild(poll);
+
+    var list = document.createElement("div");
+    list.className = "bus-list";
+    bus.appendChild(list);
 
     var awaiting = false;
     var nextAt = 0;
@@ -377,38 +359,41 @@
       pollValue.textContent = "refresh in " + Math.ceil(left / 1000) + "s";
     }
 
-    function draw(results) {
+    function draw(payload) {
       list.innerHTML = "";
-      var limited = results.some(function (r) {
-        return r.status === 429 || (r.data && r.data.code === 429);
-      });
-      if (limited) {
+      if (!payload) {
+        list.innerHTML = "<p class=\"empty\">schedule unavailable</p>";
+        return;
+      }
+      var stops = payload.stops || [];
+      if (!stops.length) {
+        list.innerHTML =
+          "<p class=\"empty\">add busStops in intranet/config/transit/config.example.nix</p>";
+        return;
+      }
+      if (payload.limited) {
         var rate = document.createElement("p");
         rate.className = "empty";
         rate.textContent = "rate limited — waiting to try again";
         list.appendChild(rate);
       }
-      results.forEach(function (r) {
-        if (r.status === 429 || (r.data && r.data.code === 429)) return;
+      stops.forEach(function (r) {
+        if (r.status === 429 || r.code === 429) return;
         var wrap = document.createElement("div");
         wrap.className = "bus-stop";
         var h = document.createElement("h3");
-        h.textContent =
-          r.name || (r.data ? stopName(r.data.data, r.obaId || r.id) : r.id);
+        h.textContent = r.name || r.id;
         wrap.appendChild(h);
-        if (!r.ok || !r.data || r.data.code !== 200) {
+        if (!r.ok) {
           var miss = document.createElement("p");
           miss.className = "empty";
-          miss.textContent = r.status === 404 || (r.data && r.data.code === 404) ? "stop not found" : "arrivals unavailable";
+          miss.textContent = r.code === 404 || r.status === 404 ? "stop not found" : "arrivals unavailable";
           wrap.appendChild(miss);
           list.appendChild(wrap);
           return;
         }
-        var nowMs = r.data.currentTime || Date.now();
-        var rows = ((r.data.data || {}).entry || {}).arrivalsAndDepartures || [];
-        rows = rows.slice().sort(function (a, b) {
-          return arrivalMs(a) - arrivalMs(b);
-        }).slice(0, 6);
+        var nowMs = r.currentTime || Date.now();
+        var rows = r.arrivals || [];
         if (!rows.length) {
           var none = document.createElement("p");
           none.className = "empty";
@@ -442,45 +427,27 @@
       });
     }
 
-    function fetchStop(stop) {
-      return fetch(
-        "/transit/oba/arrivals-and-departures-for-stop/" +
-          encodeURIComponent(stop.obaId) +
-          ".json?minutesAfter=60"
-      )
-        .then(function (res) {
-          return res.json().then(function (data) {
-            return {
-              id: stop.id,
-              obaId: stop.obaId,
-              name: stop.name,
-              ok: res.ok,
-              status: res.status,
-              data: data,
-            };
-          });
-        })
-        .catch(function () {
-          return {
-            id: stop.id,
-            obaId: stop.obaId,
-            name: stop.name,
-            ok: false,
-            status: 0,
-            data: null,
-          };
-        });
-    }
-
     function tick() {
       if (awaiting) return;
       awaiting = true;
       setPollUi();
-      Promise.all(stops.map(fetchStop))
-        .then(draw)
+      fetch("/transit.json")
+        .then(function (res) {
+          if (!res.ok) throw new Error("transit " + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          draw(data);
+          pollMs = Math.max(60, Number((data && data.pollSeconds) || 60)) * 1000;
+          nextAt = ((data && data.generatedAt) || 0) * 1000 + pollMs;
+          if (nextAt <= Date.now()) nextAt = Date.now() + 5000;
+        })
+        .catch(function () {
+          draw(null);
+          nextAt = Date.now() + pollMs;
+        })
         .finally(function () {
           awaiting = false;
-          nextAt = Date.now() + pollMs;
           setPollUi();
         });
     }
@@ -549,7 +516,7 @@
     if (!node) return;
     node.hidden = false;
     node.innerHTML = "";
-    heading(node, "Calendar");
+    heading(node, "Calendar", ICO.calendar);
     function draw(marked) {
       var cap = document.createElement("p");
       cap.textContent = new Date().toLocaleString(undefined, {
@@ -605,7 +572,7 @@
         }
         node.hidden = false;
         node.innerHTML = "";
-        heading(node, "Gallery");
+        heading(node, "Gallery", ICO.gallery);
         var img = document.createElement("img");
         img.alt = "";
         node.appendChild(img);
@@ -659,7 +626,7 @@
     if (!node) return;
     node.hidden = false;
     node.innerHTML = "";
-    heading(node, "Server Status");
+    heading(node, "Server Status", ICO.server);
     if (!data) {
       var miss = document.createElement("p");
       miss.className = "empty";

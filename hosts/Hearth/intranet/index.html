@@ -15,7 +15,10 @@
       <header>
         <h1>Hearth</h1>
         <div class="clock">
-          <h2><time id="clock-time"></time></h2>
+          <h2>
+            <span class="nf" aria-hidden="true">&#xf0954;</span>
+            <time id="clock-time"></time>
+          </h2>
           <p id="clock-date"></p>
         </div>
       </header>
@@ -48,10 +51,11 @@
         function tick() {
           var now = new Date();
           timeEl.dateTime = now.toISOString();
-          timeEl.textContent = now.toLocaleTimeString(undefined, {
+          timeEl.textContent = now.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
             second: "2-digit",
+            hour12: true,
           });
           dateEl.textContent = now.toLocaleDateString(undefined, {
             weekday: "long",

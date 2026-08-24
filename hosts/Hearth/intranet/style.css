@@ -42,12 +42,22 @@ h1 {
   letter-spacing: 0.02em;
 }
 
-.clock h2 {
-  margin: 0;
-  color: var(--accent);
+.clock h2,
+section h2,
+.poll h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  color: var(--strong);
   font-size: 1.5rem;
   font-weight: 650;
   text-transform: none;
+}
+
+.clock h2 {
+  margin: 0;
+  color: var(--accent);
 }
 
 .clock time {
@@ -79,13 +89,6 @@ h1 {
 
 section {
   margin-top: 1.75rem;
-}
-
-section h2 {
-  margin: 0 0 0.4rem;
-  color: var(--strong);
-  font-size: 1.05rem;
-  text-transform: capitalize;
 }
 
 .nf {
@@ -206,6 +209,16 @@ section h3 {
   opacity: 0.85;
 }
 
+.local-map {
+  display: block;
+  width: 100%;
+  height: 16rem;
+  margin: 0 0 1.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--depth);
+}
+
 .bus-stop {
   margin-top: 0.75rem;
 }
@@ -235,15 +248,11 @@ section h3 {
 }
 
 .poll {
-  margin-top: 0.85rem;
+  margin: 0 0 0.85rem;
 }
 
-.poll-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--strong);
-  font-size: 0.85rem;
+.poll h2 {
+  margin: 0 0 0.4rem;
 }
 
 .poll-track {

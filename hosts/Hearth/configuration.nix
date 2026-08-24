@@ -14,5 +14,6 @@
     ./home.nix
     ./caddy.nix
     ./intranet-status.nix
+    ./intranet-transit.nix
   ];
 }
