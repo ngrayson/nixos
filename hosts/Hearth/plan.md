@@ -212,18 +212,20 @@ desktop is currently the only recovery console.
 ### H6 — Remote surface (wiztow.org + streaming)
 - **Public site (decision 16):** serverless webapp on Vercel (or similar) at
   `wiztow.org`. Lives outside this flake; Hearth is not a public web server.
-- **Intranet subdomain:** `hms.wiztow.org` fronts the home-media surface.
-  Two candidate wirings, pick when H6 lands:
-  - **Tailnet-only:** `hms.wiztow.org` CNAME/A → tailnet address; resolves
-    for everyone but only *connects* for tailnet members. Simplest, private.
-  - **Public via Tailscale Funnel:** CNAME → the Funnel hostname; Jellyfin's
-    own auth becomes the only gate. More exposed — decide deliberately.
-- On Hearth: Caddy bound to the **tailnet interface only** (or `tailscale
-  serve`), reverse-proxying Jellyfin under the `hms` hostname.
-- Remote streaming path: Jellyfin over Tailscale (Go 2, phones). LG TV stays
-  on a local path — same GiGstreem LAN as Hearth (decision 13).
+- **Intranet subdomain (landed, tailnet-only — not Funnel):** Caddy on Hearth
+  (`hosts/Hearth/caddy.nix`) reverse-proxies Jellyfin at
+  `https://hms.wiztow.org`, bound to tailnet IPv4 `100.84.222.78:443` only.
+  Funnel stays a future card.
+- **DNS (operator):** CNAME `hms.wiztow.org` → `hearth.tail6cd822.ts.net`
+  (or A `100.84.222.78`). The name may resolve off-tailnet; TCP/TLS only
+  works for tailnet members. TLS is Caddy `tls internal` until a Tailscale
+  or ACME cert is issued.
+- **TV:** still `http://172.16.141.38:8096` on GiGstreem (Jellyfin
+  `openFirewall` unchanged). Put that LAN IP on the intranet page later so
+  local users do not need DHCP reservations.
+- Remote streaming path: Jellyfin over Tailscale (Go 2, phones).
 - Acceptance: `https://hms.wiztow.org` serves Jellyfin for tailnet devices;
-  nothing on Hearth listens on WAN.
+  nothing on Hearth listens on WAN for this vhost.
 
 ### H7 — Automatic remote-dev updates (GitOps)
 **Decided (decision 11):** start **push-based with deploy-rs over Tailscale**

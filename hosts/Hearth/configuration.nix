@@ -8,5 +8,6 @@
     ./host.nix
     ./jellyfin.nix
     ./remote-access.nix
+    ./caddy.nix
   ];
 }
