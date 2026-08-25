@@ -71,6 +71,37 @@ else
   fail "/mnt/cold is not mounted"
 fi
 
+# Library paths are Jellyfin server state, not jellyfin.nix. COLD is mounted
+# case-sensitively and Jellyfin does not trim mblink files, so a wrong capital
+# and a trailing newline both scan as "inaccessible or empty, skipping" with the
+# tracks sitting unread. Fail the deploy instead of leaving a silent empty shelf.
+JELLYFIN_ROOT="${HEARTH_JELLYFIN_ROOT:-/var/lib/jellyfin/root/default}"
+if [[ -d "$JELLYFIN_ROOT" ]]; then
+  links="$(find "$JELLYFIN_ROOT" -name '*.mblink' -type f 2>/dev/null | sort || true)"
+  if [[ -z "$links" ]]; then
+    fail "no Jellyfin library folders under $JELLYFIN_ROOT"
+  else
+    while IFS= read -r link; do
+      [[ -n "$link" ]] || continue
+      lib="$(basename "$(dirname "$link")")"
+      path="$(cat "$link")"
+      # cat strips trailing newlines and Jellyfin does not, so the byte counts
+      # diverge exactly when the file carries one. Do not probe for the newline
+      # with a command substitution; that strips it too and always looks clean.
+      if (($(wc -c <"$link") != $(printf '%s' "$path" | wc -c))); then
+        fail "Jellyfin library '$lib' mblink ends in a newline; write it with printf, not echo"
+      elif [[ ! -d "$path" ]]; then
+        fail "Jellyfin library '$lib' points at missing '$path' (COLD is case-sensitive)"
+      elif [[ -f "$(dirname "$link")/options.xml" ]] &&
+        ! grep -Fq "<Path>$path</Path>" "$(dirname "$link")/options.xml"; then
+        fail "Jellyfin library '$lib' options.xml disagrees with mblink '$path'"
+      else
+        ok "Jellyfin library '$lib' resolves to $path"
+      fi
+    done <<<"$links"
+  fi
+fi
+
 if command -v curl >/dev/null 2>&1; then
   if curl -fsS --max-time 5 "$JELLYFIN_HEALTH" >/dev/null; then
     ok "Jellyfin health $JELLYFIN_HEALTH"
