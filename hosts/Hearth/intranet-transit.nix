@@ -1,5 +1,6 @@
-# Oneshot + timer: one Hearth poll of OneBusAway → /run/hearth-intranet/transit.json.
-# Browsers only read that file. Do not proxy OBA per client (TEST key 429s).
+# Oneshot + timer: one Hearth poll of Puget Sound OneBusAway (Sound Transit OTD)
+# → /run/hearth-intranet/transit.json. Browsers only read that file.
+# Do not proxy OBA per client (TEST key 429s). Do not call Houston METRO.
 {pkgs, ...}: let
   transitCfg = (import ./intranet/config).transit;
   pollSeconds = let
@@ -32,6 +33,17 @@
       def oba_id(posted):
           posted = str(posted)
           return posted if "_" in posted else f"1_{posted}"
+
+
+      def skip_stop(stop):
+          if not isinstance(stop, dict):
+              return False
+          feed = str(stop.get("feed") or "").lower()
+          if stop.get("skip") or feed in ("houston", "metro"):
+              return True
+          posted = str(stop.get("id") or stop.get("stopId") or "")
+          # Houston METRO codes from an older dashboard list — not OBA ids.
+          return posted in ("25027", "25028")
 
 
       def fetch_stop(stop):
@@ -99,7 +111,7 @@
               "arrivals": arrivals[:6],
           }
 
-      results = [fetch_stop(s) for s in stops_in]
+      results = [fetch_stop(s) for s in stops_in if not skip_stop(s if isinstance(s, dict) else {"id": s})]
       limited = any(r.get("status") == 429 or r.get("code") == 429 for r in results)
       payload = {
           "generatedAt": int(time.time()),
@@ -117,17 +129,20 @@
     '';
   };
 in {
-  systemd.tmpfiles.rules = [
-    "d /run/hearth-intranet 0755 root root -"
-  ];
-
   systemd.services.hearth-intranet-transit = {
     description = "Write Hearth intranet transit.json from OneBusAway";
     after = ["network-online.target"];
     wants = ["network-online.target"];
     serviceConfig = {
       Type = "oneshot";
+      User = "hearth-intranet";
+      Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-transit";
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      ReadWritePaths = ["/run/hearth-intranet"];
     };
   };
 

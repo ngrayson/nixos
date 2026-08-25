@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { widget } from "../lib/config.js";
 import { Heading, ICO } from "../lib/icons.jsx";
 
 function parseIcsDays(text) {
@@ -57,13 +56,11 @@ function MonthGrid({ marked }) {
 }
 
 export default function Calendar() {
-  const ics = widget("calendar").calendarIcsUrl;
   const [marked, setMarked] = useState({});
 
   useEffect(() => {
-    if (!ics) return;
     let cancelled = false;
-    fetch(ics)
+    fetch("/calendar.ics")
       .then((res) => {
         if (!res.ok) throw new Error("ics " + res.status);
         return res.text();
@@ -77,7 +74,7 @@ export default function Calendar() {
     return () => {
       cancelled = true;
     };
-  }, [ics]);
+  }, []);
 
   const cap = new Date().toLocaleString(undefined, {
     month: "long",
@@ -87,7 +84,7 @@ export default function Calendar() {
   return (
     <>
       <Heading title="Calendar" code={ICO.calendar} />
-      <p>{cap}</p>
+      <p className="cal-caption">{cap}</p>
       <MonthGrid marked={marked} />
     </>
   );

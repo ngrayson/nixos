@@ -173,6 +173,8 @@ desktop is currently the only recovery console.
   `x-systemd.device-timeout=10s`. `/srv/media` emptied; unplug drill passed.
 - Leftover ops: hub still enumerating at USB2 480 Mb/s — move it to the
   USB-C SuperSpeed port when convenient.
+- `hearth-disk park` before unplugging COLD; replug remounts and starts
+  Jellyfin; `hearth-deploy health` is expected to fail while parked.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
   Leave Anime/Music/… at the volume root.
 
@@ -208,6 +210,16 @@ desktop is currently the only recovery console.
   URL, Restic repo password, seedbox credentials, Syncthing device IDs.
 - Acceptance: no plaintext secret in the repo; a fresh Hearth install can be
   re-keyed from Bitwarden alone.
+- **Restic (v1):** `hosts/Hearth/restic.nix` backups Jellyfin state (no
+  transcodes/cache), Tailscale identity, ACME certs, the host age key, and
+  builder `config.nix` copies under `/var/lib/hearth-intranet/config/`.
+  Repo is `/mnt/cold/backups/hearth-restic` (7 daily + 4 weekly). Restore
+  when and how: [`hosts/Hearth/restic.md`](./restic.md) (Conveyor tag
+  `restic`). The flake still builds the OS. Do not snapshot
+  `/mnt/cold/media` or `/nix/store`. Password is
+  `secrets/hearth-restic-password.yaml` (Bitwarden → sops). Missing COLD
+  fails only the backup unit. `hearth-deploy` copies gitignored widget
+  `config.nix` files after switch/boot.
 
 ### H6 — Remote surface (wiztow.org + streaming)
 - **Public site (decision 16):** serverless webapp on Vercel (or similar) at
@@ -233,10 +245,11 @@ desktop is currently the only recovery console.
   nothing on Hearth listens on WAN for this vhost.
 
 ### H7 — Automatic remote-dev updates (GitOps)
-**Decided (decision 11):** start **push-based with deploy-rs over Tailscale**
-(no agent on the server; deploys are deliberate acts from Go 2 or CI), then
-graduate to **comin polling `deploy/hearth`** once a health-check script
-exists. The custom-timer agent from the original plan is dropped.
+**Decided (decision 11):** push-based deploys via `hearth-deploy` over
+OpenSSH/Tailscale (no agent on the server). The pin is **`deploy/hearth`**.
+Activator is `nixos-rebuild --target-host` (deploy-rs cannot `boot`; same
+path filter). **comin** on `deploy/hearth` only after health-check is
+trusted. Do not auto-switch `main`.
 
 Guardrails that answer "unsupervised switch on main" regardless of tool:
 1. Hearth deploys from a **dedicated branch** (e.g. `deploy/hearth`), never

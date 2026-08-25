@@ -20,6 +20,15 @@
     openFirewall = true;
   };
 
+  # BindsTo stops jellyfin when COLD unmounts. WantedBy the mount starts it
+  # again on remount/replug. Keep the module's wantedBy = multi-user.target.
+  systemd.services.jellyfin = {
+    after = ["mnt-cold.mount"];
+    bindsTo = ["mnt-cold.mount"];
+    wantedBy = ["mnt-cold.mount"];
+    unitConfig.RequiresMountsFor = ["/mnt/cold"];
+  };
+
   hardware.graphics = {
     enable = true;
     extraPackages = with pkgs; [

@@ -8,9 +8,14 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    watch: {
+      ignored: ["**/result", "**/result/**", "**/dist/**"],
+    },
     proxy: {
       "/status.json": { target: "https://home.wizt.org", changeOrigin: true },
       "/transit.json": { target: "https://home.wizt.org", changeOrigin: true },
+      "/gallery.json": { target: "https://home.wizt.org", changeOrigin: true },
+      "/calendar.ics": { target: "https://home.wizt.org", changeOrigin: true },
       "/gallery": { target: "https://home.wizt.org", changeOrigin: true },
     },
   },

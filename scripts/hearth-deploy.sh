@@ -75,13 +75,14 @@ Usage:
   hearth-deploy health          Post-activate probes (sshd, Tailscale, Jellyfin, COLD)
   hearth-deploy build           Build only (no copy, no activate)
   hearth-deploy dry-activate    Build, copy, show activation diff
-  hearth-deploy switch          Build, copy, activate now, then health
+  hearth-deploy switch          Pick source, then build, copy, activate, health
   hearth-deploy boot            Build, copy, set next boot generation
   hearth-deploy ssh             Open a shell on Hearth
 
 Options:
   --yes                   Skip confirmations
   --no-stage              Do not offer to git-add untracked flake inputs
+  --from-checkout         Activate the builder worktree (skips the switch source menu).
   -h, --help              Show this help
 
 Environment:
@@ -89,6 +90,7 @@ Environment:
   HEARTH_SSH_TARGET       Override ssh destination (default: hearth)
   HEARTH_SSH_HOSTNAME     Override MagicDNS / IP written into ~/.ssh/config.d/hearth
   HEARTH_DEPLOY_LOG_DIR   Log directory (default: ~/.cache/hearth-deploy)
+  HEARTH_DEPLOY_ALLOW_SHARED=1  Allow common/ home/ profiles/ flake.nix flake.lock in the deploy range
 
 Run this on Tawa (or another strong builder). Do not run switch/boot on Hearth.
 EOF
@@ -143,6 +145,138 @@ branch_summary() {
     topic) printf '%s (topic — not main/dev)' "$branch" ;;
     *) printf '%s' "$branch" ;;
   esac
+}
+
+# switch/boot/dry-activate default to origin/deploy/hearth, not Tawa's dirty dest.
+fetch_deploy_pin() {
+  git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth
+}
+
+activation_rev() {
+  if (( FROM_CHECKOUT )); then
+    git -C "$NIXOS_DIR" rev-parse HEAD
+  else
+    git -C "$NIXOS_DIR" rev-parse origin/deploy/hearth
+  fi
+}
+
+activation_flake() {
+  if (( FROM_CHECKOUT )); then
+    printf '%s#%s' "$NIXOS_DIR" "$FLAKE_OUTPUT"
+    return
+  fi
+  local rev
+  rev="$(git -C "$NIXOS_DIR" rev-parse origin/deploy/hearth)"
+  printf 'git+file://%s?rev=%s#%s' "$NIXOS_DIR" "$rev" "$FLAKE_OUTPUT"
+}
+
+activation_summary() {
+  if (( FROM_CHECKOUT )); then
+    printf 'builder checkout %s (ESCAPE HATCH --from-checkout)' "$(branch_summary)"
+    return
+  fi
+  local rev
+  rev="$(git -C "$NIXOS_DIR" rev-parse --short origin/deploy/hearth 2>/dev/null || printf '?')"
+  printf 'origin/deploy/hearth (%s)' "$rev"
+}
+
+# Interactive switch (and TUI Switch): pick checkout, pin, or FF pin to origin/dev.
+# --from-checkout skips this. --yes keeps the pin (no FF, no checkout).
+# Answers in SWITCH_SOURCE, not on stdout: has_gum needs a tty on fd 1, and the
+# text fallback has to print the menu where the operator can see it.
+choose_switch_source() {
+  SWITCH_SOURCE="pin"
+  if [[ "$NO_PROMPT" == "1" ]]; then
+    return 0
+  fi
+
+  local branch pin_rev
+  branch="$(repo_branch)"
+  pin_rev="$(git -C "$NIXOS_DIR" rev-parse --short origin/deploy/hearth 2>/dev/null || printf '?')"
+
+  local opt_current="Current branch (${branch})"
+  local opt_pin="Pinned branch (hearthDeploy / origin/deploy/hearth @ ${pin_rev})"
+  local opt_ff="Fast-forward deploy/hearth to origin/dev and use that"
+
+  local pick=""
+  if has_gum; then
+    pick="$(
+      gum choose \
+        --header "Hearth switch source" \
+        --cursor "→ " \
+        "$opt_current" \
+        "$opt_pin" \
+        "$opt_ff"
+    )" || return 1
+  else
+    printf '\nSwitch source:\n'
+    printf '  [1] %s\n' "$opt_current"
+    printf '  [2] %s\n' "$opt_pin"
+    printf '  [3] %s\n' "$opt_ff"
+    printf 'Choice [2]: '
+    read -r pick || true
+  fi
+
+  case "$pick" in
+    1 | current | "$opt_current") SWITCH_SOURCE="checkout" ;;
+    3 | ff | ff-dev | dev | "$opt_ff") SWITCH_SOURCE="ff-dev" ;;
+    2 | pin | hearthDeploy | "" | "$opt_pin") SWITCH_SOURCE="pin" ;;
+    *)
+      error "Unknown switch source: ${pick}"
+      return 1
+      ;;
+  esac
+}
+
+fast_forward_deploy_pin_to_dev() {
+  info "Fetching origin/dev and origin/deploy/hearth"
+  git -C "$NIXOS_DIR" fetch origin dev:refs/remotes/origin/dev || {
+    error "Could not fetch origin/dev."
+    return 1
+  }
+  git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth || {
+    error "Could not fetch origin/deploy/hearth."
+    return 1
+  }
+
+  local dev_rev pin_rev
+  dev_rev="$(git -C "$NIXOS_DIR" rev-parse origin/dev)"
+  pin_rev="$(git -C "$NIXOS_DIR" rev-parse origin/deploy/hearth)"
+  if [[ "$dev_rev" == "$pin_rev" ]]; then
+    ok "origin/deploy/hearth already at origin/dev ($(git -C "$NIXOS_DIR" rev-parse --short origin/dev))"
+    return 0
+  fi
+
+  info "git push origin origin/dev:refs/heads/deploy/hearth"
+  git -C "$NIXOS_DIR" push origin origin/dev:refs/heads/deploy/hearth || {
+    error "Fast-forward of deploy/hearth to origin/dev failed (pin is not an ancestor, or push was refused). Not force-pushing."
+    return 1
+  }
+  git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth
+  ok "origin/deploy/hearth is now $(git -C "$NIXOS_DIR" rev-parse --short origin/deploy/hearth) (origin/dev)"
+}
+
+refuse_shared_deploy_paths() {
+  local tip="$1"
+  local hit
+  if ! git -C "$NIXOS_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
+    git -C "$NIXOS_DIR" fetch origin main:refs/remotes/origin/main || true
+  fi
+  hit="$(git -C "$NIXOS_DIR" diff --name-only origin/main..."$tip" -- common home profiles flake.nix flake.lock 2>/dev/null || true)"
+  [[ -z "$hit" ]] && return 0
+  if [[ "${HEARTH_DEPLOY_ALLOW_SHARED:-0}" == "1" ]]; then
+    warn "Shared-tree paths in origin/main...${tip} (HEARTH_DEPLOY_ALLOW_SHARED=1):"
+    printf '    %s\n' $hit
+    return 0
+  fi
+  if git -C "$NIXOS_DIR" log origin/main.."$tip" --pretty=%B 2>/dev/null | grep -q '^Hearth-Deploy: allow-shared$'; then
+    warn "Shared-tree paths allowed by trailer Hearth-Deploy: allow-shared."
+    return 0
+  fi
+  error "Refusing Hearth deploy: origin/main...${tip} touches shared tree:"
+  printf '    %s\n' $hit
+  error "Fast-forward deploy/hearth with Hearth-only commits, or HEARTH_DEPLOY_ALLOW_SHARED=1, or trailer Hearth-Deploy: allow-shared."
+  return 1
 }
 
 local_hostname() {
@@ -356,6 +490,24 @@ require_local_intranet_config() {
     fi
   done
   return "$missing"
+}
+
+# After activate: copy gitignored widget config.nix onto Hearth for restic.
+# Do not git add those files. Skip widgets that have no local config.nix.
+copy_intranet_config_for_restic() {
+  local base="$NIXOS_DIR/hosts/Hearth/intranet/config"
+  local remote_dir="/var/lib/hearth-intranet/config"
+  local widget src copied=0
+  ssh_hearth -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
+  for widget in clock weather transit health gallery calendar; do
+    src="$base/$widget/config.nix"
+    [[ -f "$src" ]] || continue
+    scp -q "$src" "${TARGET}:/tmp/hearth-${widget}.nix" || return 1
+    ssh_hearth -o BatchMode=yes sudo mv "/tmp/hearth-${widget}.nix" "${remote_dir}/${widget}.nix" || return 1
+    ssh_hearth -o BatchMode=yes sudo chmod 0640 "${remote_dir}/${widget}.nix" || return 1
+    copied=$((copied + 1))
+  done
+  ok "Copied ${copied} intranet config.nix file(s) to ${remote_dir} for restic."
 }
 
 offer_stage_untracked() {
@@ -611,6 +763,8 @@ run_build() {
 
 run_deploy() {
   local action="$1"
+  # Shadowed so a source picked for one switch does not leak into later TUI actions.
+  local FROM_CHECKOUT="$FROM_CHECKOUT"
   offer_stage_untracked
   require_local_intranet_config
 
@@ -622,24 +776,48 @@ run_deploy() {
     return 1
   fi
 
-  if [[ "$action" == "switch" ]] && hardware_dirty; then
+  if [[ "$action" == "switch" ]] && ! (( FROM_CHECKOUT )); then
+    fetch_deploy_pin || true
+    choose_switch_source || return 1
+    case "$SWITCH_SOURCE" in
+      checkout) FROM_CHECKOUT=1 ;;
+      ff-dev) fast_forward_deploy_pin_to_dev || return 1 ;;
+      pin) ;;
+      *)
+        error "Unknown switch source: ${SWITCH_SOURCE}"
+        return 1
+        ;;
+    esac
+  fi
+
+  if ! (( FROM_CHECKOUT )); then
+    fetch_deploy_pin || {
+      error "Could not fetch origin/deploy/hearth. Create that pin or pass --from-checkout."
+      return 1
+    }
+  else
+    warn "Activating the builder checkout, not origin/deploy/hearth."
+  fi
+
+  local tip
+  tip="$(activation_rev)"
+  refuse_shared_deploy_paths "$tip" || return 1
+
+  local act_flake
+  act_flake="$(activation_flake)"
+
+  if [[ "$action" == "switch" ]] && hardware_dirty && (( FROM_CHECKOUT )); then
     warn "Hardware/host files changed. Boot + reboot is safer than switch."
-    if ! confirm "Still switch Hearth from $(branch_summary)?" "no"; then
+    if ! confirm "Still switch Hearth from $(activation_summary)?" "no"; then
       return 0
     fi
   elif is_activation "$action"; then
-    case "$(branch_lane "$(repo_branch)")" in
-      unstable)
-        warn "Hearth will activate this machine's checkout on $(branch_summary)."
-        ;;
-      stable)
-        info "Hearth will activate this machine's checkout on $(branch_summary)."
-        ;;
-      *)
-        warn "Hearth will activate this machine's checkout on $(branch_summary)."
-        ;;
-    esac
-    if ! confirm "Run '${action}' on Hearth from $(branch_summary)? Build stays on $(local_hostname)." "no"; then
+    if (( FROM_CHECKOUT )); then
+      warn "Hearth will activate $(activation_summary). Builder checkout is $(branch_summary)."
+    else
+      info "Hearth will activate $(activation_summary). Builder checkout is $(branch_summary)."
+    fi
+    if ! confirm "Run '${action}' on Hearth from $(activation_summary)? Build stays on $(local_hostname)." "no"; then
       return 0
     fi
   fi
@@ -649,12 +827,13 @@ run_deploy() {
     before="$(ssh_hearth -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
   fi
 
-  heading "${action} on Hearth (build on $(local_hostname), $(branch_summary))"
-  info "nixos-rebuild ${action} --flake ${FLAKE} --impure --target-host ${TARGET} --use-remote-sudo"
+  heading "${action} on Hearth (build on $(local_hostname), $(activation_summary))"
+  info "nixos-rebuild ${action} --flake ${act_flake} --impure --target-host ${TARGET} --use-remote-sudo"
+  info "Activator is nixos-rebuild --target-host (deploy-rs cannot boot; same path filter)."
 
   local -a cmd=(
     nixos-rebuild "$action"
-    --flake "$FLAKE"
+    --flake "$act_flake"
     --impure
     --target-host "$TARGET"
     --use-remote-sudo
@@ -666,6 +845,10 @@ run_deploy() {
     error "nixos-rebuild ${action} failed. Full log: $(short_home "$LOG_FILE")"
     warn "If SSH dropped, reconnect and: ssh ${TARGET} readlink /run/current-system"
     return 1
+  fi
+
+  if [[ "$action" == "switch" || "$action" == "boot" ]]; then
+    copy_intranet_config_for_restic || warn "Intranet config.nix copy for restic failed."
   fi
 
   if [[ "$action" == "boot" ]]; then
@@ -684,6 +867,11 @@ run_deploy() {
     fi
     if ! run_healthcheck; then
       error "Activate succeeded but health check failed — do not treat this generation as good."
+      HEARTH_NOTIFY_BRANCH="$(repo_branch)" \
+        HEARTH_NOTIFY_LANE="$(branch_lane "$(repo_branch)")" \
+        HEARTH_NOTIFY_GENERATION="$(short_store "${after:-unknown}")" \
+        HEARTH_NOTIFY_LOG="$(short_home "$LOG_FILE")" \
+        bash "$NIXOS_DIR/scripts/hearth-notify.sh" health-fail || true
       return 1
     fi
 
@@ -803,6 +991,8 @@ main() {
   local action="tui"
   NO_PROMPT="${HEARTH_DEPLOY_NO_PROMPT:-0}"
   STAGE=1
+  FROM_CHECKOUT=0
+  SWITCH_SOURCE="pin"
   NIXOS_DIR="${NIXOS_DIR:-$HOME/.config/nixos}"
   LOG_DIR="${HEARTH_DEPLOY_LOG_DIR:-$HOME/.cache/hearth-deploy}"
 
@@ -816,6 +1006,9 @@ main() {
         ;;
       --no-stage)
         STAGE=0
+        ;;
+      --from-checkout)
+        FROM_CHECKOUT=1
         ;;
       -h | --help)
         usage

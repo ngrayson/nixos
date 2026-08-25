@@ -9,11 +9,17 @@
     ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
+    ./disk.nix
     ./jellyfin.nix
     ./remote-access.nix
     ./home.nix
     ./caddy.nix
+    ./intranet-runtime.nix
     ./intranet-status.nix
     ./intranet-transit.nix
+    ./intranet-gallery.nix
+    ./intranet-calendar.nix
+    ./intranet-maps-key.nix
+    ./restic.nix
   ];
 }

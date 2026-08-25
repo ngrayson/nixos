@@ -1,3 +1,6 @@
 node_modules
 dist
 public/SymbolsNerdFont.ttf
+public/intranet-config.js
+public/lan.js
+public/maps-key.js

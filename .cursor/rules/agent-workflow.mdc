@@ -8,7 +8,7 @@ alwaysApply: true
 Canonical tree: `~/.config/nixos` (flake `github:ngrayson/nixos`). Hosts: **Theseus** (Framework laptop), **Tawa** (desktop), **Hearth** (Surface media host), **Gcp**.
 
 - **`main` is stable, `dev` is unstable.** New hosts stay on `main`. Daily work happens on `dev` until you promote. Never `git switch` the user's checkout unless they ask.
-- `os-rebuild` and `hearth-deploy` use the **active checkout** and must tell the user which branch/lane they are on. They do not pick a branch.
+- `os-rebuild` uses the **active checkout** and must tell the user which branch/lane they are on. It does not pick a branch. `hearth-deploy` **builds** the checkout; **switch/boot** default to `origin/deploy/hearth` unless `--from-checkout`.
 - Edit files here; do not duplicate config under Stellarium `projects/`.
 - Activate **this machine** with `os-rebuild switch` (alias). Never run `sudo` yourself: give the user the command plus a check (`readlink /run/current-system`, or `qs-nixos-status`).
 - **Hearth** is built on Tawa and activated with `hearth-deploy` (`scripts/hearth-deploy.sh`) from **Tawa's current branch**. Do not `os-rebuild switch --host Hearth` on Tawa, and do not routine-switch Hearth on-box. Exception: the first on-box Hearth switch after `hosts/Hearth/remote-access.nix` trust/sudo changes.
