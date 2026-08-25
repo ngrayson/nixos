@@ -24,7 +24,7 @@ const H = {
   calendar: 10,
 };
 
-const HUG = new Set(["clock", "weather", "buses", "health"]);
+const HUG = new Set(["clock", "weather", "buses", "health", "calendar"]);
 
 function item(i, x, y, w, h) {
   return { i, x, y, w, h, static: true };
@@ -224,9 +224,9 @@ export default function WidgetGrid() {
             </div>
           ) : null}
           <div key="calendar">
-            <WidgetCard>
+            <HugCard id="calendar" onHeight={onHugHeight}>
               <Calendar />
-            </WidgetCard>
+            </HugCard>
           </div>
         </ReactGridLayout>
       ) : null}

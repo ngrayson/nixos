@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import Modal from "../components/Modal.jsx";
 import { widget } from "../lib/config.js";
 import { Empty, Fact, Heading, ICO, Icon } from "../lib/icons.jsx";
 
@@ -181,86 +181,53 @@ function ForecastStrip({ daily, unit }) {
 }
 
 function ForecastModal({ place, unit, aqi, onClose }) {
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const daily = (place.forecast && place.forecast.daily) || {};
   const times = daily.time || [];
   const name = place.loc.name || "Location";
-  // Portaled to body on purpose: the weather widget is a hug card with
-  // overflow:hidden, and its height is measured by cloning its subtree.
-  return createPortal(
-    <div
-      className="modal-backdrop"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+  return (
+    <Modal
+      icon={ICO.weather}
+      title={`${name} · ${FORECAST_DAYS}-day`}
+      label={`${name} ${FORECAST_DAYS}-day forecast`}
+      onClose={onClose}
     >
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${name} ${FORECAST_DAYS}-day forecast`}
-      >
-        <div className="modal-head">
-          <h2>
-            <Icon code={ICO.weather} />
-            {name} · {FORECAST_DAYS}-day
-          </h2>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Close forecast"
-            autoFocus
-          >
-            ×
-          </button>
-        </div>
-        <p className="facts">
-          <Fact code={ICO.aci} text={`ACI ${aqi == null ? "—" : aqi}`} tone={aqiTone(aqi)} />
-        </p>
-        <ul className="forecast-days">
-          {times.map((iso, i) => {
-            const hi = at(daily.temperature_2m_max, i);
-            const lo = at(daily.temperature_2m_min, i);
-            const code = at(daily.weather_code, i);
-            const precip = at(daily.precipitation_probability_max, i);
-            const gust = at(daily.wind_speed_10m_max, i);
-            return (
-              <li key={iso}>
-                <h3>
-                  {i === 0 ? "Today" : fmtDay(iso, { weekday: "long" })}
-                  <span className="forecast-date">
-                    {fmtDay(iso, { month: "short", day: "numeric" })}
-                  </span>
-                </h3>
-                <p className="facts">
-                  <Fact code={weatherIcon(code)} text={weatherLabel(code)} />
-                  <Fact
-                    code={ICO.thermometer}
-                    text={`${fmtDeg(hi)} / ${fmtDeg(lo)}`}
-                    tone={tempTone(hi, unit)}
-                  />
-                  <Fact code={ICO.rain} text={precip == null ? "—" : `${Math.round(precip)}%`} />
-                  <Fact code={ICO.wind} text={gust == null ? "—" : String(Math.round(gust))} />
-                </p>
-                <p className="facts">
-                  <Fact code={ICO.sunrise} text={fmtClock(at(daily.sunrise, i))} />
-                  <Fact code={ICO.sunset} text={fmtClock(at(daily.sunset, i))} />
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>,
-    document.body,
+      <p className="facts">
+        <Fact code={ICO.aci} text={`ACI ${aqi == null ? "—" : aqi}`} tone={aqiTone(aqi)} />
+      </p>
+      <ul className="forecast-days">
+        {times.map((iso, i) => {
+          const hi = at(daily.temperature_2m_max, i);
+          const lo = at(daily.temperature_2m_min, i);
+          const code = at(daily.weather_code, i);
+          const precip = at(daily.precipitation_probability_max, i);
+          const gust = at(daily.wind_speed_10m_max, i);
+          return (
+            <li key={iso}>
+              <h3>
+                {i === 0 ? "Today" : fmtDay(iso, { weekday: "long" })}
+                <span className="forecast-date">
+                  {fmtDay(iso, { month: "short", day: "numeric" })}
+                </span>
+              </h3>
+              <p className="facts">
+                <Fact code={weatherIcon(code)} text={weatherLabel(code)} />
+                <Fact
+                  code={ICO.thermometer}
+                  text={`${fmtDeg(hi)} / ${fmtDeg(lo)}`}
+                  tone={tempTone(hi, unit)}
+                />
+                <Fact code={ICO.rain} text={precip == null ? "—" : `${Math.round(precip)}%`} />
+                <Fact code={ICO.wind} text={gust == null ? "—" : String(Math.round(gust))} />
+              </p>
+              <p className="facts">
+                <Fact code={ICO.sunrise} text={fmtClock(at(daily.sunrise, i))} />
+                <Fact code={ICO.sunset} text={fmtClock(at(daily.sunset, i))} />
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </Modal>
   );
 }
 
