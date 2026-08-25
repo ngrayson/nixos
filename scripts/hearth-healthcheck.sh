@@ -76,29 +76,56 @@ fi
 # and a trailing newline both scan as "inaccessible or empty, skipping" with the
 # tracks sitting unread. Fail the deploy instead of leaving a silent empty shelf.
 JELLYFIN_ROOT="${HEARTH_JELLYFIN_ROOT:-/var/lib/jellyfin/root/default}"
-if [[ -d "$JELLYFIN_ROOT" ]]; then
+if [[ ! -d "$JELLYFIN_ROOT" ]]; then
+  # Skipping quietly here would restore the green-but-empty deploy this whole
+  # block exists to catch, so a moved or mistyped root is itself a failure.
+  fail "Jellyfin library root $JELLYFIN_ROOT does not exist"
+else
   links="$(find "$JELLYFIN_ROOT" -name '*.mblink' -type f 2>/dev/null | sort || true)"
   if [[ -z "$links" ]]; then
     fail "no Jellyfin library folders under $JELLYFIN_ROOT"
   else
-    while IFS= read -r link; do
-      [[ -n "$link" ]] || continue
-      lib="$(basename "$(dirname "$link")")"
-      path="$(cat "$link")"
-      # cat strips trailing newlines and Jellyfin does not, so the byte counts
-      # diverge exactly when the file carries one. Do not probe for the newline
-      # with a command substitution; that strips it too and always looks clean.
-      if (($(wc -c <"$link") != $(printf '%s' "$path" | wc -c))); then
-        fail "Jellyfin library '$lib' mblink ends in a newline; write it with printf, not echo"
-      elif [[ ! -d "$path" ]]; then
-        fail "Jellyfin library '$lib' points at missing '$path' (COLD is case-sensitive)"
-      elif [[ -f "$(dirname "$link")/options.xml" ]] &&
-        ! grep -Fq "<Path>$path</Path>" "$(dirname "$link")/options.xml"; then
-        fail "Jellyfin library '$lib' options.xml disagrees with mblink '$path'"
-      else
-        ok "Jellyfin library '$lib' resolves to $path"
-      fi
-    done <<<"$links"
+    libdirs="$(while IFS= read -r link; do
+      [[ -n "$link" ]] && dirname "$link"
+    done <<<"$links" | sort -u)"
+    while IFS= read -r libdir; do
+      [[ -n "$libdir" ]] || continue
+      lib="$(basename "$libdir")"
+      linked=()
+      for link in "$libdir"/*.mblink; do
+        [[ -f "$link" ]] || continue
+        path="$(cat "$link")"
+        linked+=("$path")
+        # cat strips trailing newlines and Jellyfin does not, so the byte counts
+        # diverge exactly when the file carries one. Do not probe for the newline
+        # with a command substitution; that strips it too and always looks clean.
+        if (($(wc -c <"$link") != $(printf '%s' "$path" | wc -c))); then
+          fail "Jellyfin library '$lib' mblink ends in a newline; write it with printf, not echo"
+        elif [[ ! -d "$path" ]]; then
+          fail "Jellyfin library '$lib' points at missing '$path' (COLD is case-sensitive)"
+        else
+          ok "Jellyfin library '$lib' resolves to $path"
+        fi
+      done
+
+      opts="$libdir/options.xml"
+      ((${#linked[@]})) || continue
+      [[ -f "$opts" ]] || continue
+      # Checking only that each mblink appears in options.xml lets a stale entry
+      # from a renamed folder survive, and Jellyfin keeps scanning it. Compare
+      # the two sets both ways. &amp; is unescaped because a path may hold '&'.
+      declared="$(grep -o '<Path>[^<]*</Path>' "$opts" |
+        sed -e 's|<Path>||' -e 's|</Path>||' -e 's|&amp;|\&|g' | sort -u || true)"
+      have="$(printf '%s\n' "${linked[@]}" | sort -u)"
+      while IFS= read -r stale; do
+        [[ -n "$stale" ]] || continue
+        fail "Jellyfin library '$lib' options.xml declares '$stale' with no mblink (stale after a rename)"
+      done < <(comm -13 <(printf '%s\n' "$have") <(printf '%s\n' "$declared"))
+      while IFS= read -r undeclared; do
+        [[ -n "$undeclared" ]] || continue
+        fail "Jellyfin library '$lib' options.xml does not declare mblink path '$undeclared'"
+      done < <(comm -23 <(printf '%s\n' "$have") <(printf '%s\n' "$declared"))
+    done <<<"$libdirs"
   fi
 fi
 

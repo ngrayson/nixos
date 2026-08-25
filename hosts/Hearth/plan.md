@@ -204,7 +204,11 @@ desktop is currently the only recovery console.
   Dashboard → Libraries.
 - `hearth-healthcheck.sh` now fails the deploy if any library `.mblink` ends in a
   newline, names a directory that does not exist, or disagrees with its
-  `options.xml`. An empty music shelf should never again survive a green switch.
+  `options.xml` **in either direction** — a stale `<Path>` a rename left behind
+  fails too, since Jellyfin keeps scanning it. A missing library root is a
+  failure rather than a skipped check, so the probe cannot quietly disappear if
+  Jellyfin's layout moves. An empty music shelf should never again survive a
+  green switch.
 
 ### H3 — Jellyfin consolidation (Tawa → Hearth)
 - Copy Tawa's media files into `/mnt/cold/media` (rsync over LAN/tailnet).
