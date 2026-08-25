@@ -5,6 +5,8 @@
   systemd.tmpfiles.rules = [
     # HDD (COLD). Created only when /mnt/cold is mounted; nofail so a missing
     # disk does not fail tmpfiles. Existing archive folders are left alone.
+    # ntfs-3g mounts COLD case-sensitively: these names must match the on-disk
+    # ones exactly, or tmpfiles builds an empty twin beside the real archive.
     "d /mnt/cold/media 0775 jellyfin jellyfin -"
     "d /mnt/cold/media/movies 0775 jellyfin jellyfin -"
     "d /mnt/cold/media/tv 0775 jellyfin jellyfin -"
