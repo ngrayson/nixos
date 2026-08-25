@@ -176,7 +176,13 @@ desktop is currently the only recovery console.
 - `hearth-disk park` before unplugging COLD; replug remounts and starts
   Jellyfin; `hearth-deploy health` is expected to fail while parked.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
-  Leave Anime/Music/… at the volume root.
+  Leave `Anime/`, `Downloads/`, … at the volume root. There is no `Music`
+  there; the audio archive lives at `media/music`.
+- ntfs-3g mounts COLD case-sensitively, so `music` and `Music` are two
+  different directories. The archive shipped as `Music` and was renamed to
+  lowercase to match the tmpfiles rule and the Jellyfin library path. Do not
+  "fix" the case back: a mismatch leaves the populated tree unscanned beside an
+  empty twin that Jellyfin logs as "inaccessible or empty, skipping".
 
 ### H3 — Jellyfin consolidation (Tawa → Hearth)
 - Copy Tawa's media files into `/mnt/cold/media` (rsync over LAN/tailnet).
