@@ -12,9 +12,13 @@
 {
   # Waze iframe (`lat,lon`). Official params have no traffic toggle.
   # Livemap georss 403s as of 2026-08, so the embed is a basemap only.
-  # Do not swap providers here. Do not put a real home map center here.
+  # Google mode uses Maps JS + TrafficLayer and a billed browser key
+  # (sops secrets/hearth-google-maps-browser-key.yaml, key apiKey:).
+  # mapProvider is the default: "waze" | "google" | "off". The HUD toggle
+  # overrides it in localStorage. Do not put a real home map center here.
   mapQuery = "";
   mapZoom = 10;
+  mapProvider = "waze";
   obaApiKey = "TEST";
   obaPollSeconds = 60;
   busStops = [];
