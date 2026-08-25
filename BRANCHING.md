@@ -11,7 +11,7 @@
 
 - New system: clone defaults to `main`, stay there until you opt into daily work (`git switch dev`).
 - Daily driver (Tawa today): check out `dev`. Post-rebuild commits stay on `dev`.
-- `hearth-deploy` **builds** the builder's checkout. **switch / boot / dry-activate** default to `origin/deploy/hearth` (Hearth's deploy pin), not Tawa's dirty `dev`. Promotion = fast-forward `deploy/hearth`. Escape hatch: `hearth-deploy switch --from-checkout` (warns; still path-filters). Shared-tree touches (`common/`, `home/`, `profiles/`, `flake.nix`, `flake.lock`) vs `origin/main` are refused — see [Shipping a shared-tree change to Hearth](#shipping-a-shared-tree-change-to-hearth). Activator is still `nixos-rebuild --target-host` (deploy-rs cannot `boot`).
+- `hearth-deploy` **builds** the builder's checkout. **boot / dry-activate** default to `origin/deploy/hearth` (Hearth's deploy pin), not Tawa's dirty `dev`. Interactive **switch** asks for the pin, the checkout, or a fast-forward of the pin to `origin/dev`; `--yes` keeps the pin. Promotion = fast-forward `deploy/hearth`. Escape hatch: `hearth-deploy switch --from-checkout` (warns; still path-filters). Shared-tree touches (`common/`, `home/`, `profiles/`, `flake.nix`, `flake.lock`) vs `origin/main` are refused — see [Shipping a shared-tree change to Hearth](#shipping-a-shared-tree-change-to-hearth). Activator is still `nixos-rebuild --target-host` (deploy-rs cannot `boot`).
 - `legacy/surface-standalone` is named above as the pre-flake Surface rollback. It is **not** on `origin` today.
 - Promote: merge or fast-forward `dev` → `main` (Conveyor release, or a deliberate local merge), then hosts that should be stable `git switch main`.
 
@@ -29,6 +29,7 @@ gh pr create --base main --head dev     # 2. promote (or a deliberate local merg
 git fetch origin                        # 3. after it merges
 git push origin origin/dev:deploy/hearth  # 4. fast-forward the pin
 hearth-deploy switch                    # 5. filter passes, no override
+                                        #    (or pick "Fast-forward" in switch to do 4 + 5)
 ```
 
 Once the change is on `main`, `origin/main...deploy/hearth` contains only Hearth-only paths and the filter is silent. Hearth-only work (`hosts/Hearth/`, `secrets/`, `scripts/hearth-*`) can fast-forward `deploy/hearth` ahead of `main` freely and never trips it.

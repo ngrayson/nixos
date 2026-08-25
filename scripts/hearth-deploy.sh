@@ -75,14 +75,14 @@ Usage:
   hearth-deploy health          Post-activate probes (sshd, Tailscale, Jellyfin, COLD)
   hearth-deploy build           Build only (no copy, no activate)
   hearth-deploy dry-activate    Build, copy, show activation diff
-  hearth-deploy switch          Build, copy, activate now, then health
+  hearth-deploy switch          Pick source, then build, copy, activate, health
   hearth-deploy boot            Build, copy, set next boot generation
   hearth-deploy ssh             Open a shell on Hearth
 
 Options:
   --yes                   Skip confirmations
   --no-stage              Do not offer to git-add untracked flake inputs
-  --from-checkout         Activate the builder worktree (warns). Default pin is origin/deploy/hearth.
+  --from-checkout         Activate the builder worktree (skips the switch source menu).
   -h, --help              Show this help
 
 Environment:
@@ -178,6 +178,82 @@ activation_summary() {
   local rev
   rev="$(git -C "$NIXOS_DIR" rev-parse --short origin/deploy/hearth 2>/dev/null || printf '?')"
   printf 'origin/deploy/hearth (%s)' "$rev"
+}
+
+# Interactive switch (and TUI Switch): pick checkout, pin, or FF pin to origin/dev.
+# --from-checkout skips this. --yes keeps the pin (no FF, no checkout).
+# Answers in SWITCH_SOURCE, not on stdout: has_gum needs a tty on fd 1, and the
+# text fallback has to print the menu where the operator can see it.
+choose_switch_source() {
+  SWITCH_SOURCE="pin"
+  if [[ "$NO_PROMPT" == "1" ]]; then
+    return 0
+  fi
+
+  local branch pin_rev
+  branch="$(repo_branch)"
+  pin_rev="$(git -C "$NIXOS_DIR" rev-parse --short origin/deploy/hearth 2>/dev/null || printf '?')"
+
+  local opt_current="Current branch (${branch})"
+  local opt_pin="Pinned branch (hearthDeploy / origin/deploy/hearth @ ${pin_rev})"
+  local opt_ff="Fast-forward deploy/hearth to origin/dev and use that"
+
+  local pick=""
+  if has_gum; then
+    pick="$(
+      gum choose \
+        --header "Hearth switch source" \
+        --cursor "→ " \
+        "$opt_current" \
+        "$opt_pin" \
+        "$opt_ff"
+    )" || return 1
+  else
+    printf '\nSwitch source:\n'
+    printf '  [1] %s\n' "$opt_current"
+    printf '  [2] %s\n' "$opt_pin"
+    printf '  [3] %s\n' "$opt_ff"
+    printf 'Choice [2]: '
+    read -r pick || true
+  fi
+
+  case "$pick" in
+    1 | current | "$opt_current") SWITCH_SOURCE="checkout" ;;
+    3 | ff | ff-dev | dev | "$opt_ff") SWITCH_SOURCE="ff-dev" ;;
+    2 | pin | hearthDeploy | "" | "$opt_pin") SWITCH_SOURCE="pin" ;;
+    *)
+      error "Unknown switch source: ${pick}"
+      return 1
+      ;;
+  esac
+}
+
+fast_forward_deploy_pin_to_dev() {
+  info "Fetching origin/dev and origin/deploy/hearth"
+  git -C "$NIXOS_DIR" fetch origin dev:refs/remotes/origin/dev || {
+    error "Could not fetch origin/dev."
+    return 1
+  }
+  git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth || {
+    error "Could not fetch origin/deploy/hearth."
+    return 1
+  }
+
+  local dev_rev pin_rev
+  dev_rev="$(git -C "$NIXOS_DIR" rev-parse origin/dev)"
+  pin_rev="$(git -C "$NIXOS_DIR" rev-parse origin/deploy/hearth)"
+  if [[ "$dev_rev" == "$pin_rev" ]]; then
+    ok "origin/deploy/hearth already at origin/dev ($(git -C "$NIXOS_DIR" rev-parse --short origin/dev))"
+    return 0
+  fi
+
+  info "git push origin origin/dev:refs/heads/deploy/hearth"
+  git -C "$NIXOS_DIR" push origin origin/dev:refs/heads/deploy/hearth || {
+    error "Fast-forward of deploy/hearth to origin/dev failed (pin is not an ancestor, or push was refused). Not force-pushing."
+    return 1
+  }
+  git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth
+  ok "origin/deploy/hearth is now $(git -C "$NIXOS_DIR" rev-parse --short origin/deploy/hearth) (origin/dev)"
 }
 
 refuse_shared_deploy_paths() {
@@ -687,6 +763,8 @@ run_build() {
 
 run_deploy() {
   local action="$1"
+  # Shadowed so a source picked for one switch does not leak into later TUI actions.
+  local FROM_CHECKOUT="$FROM_CHECKOUT"
   offer_stage_untracked
   require_local_intranet_config
 
@@ -696,6 +774,20 @@ run_deploy() {
   if [[ "$DOC_SSH" != "ok" ]]; then
     error "No SSH path to Hearth; fix doctor before ${action}."
     return 1
+  fi
+
+  if [[ "$action" == "switch" ]] && ! (( FROM_CHECKOUT )); then
+    fetch_deploy_pin || true
+    choose_switch_source || return 1
+    case "$SWITCH_SOURCE" in
+      checkout) FROM_CHECKOUT=1 ;;
+      ff-dev) fast_forward_deploy_pin_to_dev || return 1 ;;
+      pin) ;;
+      *)
+        error "Unknown switch source: ${SWITCH_SOURCE}"
+        return 1
+        ;;
+    esac
   fi
 
   if ! (( FROM_CHECKOUT )); then
@@ -899,6 +991,7 @@ main() {
   NO_PROMPT="${HEARTH_DEPLOY_NO_PROMPT:-0}"
   STAGE=1
   FROM_CHECKOUT=0
+  SWITCH_SOURCE="pin"
   NIXOS_DIR="${NIXOS_DIR:-$HOME/.config/nixos}"
   LOG_DIR="${HEARTH_DEPLOY_LOG_DIR:-$HOME/.cache/hearth-deploy}"
 
