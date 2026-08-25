@@ -5,9 +5,12 @@
 # key at /var/lib/sops-nix/key.txt (0400 root) before activate. See NEW-SYSTEM.md.
 {
   inputs,
+  lib,
   pkgs,
   ...
-}: {
+}: let
+  discordWebhook = ../secrets/hearth-discord-webhook.yaml;
+in {
   imports = [inputs.sops-nix.nixosModules.sops];
 
   sops = {
@@ -18,6 +21,16 @@
     # Dummy consumer so eval/activate exercise decrypt. Real secrets (Tailscale,
     # Discord, Restic, seedbox, Syncthing, git mailbox) wait until issued.
     secrets.placeholder = {};
+    # Hearthchime Incoming Webhook. Nick encrypts locally
+    # (`sops secrets/hearth-discord-webhook.yaml`, key `url`). Never print it.
+    # Until the file exists, this secret stays off so hosts still evaluate.
+    secrets.hearth-discord-webhook = lib.mkIf (builtins.pathExists discordWebhook) {
+      sopsFile = discordWebhook;
+      key = "url";
+      owner = "wiz";
+      group = "users";
+      mode = "0400";
+    };
   };
 
   environment.systemPackages = [pkgs.sops pkgs.age];

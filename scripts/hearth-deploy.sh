@@ -775,6 +775,11 @@ run_deploy() {
     fi
     if ! run_healthcheck; then
       error "Activate succeeded but health check failed — do not treat this generation as good."
+      HEARTH_NOTIFY_BRANCH="$(repo_branch)" \
+        HEARTH_NOTIFY_LANE="$(branch_lane "$(repo_branch)")" \
+        HEARTH_NOTIFY_GENERATION="$(short_store "${after:-unknown}")" \
+        HEARTH_NOTIFY_LOG="$(short_home "$LOG_FILE")" \
+        bash "$NIXOS_DIR/scripts/hearth-notify.sh" health-fail || true
       return 1
     fi
     notify_hearth_if_visible "Hearth switch OK" "$(short_store "${after:-activated}")"
