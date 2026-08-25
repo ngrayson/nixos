@@ -37,30 +37,52 @@ function wazeSrc(transit) {
   );
 }
 
+// Under loading=async the maps/api/js response is only a stub that injects
+// main.js later, so the script's own load event fires before
+// google.maps.importLibrary exists. Wait for the API's callback, not load.
+const MAPS_CALLBACK = "hearthGoogleMapsReady";
+const MAPS_TIMEOUT_MS = 20000;
+let mapsReady = null;
+
 function loadGoogleMaps(key) {
   if (window.google?.maps?.importLibrary) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.getElementById("hearth-google-maps");
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("maps")), { once: true });
-      return;
-    }
+  if (mapsReady) return mapsReady;
+  mapsReady = new Promise((resolve, reject) => {
     const script = document.createElement("script");
+    const fail = (message) => {
+      script.remove();
+      // Let a later mount retry rather than latching the failure forever.
+      mapsReady = null;
+      reject(new Error(message));
+    };
+    const timer = setTimeout(() => fail("google maps callback timed out"), MAPS_TIMEOUT_MS);
+    window[MAPS_CALLBACK] = () => {
+      clearTimeout(timer);
+      resolve();
+    };
     script.id = "hearth-google-maps";
     script.src =
       "https://maps.googleapis.com/maps/api/js?key=" +
       encodeURIComponent(key) +
-      "&v=weekly&loading=async";
+      "&v=weekly&loading=async&callback=" +
+      MAPS_CALLBACK;
     script.async = true;
-    script.addEventListener("load", () => resolve(), { once: true });
-    script.addEventListener("error", () => reject(new Error("maps")), { once: true });
+    script.addEventListener(
+      "error",
+      () => {
+        clearTimeout(timer);
+        fail("google maps script failed to load");
+      },
+      { once: true },
+    );
     document.head.appendChild(script);
   });
+  return mapsReady;
 }
 
 function GoogleTrafficMap({ lat, lng, zoom }) {
   const ref = useRef(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -70,7 +92,7 @@ function GoogleTrafficMap({ lat, lng, zoom }) {
     (async () => {
       try {
         await loadGoogleMaps(key);
-        if (cancelled || !ref.current || !window.google?.maps?.importLibrary) return;
+        if (cancelled || !ref.current) return;
         const { Map } = await window.google.maps.importLibrary("maps");
         if (cancelled || !ref.current) return;
         const map = new Map(ref.current, {
@@ -86,8 +108,9 @@ function GoogleTrafficMap({ lat, lng, zoom }) {
         });
         const traffic = new window.google.maps.TrafficLayer();
         traffic.setMap(map);
-      } catch {
-        /* empty state stays if Maps fails to load */
+      } catch (err) {
+        if (!cancelled) setFailed(true);
+        console.error("google map failed", err);
       }
     })();
     return () => {
@@ -96,6 +119,7 @@ function GoogleTrafficMap({ lat, lng, zoom }) {
     };
   }, [lat, lng, zoom]);
 
+  if (failed) return <p className="empty">Google map failed to load.</p>;
   return <div ref={ref} className="local-map local-map-google" role="img" aria-label="Local traffic map" />;
 }
 
