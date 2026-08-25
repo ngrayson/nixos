@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { hearthLan } from "./lib/config.js";
 import WidgetGrid from "./components/WidgetGrid.jsx";
 import { ICO, Icon } from "./lib/icons.jsx";
 
@@ -23,9 +22,6 @@ function AtmosphereGate() {
 }
 
 export default function App() {
-  const lan = hearthLan();
-  const tvHref = lan ? `http://${lan}:8096` : "#";
-
   return (
     <>
       <AtmosphereGate />
@@ -40,12 +36,6 @@ export default function App() {
               <Icon code={ICO.tv} />
               TV Jellyfin
             </a>
-            {lan ? (
-              <a className="site-nav-item site-nav-cta" href={tvHref}>
-                <Icon code={ICO.tv} />
-                TV (LAN)
-              </a>
-            ) : null}
           </span>
         </nav>
         <WidgetGrid />

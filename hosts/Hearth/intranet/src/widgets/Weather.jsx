@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
+import Modal from "../components/Modal.jsx";
 import { widget } from "../lib/config.js";
-import { Empty, Fact, Heading, ICO } from "../lib/icons.jsx";
+import { Empty, Fact, Heading, ICO, Icon } from "../lib/icons.jsx";
+
+const FORECAST_DAYS = 7;
+const STRIP_DAYS = 5;
 
 function tempUnit(weather) {
   const u = String(weather.temperatureUnit || "F").toUpperCase();
@@ -78,6 +82,32 @@ function fmtClock(iso) {
   });
 }
 
+function fmtDeg(value) {
+  if (value == null || isNaN(value)) return "—";
+  return `${Math.round(value)}°`;
+}
+
+// daily.time entries are bare YYYY-MM-DD in the location's own timezone. Handing
+// those to new Date() reads them as UTC midnight, which renders as the previous
+// day at any negative offset, so build and format the date in UTC throughout.
+function utcDay(iso) {
+  const [y, m, d] = String(iso || "")
+    .split("-")
+    .map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function fmtDay(iso, opts) {
+  const date = utcDay(iso);
+  if (!date) return "—";
+  return date.toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
+}
+
+function at(list, i) {
+  return Array.isArray(list) ? list[i] : undefined;
+}
+
 function placeDetail(loc) {
   return String((loc && loc.detail) || "long").toLowerCase() === "short" ? "short" : "long";
 }
@@ -99,6 +129,10 @@ function loadPlace(loc, unit) {
     encodeURIComponent(loc.longitude) +
     "&current=temperature_2m,weather_code,wind_speed_10m" +
     "&daily=sunrise,sunset,moonrise,moonset,moon_phase" +
+    ",temperature_2m_max,temperature_2m_min,weather_code" +
+    ",precipitation_probability_max,wind_speed_10m_max" +
+    "&forecast_days=" +
+    FORECAST_DAYS +
     "&temperature_unit=" +
     temp +
     "&wind_speed_unit=" +
@@ -117,14 +151,107 @@ function loadPlace(loc, unit) {
   }));
 }
 
+function ForecastStrip({ daily, unit }) {
+  const times = daily.time || [];
+  const count = Math.min(STRIP_DAYS, times.length);
+  if (!count) return null;
+  const days = [];
+  for (let i = 0; i < count; i += 1) {
+    const hi = at(daily.temperature_2m_max, i);
+    const lo = at(daily.temperature_2m_min, i);
+    const code = at(daily.weather_code, i);
+    days.push(
+      <li key={times[i]}>
+        <span className="forecast-day">
+          {i === 0 ? "Today" : fmtDay(times[i], { weekday: "short" })}
+        </span>
+        <Icon code={weatherIcon(code)} />
+        <span className="forecast-temps">
+          <span className={tempTone(hi, unit) || undefined}>{fmtDeg(hi)}</span>
+          <span className="forecast-low">{fmtDeg(lo)}</span>
+        </span>
+      </li>,
+    );
+  }
+  return (
+    <ul className="forecast-strip" aria-label={`${count}-day forecast`}>
+      {days}
+    </ul>
+  );
+}
+
+function ForecastModal({ place, unit, aqi, onClose }) {
+  const daily = (place.forecast && place.forecast.daily) || {};
+  const times = daily.time || [];
+  const name = place.loc.name || "Location";
+  return (
+    <Modal
+      icon={ICO.weather}
+      title={`${name} · ${FORECAST_DAYS}-day`}
+      label={`${name} ${FORECAST_DAYS}-day forecast`}
+      onClose={onClose}
+    >
+      <p className="facts">
+        <Fact code={ICO.aci} text={`ACI ${aqi == null ? "—" : aqi}`} tone={aqiTone(aqi)} />
+      </p>
+      <ul className="forecast-days">
+        {times.map((iso, i) => {
+          const hi = at(daily.temperature_2m_max, i);
+          const lo = at(daily.temperature_2m_min, i);
+          const code = at(daily.weather_code, i);
+          const precip = at(daily.precipitation_probability_max, i);
+          const gust = at(daily.wind_speed_10m_max, i);
+          return (
+            <li key={iso}>
+              <h3>
+                {i === 0 ? "Today" : fmtDay(iso, { weekday: "long" })}
+                <span className="forecast-date">
+                  {fmtDay(iso, { month: "short", day: "numeric" })}
+                </span>
+              </h3>
+              <p className="facts">
+                <Fact code={weatherIcon(code)} text={weatherLabel(code)} />
+                <Fact
+                  code={ICO.thermometer}
+                  text={`${fmtDeg(hi)} / ${fmtDeg(lo)}`}
+                  tone={tempTone(hi, unit)}
+                />
+                <Fact code={ICO.rain} text={precip == null ? "—" : `${Math.round(precip)}%`} />
+                <Fact code={ICO.wind} text={gust == null ? "—" : String(Math.round(gust))} />
+              </p>
+              <p className="facts">
+                <Fact code={ICO.sunrise} text={fmtClock(at(daily.sunrise, i))} />
+                <Fact code={ICO.sunset} text={fmtClock(at(daily.sunset, i))} />
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </Modal>
+  );
+}
+
 function Place({ place, unit }) {
   const cur = (place.forecast && place.forecast.current) || {};
   const daily = (place.forecast && place.forecast.daily) || {};
   const aqi = place.air && place.air.current ? place.air.current.us_aqi : null;
   const phase = moonPhase(daily.moon_phase && daily.moon_phase[0]);
+  const [open, setOpen] = useState(false);
+  const name = place.loc.name || "Location";
   return (
     <article className="weather-place">
-      <h3>{place.loc.name || "Location"}</h3>
+      <h3>
+        {name}
+        <button
+          type="button"
+          className="forecast-btn"
+          onClick={() => setOpen(true)}
+          aria-label={`Open ${FORECAST_DAYS}-day forecast for ${name}`}
+        >
+          <Icon code={ICO.calendar} />
+          {FORECAST_DAYS}-day
+        </button>
+      </h3>
       <p className="facts">
         <Fact
           code={ICO.thermometer}
@@ -146,7 +273,11 @@ function Place({ place, unit }) {
             <Fact code={ICO.moonrise} text={fmtClock(daily.moonrise && daily.moonrise[0])} />
             <Fact code={ICO.moonset} text={fmtClock(daily.moonset && daily.moonset[0])} />
           </p>
+          <ForecastStrip daily={daily} unit={unit} />
         </>
+      ) : null}
+      {open ? (
+        <ForecastModal place={place} unit={unit} aqi={aqi} onClose={() => setOpen(false)} />
       ) : null}
     </article>
   );
