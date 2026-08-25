@@ -21,9 +21,12 @@ function minsLabel(row, nowMs) {
   return mins + " min" + (row.predicted ? "" : " sched");
 }
 
+const RECHECK_MS = 2000;
+
 export default function Buses() {
   const [payload, setPayload] = useState(undefined);
   const [awaiting, setAwaiting] = useState(false);
+  const [stale, setStale] = useState(false);
   const [pollMs, setPollMs] = useState(60000);
   const [nextAt, setNextAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -38,6 +41,7 @@ export default function Buses() {
     let awaitingTick = false;
     let poll = 60000;
     let due = 0;
+    let seenAt = 0;
 
     function tick() {
       if (awaitingTick || cancelled) return;
@@ -53,13 +57,25 @@ export default function Buses() {
           setPayload(data);
           poll = Math.max(60, Number((data && data.pollSeconds) || 60)) * 1000;
           setPollMs(poll);
-          due = ((data && data.generatedAt) || 0) * 1000 + poll;
-          if (due <= Date.now()) due = Date.now() + 5000;
+          const generatedAt = ((data && data.generatedAt) || 0) * 1000;
+          // The poller's real cadence exceeds pollSeconds (timer slack plus its
+          // own run time), so counting to generatedAt + poll always expires a
+          // few seconds early. Re-poll briefly until the file actually changes
+          // rather than showing a countdown we know is wrong.
+          if (generatedAt > seenAt) {
+            seenAt = generatedAt;
+            setStale(false);
+            due = generatedAt + poll;
+          } else {
+            setStale(true);
+            due = Date.now() + RECHECK_MS;
+          }
           setNextAt(due);
         })
         .catch(() => {
           if (cancelled) return;
           setPayload(null);
+          setStale(false);
           due = Date.now() + poll;
           setNextAt(due);
         })
@@ -80,7 +96,7 @@ export default function Buses() {
   }, []);
 
   const left = Math.max(0, nextAt - now);
-  const pct = nextAt ? Math.max(0, Math.min(100, (left / pollMs) * 100)) : 0;
+  const pct = nextAt && !stale ? Math.max(0, Math.min(100, (left / pollMs) * 100)) : 0;
 
   let list;
   if (payload === undefined) {
@@ -94,10 +110,19 @@ export default function Buses() {
     } else {
       list = (
         <>
-          {payload.limited ? <p className="empty">rate limited — waiting to try again</p> : null}
           {stops.map((r) => {
-            if (r.status === 429 || r.code === 429) return null;
-            if (!r.ok) {
+            const limited = r.status === 429 || r.code === 429;
+            const nowMs = r.currentTime || Date.now();
+            const rows = r.arrivals || [];
+            if (limited && !rows.length) {
+              return (
+                <div className="bus-stop" key={r.id || r.name}>
+                  <h3>{r.name || r.id}</h3>
+                  <p className="empty">rate limited — retrying</p>
+                </div>
+              );
+            }
+            if (!limited && !r.ok) {
               return (
                 <div className="bus-stop" key={r.id || r.name}>
                   <h3>{r.name || r.id}</h3>
@@ -107,8 +132,6 @@ export default function Buses() {
                 </div>
               );
             }
-            const nowMs = r.currentTime || Date.now();
-            const rows = r.arrivals || [];
             if (!rows.length) {
               return (
                 <div className="bus-stop" key={r.id || r.name}>
@@ -119,7 +142,10 @@ export default function Buses() {
             }
             return (
               <div className="bus-stop" key={r.id || r.name}>
-                <h3>{r.name || r.id}</h3>
+                <h3>
+                  {r.name || r.id}
+                  {r.stale ? <span className="stale-hint"> · last known</span> : null}
+                </h3>
                 <ul className="arrivals">
                   {rows.map((row, i) => (
                     <li key={`${row.routeShortName}-${row.tripHeadsign}-${i}`}>
@@ -147,7 +173,11 @@ export default function Buses() {
           <MeterBar variant="poll" percent={pct} awaiting={awaiting} />
         </div>
         <div className="poll-value">
-          {awaiting ? "awaiting response" : `refresh in ${Math.ceil(left / 1000)}s`}
+          {awaiting
+            ? "awaiting response"
+            : stale
+              ? "waiting for fresh data"
+              : `refresh in ${Math.ceil(left / 1000)}s`}
         </div>
       </div>
       <div className="bus-list">{list}</div>

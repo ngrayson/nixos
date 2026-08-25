@@ -8,7 +8,11 @@
 # Houston METRO ids are not OBA — set skip = true (or feed = "houston") so
 # they stay in the list without being queried. 25027 / 25028 are skipped.
 # obaApiKey "TEST" is the public OBA development key, not a Bitwarden secret.
-# It 429s if polled hard. Poll no faster than 60s (Hearth-side).
+# It is shared by every OBA demo caller, so it 429s a stop most cycles even at
+# 60s with staggered requests. The durable fix is a personal Puget Sound OBA
+# key (free, requested by email from OBA Puget Sound) set here in the
+# gitignored config.nix — never in config.example.nix or any commit.
+# Poll no faster than 60s (Hearth-side) regardless of key.
 {
   # Waze iframe (`lat,lon`). Official params have no traffic toggle.
   # Livemap georss 403s as of 2026-08, so the embed is a basemap only.

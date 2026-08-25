@@ -627,6 +627,12 @@ section h3 {
   margin-top: 0.75rem;
 }
 
+.stale-hint {
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+  font-weight: 400;
+  font-size: 0.8em;
+}
+
 .arrivals {
   margin: 0;
   padding: 0;

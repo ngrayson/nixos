@@ -29,6 +29,32 @@
       poll = max(60, int(cfg.get("pollSeconds") or 60))
       stops_in = cfg.get("stops") or []
 
+      # Seconds between stop requests. Two back-to-back calls on the shared
+      # TEST key trip OBA's burst limit and one stop comes back 429.
+      STAGGER = 2.0
+      RETRY_AFTER = 5.0
+      # Carry a 429'd stop's last arrivals only this long. Long enough to ride
+      # out a few bad cycles, short enough that the times still mean something.
+      MAX_CARRY_AGE = 300
+
+
+      def log(msg):
+          print(msg, file=sys.stderr, flush=True)
+
+
+      def previous():
+          try:
+              with open(out, encoding="utf-8") as fh:
+                  return json.load(fh)
+          except Exception:
+              return {}
+
+
+      prev_stops = {}
+      for row in (previous().get("stops") or []):
+          if row.get("id"):
+              prev_stops[str(row["id"])] = row
+
 
       def oba_id(posted):
           posted = str(posted)
@@ -111,8 +137,48 @@
               "arrivals": arrivals[:6],
           }
 
-      results = [fetch_stop(s) for s in stops_in if not skip_stop(s if isinstance(s, dict) else {"id": s})]
-      limited = any(r.get("status") == 429 or r.get("code") == 429 for r in results)
+      def is_429(row):
+          return row.get("status") == 429 or row.get("code") == 429
+
+
+      def carry_forward(row):
+          prev = prev_stops.get(str(row.get("id")))
+          if not prev or not (prev.get("arrivals") or []):
+              return row
+          # Age is measured from OBA's own currentTime, which a carried row
+          # keeps. Using the file's generatedAt would never expire, because we
+          # rewrite the file every cycle even while every stop is 429ing.
+          captured = int(prev.get("currentTime") or 0)
+          if not captured or (time.time() * 1000 - captured) > MAX_CARRY_AGE * 1000:
+              return row
+          merged = dict(row)
+          merged["arrivals"] = prev["arrivals"]
+          merged["currentTime"] = captured
+          merged["stale"] = True
+          return merged
+
+
+      wanted = [s if isinstance(s, dict) else {"id": s} for s in stops_in]
+      wanted = [s for s in wanted if not skip_stop(s)]
+
+      results = []
+      for index, stop in enumerate(wanted):
+          if index:
+              time.sleep(STAGGER)
+          row = fetch_stop(stop)
+          if is_429(row):
+              log(f"stop {row.get('id')}: 429, retrying once in {RETRY_AFTER:.0f}s")
+              time.sleep(RETRY_AFTER)
+              row = fetch_stop(stop)
+              if is_429(row):
+                  row = carry_forward(row)
+                  kept = len(row.get("arrivals") or [])
+                  log(f"stop {row.get('id')}: still 429, carrying {kept} cached arrivals")
+          if not is_429(row):
+              log(f"stop {row.get('id')}: status {row.get('status')} arrivals {len(row.get('arrivals') or [])}")
+          results.append(row)
+
+      limited = any(is_429(r) for r in results)
       payload = {
           "generatedAt": int(time.time()),
           "pollSeconds": poll,
@@ -138,6 +204,9 @@ in {
       User = "hearth-intranet";
       Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-transit";
+      # Staggering plus a retry per stop lengthens the worst case; do not let a
+      # hung fetch stall polling indefinitely.
+      TimeoutStartSec = "90s";
       ProtectSystem = "strict";
       ProtectHome = true;
       PrivateTmp = true;
@@ -151,7 +220,10 @@ in {
     timerConfig = {
       OnBootSec = "15s";
       OnUnitActiveSec = "${toString pollSeconds}s";
-      AccuracySec = "5s";
+      # OnUnitActiveSec counts from deactivation, so run time and timer slack
+      # both push the real cadence past pollSeconds. Keep the slack small; the
+      # widget no longer assumes an exact period either.
+      AccuracySec = "1s";
       Unit = "hearth-intranet-transit.service";
     };
   };
