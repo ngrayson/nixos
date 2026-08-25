@@ -9,6 +9,7 @@
     ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
+    ./disk.nix
     ./jellyfin.nix
     ./remote-access.nix
     ./home.nix

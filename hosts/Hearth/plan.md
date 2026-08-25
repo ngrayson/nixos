@@ -173,6 +173,8 @@ desktop is currently the only recovery console.
   `x-systemd.device-timeout=10s`. `/srv/media` emptied; unplug drill passed.
 - Leftover ops: hub still enumerating at USB2 480 Mb/s — move it to the
   USB-C SuperSpeed port when convenient.
+- `hearth-disk park` before unplugging COLD; replug remounts and starts
+  Jellyfin; `hearth-deploy health` is expected to fail while parked.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
   Leave Anime/Music/… at the volume root.
 
