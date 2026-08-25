@@ -62,6 +62,7 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
     console rescue post-headless, or a gigabit ethernet adapter later).
 11. **GitOps:** start **push-based (deploy-rs over Tailscale)**; graduate to
     **comin on `deploy/hearth`** once the health-check script exists.
+    **Superseded by decision 21** — comin cancelled 2026-08-25.
 12. **Secrets:** **sops-nix** on-host, **Bitwarden Pro as master vault** for
     one-time setup/re-keying. Confirmed.
 13. **Network interim:** TV and Hearth both stay on **GiGstreem Wi-Fi, no
@@ -97,6 +98,15 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
     on GiGstreem. TV hosting still requires GiGstreem `172.16.141.38` — flip
     SSID for playback tests, then come back to AncientGlade to continue
     this agent. Fixed by H0-from-elsewhere / H7, not by another LAN hack.
+
+### Decisions round 3 (2026-08-25)
+
+21. **GitOps end state: push-based only.** `hearth-deploy` is the deploy path
+    and **comin is cancelled** (supersedes decision 11). Comin implements one
+    of the five H7 guardrails; its one real gain — applying changes without
+    Tawa awake — is exactly what breaks guardrail 2, because the path filter
+    only runs when the pin advances through `hearth-deploy`. Any future puller
+    needs that filter enforced server-side on `deploy/hearth` first. See H7.
 
 ## 3. Target architecture
 
@@ -250,12 +260,12 @@ desktop is currently the only recovery console.
 - Acceptance: `https://tv.wizt.org` serves Jellyfin for tailnet devices;
   nothing on Hearth listens on WAN for this vhost.
 
-### H7 — Automatic remote-dev updates (GitOps)
-**Decided (decision 11):** push-based deploys via `hearth-deploy` over
-OpenSSH/Tailscale (no agent on the server). The pin is **`deploy/hearth`**.
-Activator is `nixos-rebuild --target-host` (deploy-rs cannot `boot`; same
-path filter). **comin** on `deploy/hearth` only after health-check is
-trusted. Do not auto-switch `main`.
+### H7 — Automatic remote-dev updates (GitOps) — **shipped (push-based)**
+**Decided (decision 11, closed by decision 21):** push-based deploys via
+`hearth-deploy` over OpenSSH/Tailscale (no agent on the server). The pin is
+**`deploy/hearth`**. Activator is `nixos-rebuild --target-host` (deploy-rs
+cannot `boot`; same path filter). **comin is cancelled** — see "Why not comin"
+below. Do not auto-switch `main`.
 
 Guardrails that answer "unsupervised switch on main" regardless of tool:
 1. Hearth deploys from a **dedicated branch** (e.g. `deploy/hearth`), never
@@ -272,6 +282,26 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
    mechanism — health-check failures trigger `switch` back to the previous
    generation explicitly.
 5. Notifications (Discord webhook via H5 secret) on start/success/rollback.
+
+**Why not comin (2026-08-25).** `hearth-deploy` already satisfies all five
+guardrails; comin satisfies one (polling a dedicated branch). It has no path
+filtering, its `operation` is a static `switch`/`test`/`boot` per branch rather
+than conditional on what changed, and health-check plus rollback would have to
+be hand-written in `postDeploymentCommand`. Its only real gain is applying
+changes with Tawa asleep — but the filter works *because* the pin only advances
+through `hearth-deploy`, so promoting from a phone or the GitHub UI (the whole
+point) would bypass it and auto-apply shared-tree changes. Kernel bumps arrive
+via `flake.lock`, so guardrail 3 falls with guardrail 2. Comin is also absent
+from the pinned nixpkgs, so it needs a `flake.nix`/`flake.lock` input that the
+filter itself blocks, and it evaluates and builds on the target with no
+`--build-host`, which would run the intranet's `buildNpmPackage` on the media
+host and contradict guardrail 4. **Prerequisite for revisiting any puller:**
+enforce the path filter server-side on `deploy/hearth` (branch protection plus
+a required check running `refuse_shared_deploy_paths` logic). With that in
+place, `nixos-autodeploy` is the better candidate — `switchMode = "smart"`
+boots on kernel/initrd/module changes and switches otherwise, and its dirty
+flag suspends auto-updates after a manual push deploy — at the cost of a binary
+cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ### H8 — Acquisition pipeline (seedbox-first)
 - **Provider (decision 19): Ultra.cc** — stand up the slot before this phase.
@@ -294,7 +324,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 | Media on NVMe | **Resolved** — H2 shipped; media is on `/mnt/cold` |
 | Two Jellyfin servers | **Resolved** — Tawa's will be disabled (H3) |
 | Docker creep | **Resolved** — NixOS modules only |
-| Unsupervised switch on main | **Resolved** — deploy-rs first, comin on `deploy/hearth` later, plus H7 guardrails |
+| Unsupervised switch on main | **Resolved** — push-based `hearth-deploy` from the `deploy/hearth` pin, plus H7 guardrails. comin cancelled (decision 21): it would bypass the path filter |
 | On-box builds vs 8 GB RAM / small disk | **Mitigated** — space freed + headless RAM headroom; build-elsewhere preferred |
 | No secrets story | **Resolved** — sops-nix + Bitwarden Pro vault confirmed (H5) |
 | TV cannot run Tailscale | **Resolved** — TV + Hearth share GiGstreem (decision 13); wired LAN later |
