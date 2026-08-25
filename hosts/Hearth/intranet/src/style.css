@@ -314,6 +314,145 @@ section h3 {
   border-top: 0;
 }
 
+.weather-place h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.forecast-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--chrome));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--depth) 70%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.forecast-btn:hover,
+.forecast-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--strong);
+}
+
+.forecast-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0;
+  padding: 0.45rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--chrome) 80%, transparent);
+  list-style: none;
+}
+
+.forecast-strip li {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: 0.8rem;
+}
+
+.forecast-day {
+  color: var(--strong);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.forecast-temps {
+  display: inline-flex;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-low {
+  opacity: 0.6;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  padding: 1.25rem;
+  background: color-mix(in srgb, #000 62%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  overflow: auto;
+  width: min(30rem, 100%);
+  max-height: min(85vh, 48rem);
+  padding: var(--pad);
+  border: 1px solid var(--chrome);
+  border-radius: var(--radius);
+  background: var(--depth);
+  box-shadow: var(--shadow);
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.modal-head h2 {
+  margin: 0;
+}
+
+.modal-close {
+  flex: 0 0 auto;
+  padding: 0 0.35rem;
+  border: 1px solid var(--chrome);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.modal-close:hover,
+.modal-close:focus-visible {
+  border-color: var(--accent);
+  color: var(--strong);
+}
+
+.forecast-days {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forecast-days li {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid color-mix(in srgb, var(--chrome) 80%, transparent);
+}
+
+.forecast-days h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.15rem;
+}
+
+.forecast-date {
+  opacity: 0.65;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
 .gallery-frame {
   overflow: hidden;
   aspect-ratio: 16 / 10;
