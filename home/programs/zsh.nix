@@ -38,6 +38,7 @@
       ohmyzshconfig = "micro ~/.config/nixos/home/programs/zsh.nix";
       "os-rebuild" = "bash ~/.config/nixos/documentation/nixos-framework-setup/os-rebuild.sh";
       "hearth-deploy" = "bash ~/.config/nixos/scripts/hearth-deploy.sh";
+      "hearth-unmount" = "ssh hearth sudo hearth-disk park";
       stars = "astroterm -r 3 -Ccum -i seattle -s 50 -t 2.5 -l 1.7";
       termconfig = "micro ~/.config/nixos/kitty/kitty.conf";
       weather = "curl \"wttr.in/kirkland?FunQ2\"";

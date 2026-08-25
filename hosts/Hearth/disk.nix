@@ -30,7 +30,8 @@
         cat <<'EOF'
       hearth-disk — park or resume Hearth's USB COLD disk and Jellyfin.
 
-      From Tawa: ssh hearth sudo hearth-disk park
+      From Tawa:  hearth-unmount   (zsh alias) or  ssh hearth sudo hearth-disk park
+      On Hearth:  sudo hearth-disk park
 
       Commands:
         status   Probe device, mount UUID, jellyfin, and :8096/health (no changes)
@@ -42,7 +43,9 @@
       need_root() {
         local cmd="$1"
         if [[ "$(id -u)" -ne 0 ]]; then
-          printf 'sudo hearth-disk %s\n' "$cmd" >&2
+          fail "hearth-disk $cmd must run as root (stops Jellyfin, unmounts /mnt/cold, powers off the COLD enclosure — not the USB hub)."
+          printf 'From Tawa:  hearth-unmount   or   ssh hearth sudo hearth-disk %s\n' "$cmd" >&2
+          printf 'On Hearth:  sudo hearth-disk %s\n' "$cmd" >&2
           exit 1
         fi
       }
@@ -86,7 +89,7 @@
         if device_present; then
           ok "device $COLD_DEV present"
         else
-          fail "device $COLD_DEV missing"
+          fail "COLD device missing ($COLD_DEV) — enclosure unplugged or still spinning up"
           failed=1
         fi
         if findmnt "$COLD_MNT" >/dev/null 2>&1 && mount_matches; then
@@ -115,7 +118,7 @@
         systemctl stop jellyfin
         if findmnt "$COLD_MNT" >/dev/null 2>&1; then
           if ! unexpected_holders; then
-            fail "something still has $COLD_MNT open; leaving it mounted"
+            fail "park aborted: those processes still have $COLD_MNT open. Close them and retry. Jellyfin is already stopped; the disk is still mounted."
             exit 1
           fi
           systemctl stop mnt-cold.mount
@@ -126,24 +129,25 @@
           waits=$((waits + 1))
         done
         if findmnt "$COLD_MNT" >/dev/null 2>&1; then
-          fail "$COLD_MNT is still mounted"
+          fail "park aborted: $COLD_MNT did not unmount after stopping mnt-cold.mount. Jellyfin is already stopped; the disk is still mounted."
           exit 1
         fi
         if device_present; then
           udisksctl power-off -b "$COLD_DEV" || {
             if device_present; then
-              fail "udisksctl power-off failed and $COLD_DEV is still present"
+              fail "park aborted: $COLD_MNT is unmounted but udisksctl could not power off $COLD_DEV. Do not unplug yet; check the enclosure (leave the USB hub on — fans live there)."
               exit 1
             fi
           }
         fi
-        printf 'COLD is safe to unplug.\n'
+        printf 'COLD is safe to unplug. Leave the USB hub plugged in (fans). Replug the enclosure to remount and start Jellyfin.\n'
       }
 
       cmd_resume() {
         need_root resume
         if ! device_present; then
-          printf 'plug the drive in\n' >&2
+          fail "resume aborted: COLD is not plugged in (missing $COLD_DEV)."
+          printf 'Plug the enclosure into the hub, wait for the disk to appear, then: sudo hearth-disk resume\n' >&2
           exit 1
         fi
         systemctl start mnt-cold.mount
