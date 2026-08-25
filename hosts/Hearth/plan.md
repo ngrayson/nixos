@@ -180,9 +180,17 @@ desktop is currently the only recovery console.
   there; the audio archive lives at `media/music`.
 - ntfs-3g mounts COLD case-sensitively, so `music` and `Music` are two
   different directories. The archive shipped as `Music` and was renamed to
-  lowercase to match the tmpfiles rule and the Jellyfin library path. Do not
-  "fix" the case back: a mismatch leaves the populated tree unscanned beside an
-  empty twin that Jellyfin logs as "inaccessible or empty, skipping".
+  lowercase to match the tmpfiles rule. Do not "fix" the case back: a mismatch
+  leaves the populated tree unscanned beside an empty twin that Jellyfin logs as
+  "inaccessible or empty, skipping".
+- Casing has **three** sides, and renaming the disk only fixes one. The library
+  path also lives in server state, outside Nix, at
+  `/var/lib/jellyfin/root/default/Music/{music.mblink,options.xml}`. Change both
+  whenever the directory moves, then restart `jellyfin` and rescan.
+- `music.mblink` must hold the path with **no trailing newline** (21 bytes for
+  `/mnt/cold/media/music`). Jellyfin does not trim it; a newline becomes part of
+  the lookup and reads as the same "inaccessible or empty" skip as a case
+  mismatch. Prefer editing the folder in Dashboard → Libraries over `echo`.
 
 ### H3 — Jellyfin consolidation (Tawa → Hearth)
 - Copy Tawa's media files into `/mnt/cold/media` (rsync over LAN/tailnet).
