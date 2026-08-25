@@ -181,8 +181,17 @@ desktop is currently the only recovery console.
 - Disk is a **4 TB Seagate IronWolf** (ST4000NE001) NTFS volume **COLD**.
   **Do not format.** Mounted at `/mnt/cold` with `nofail` +
   `x-systemd.device-timeout=10s`. `/srv/media` emptied; unplug drill passed.
-- Leftover ops: hub still enumerating at USB2 480 Mb/s — move it to the
-  USB-C SuperSpeed port when convenient.
+- **USB link fixed (2026-08-25 PM).** The enclosure used to negotiate
+  **480 Mb/s / USB 2.10** behind a USB2.1 hub (`usb3/3-4/3-4.1`), capping
+  reads at 40 MB/s — the cause of the caption delay under H3. Moved to the
+  laptop's USB-C port on a SuperSpeed-rated cable: now enumerates at
+  **10 Gb/s** (`usb2/2-1/2-1.1`) and cold-reads at **197 MB/s** (platter
+  limit — link no longer the bottleneck). Two gotchas for next time: the
+  first C-to-C cable tried was charge-only (enumerated USB2 with zero
+  SuperSpeed link, no error anywhere), and the enclosure does not re-attach
+  on plug-in alone — it needs a **power cycle** after any cable move. The
+  GenesysLogic hub that shows up with COLD is *inside the enclosure*; it
+  power-cycles with the drive.
 - `hearth-disk park` before unplugging COLD; replug remounts and starts
   Jellyfin; `hearth-deploy health` is expected to fail while parked.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
@@ -217,6 +226,27 @@ desktop is currently the only recovery console.
 - **Fresh start** for server state (decision 14): no `/var/lib/jellyfin`
   copy; users/watch history recreated on Hearth.
 - Acceptance: one Jellyfin on the network; clients repointed.
+- **Captions lag on first play — COLD's USB2 link was why (fixed).**
+  Embedded ASS/SRT tracks are extracted on demand with
+  `ffmpeg -i <file> -map <n> -c:s copy`, which demuxes the *whole* container;
+  video direct-plays immediately, so the picture runs uncaptioned until that
+  full-file read finishes. The wait is roughly `filesize / read speed`.
+  Measured 2026-08-25 AM at the old **40 MB/s** (USB2 link): 15s for a
+  ~700 MB episode, 35s for 1.4 GB, observed as bad as 152s with two
+  concurrent extractions. After the port/cable fix (H2) COLD cold-reads at
+  **197 MB/s**, predicting ~3.5s and ~7s for the same files. Embedded fonts
+  still dump one serial ffmpeg call each (14 on a SubsPlease title, ~8s
+  more), so a residual few-second delay remains on font-heavy titles.
+  - ~~Fastest real win: move COLD off the USB2.1 hub~~ — **done 2026-08-25**,
+    see H2.
+  - Durable win (follow-up card filed): pre-extract sidecar `.ass`/`.srt`
+    next to the media, since Jellyfin serves external subs with no
+    extraction step. There are **no** sidecars today against 1306 MKVs under
+    `media/tv`. At 197 MB/s this is likely no longer worth a service, but a
+    one-shot pass would also erase the font-dump tail.
+  - Not a fix: `EnableSubtitleExtraction` only *permits* on-the-fly
+    extraction; disabling it removes captions rather than speeding them up.
+    Jellyfin 10.11 has no pre-extract-during-scan option.
 
 ### H4 — Headless flip
 - New `profiles/media-server.nix`: base.nix + openssh + tailscale + jellyfin
