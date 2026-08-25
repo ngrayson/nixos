@@ -10,6 +10,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   passwordFile = ../../secrets/hearth-restic-password.yaml;
@@ -53,7 +54,7 @@ in {
       "--keep-weekly 4"
     ];
     backupPrepareCommand = ''
-      mountpoint -q /mnt/cold || {
+      ${pkgs.util-linux}/bin/mountpoint -q /mnt/cold || {
         echo "COLD is not mounted; skip restic (nofail disk)."
         exit 1
       }
