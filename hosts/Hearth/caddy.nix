@@ -53,6 +53,7 @@
       busStops = (intranetCfg.transit or {}).busStops or [];
       mapQuery = (intranetCfg.transit or {}).mapQuery or "";
       mapZoom = (intranetCfg.transit or {}).mapZoom or 10;
+      mapProvider = (intranetCfg.transit or {}).mapProvider or "waze";
     };
     health = intranetCfg.health or {};
     gallery = {};
@@ -65,7 +66,7 @@
       Permissions-Policy "camera=(), microphone=(), geolocation=()"
       Strict-Transport-Security "max-age=31536000; includeSubDomains"
       X-Robots-Tag "noindex, nofollow"
-      Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://air-quality-api.open-meteo.com; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+      Content-Security-Policy "default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.open-meteo.com https://air-quality-api.open-meteo.com https://maps.googleapis.com https://maps.gstatic.com https://www.google.com; worker-src 'self' blob:; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   '';
   intranetRoot =
@@ -147,6 +148,11 @@ in {
           file_server
         }
         handle /calendar.ics {
+          root * /run/hearth-intranet
+          file_server
+        }
+        handle /maps-key.js {
+          header Cache-Control "no-store"
           root * /run/hearth-intranet
           file_server
         }

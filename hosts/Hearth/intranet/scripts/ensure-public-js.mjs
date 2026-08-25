@@ -6,6 +6,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 for (const [src, dest] of [
   ["public/intranet-config.example.js", "public/intranet-config.js"],
   ["public/lan.example.js", "public/lan.js"],
+  ["public/maps-key.example.js", "public/maps-key.js"],
 ]) {
   const from = join(root, src);
   const to = join(root, dest);
