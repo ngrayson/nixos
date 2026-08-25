@@ -1,6 +1,10 @@
 # Jellyfin media server (Hearth). Web UI: http://hearth:8096
 # Ice Lake i5-1035G7: intel-media-driver (iHD) for VAAPI transcoding.
 # Enable VAAPI in Dashboard → Playback → Transcoding.
+#
+# No subtitle knobs here on purpose: the 15-20s blank-caption delay at play
+# start is on-demand extraction reading the whole container off COLD at USB2
+# speed, not a Jellyfin setting. See plan.md H3 before adding one.
 {pkgs, ...}: {
   systemd.tmpfiles.rules = [
     # HDD (COLD). Created only when /mnt/cold is mounted; nofail so a missing

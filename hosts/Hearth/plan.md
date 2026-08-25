@@ -171,8 +171,11 @@ desktop is currently the only recovery console.
 - Disk is a **4 TB Seagate IronWolf** (ST4000NE001) NTFS volume **COLD**.
   **Do not format.** Mounted at `/mnt/cold` with `nofail` +
   `x-systemd.device-timeout=10s`. `/srv/media` emptied; unplug drill passed.
-- Leftover ops: hub still enumerating at USB2 480 Mb/s — move it to the
-  USB-C SuperSpeed port when convenient.
+- Leftover ops: the enclosure reports as a USB 3.2 device but negotiates
+  **480 Mb/s / USB 2.10** because it sits behind a USB2.1 hub
+  (`usb3/3-4/3-4.1`); the SuperSpeed root hubs (10000 Mb/s) are unused. Move
+  it to the USB-C SuperSpeed port — this is **not cosmetic**, see the caption
+  delay under H3.
 - `hearth-disk park` before unplugging COLD; replug remounts and starts
   Jellyfin; `hearth-deploy health` is expected to fail while parked.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
@@ -185,6 +188,22 @@ desktop is currently the only recovery console.
 - **Fresh start** for server state (decision 14): no `/var/lib/jellyfin`
   copy; users/watch history recreated on Hearth.
 - Acceptance: one Jellyfin on the network; clients repointed.
+- **Captions lag on first play, and COLD's USB2 link is why.** Embedded
+  ASS/SRT tracks are extracted on demand with
+  `ffmpeg -i <file> -map <n> -c:s copy`, which demuxes the *whole* container;
+  video direct-plays immediately, so the picture runs uncaptioned until that
+  full-file read finishes. Measured 2026-08-25: COLD reads at **40 MB/s**, so
+  the wait is roughly `filesize / 40 MB/s` — 15s for a ~700 MB episode, 35s
+  for 1.4 GB, and observed as bad as 152s. Two concurrent extractions halve
+  that throughput again. Embedded fonts then dump one serial ffmpeg call each
+  (14 on a SubsPlease title, ~8s more).
+  - Fastest real win: move COLD off the USB2.1 hub (H2 leftover op).
+  - Durable win: pre-extract sidecar `.ass`/`.srt` next to the media, since
+    Jellyfin serves external subs with no extraction step. There are **no**
+    sidecars today against 1306 MKVs under `media/tv`.
+  - Not a fix: `EnableSubtitleExtraction` only *permits* on-the-fly
+    extraction; disabling it removes captions rather than speeding them up.
+    Jellyfin 10.11 has no pre-extract-during-scan option.
 
 ### H4 — Headless flip
 - New `profiles/media-server.nix`: base.nix + openssh + tailscale + jellyfin
