@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import Modal from "./components/Modal.jsx";
 import WidgetGrid from "./components/WidgetGrid.jsx";
 import { ICO, Icon } from "./lib/icons.jsx";
 import { readShaderPref, SHADER_OPTIONS, writeShaderPref } from "./lib/shaderPref.js";
+import { TimeFormatProvider, useTimeFormat } from "./lib/timeFormat.js";
 
 const Atmosphere = lazy(() => import("./visuals/Atmosphere.jsx"));
 
@@ -22,8 +24,56 @@ function AtmosphereGate({ shaderId }) {
   );
 }
 
-export default function App() {
+function SettingsModal({ shaderId, onShader, onClose }) {
+  const { pref, setFormat } = useTimeFormat();
+  return (
+    <Modal icon={ICO.cog} title="Settings" onClose={onClose}>
+      <div className="settings-row">
+        <span className="settings-label">Time</span>
+        <div className="map-provider" role="radiogroup" aria-label="Time format">
+          {[
+            ["12h", "12-hour"],
+            ["24h", "24-hour"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={pref === id}
+              className={pref === id ? "map-provider-btn is-active" : "map-provider-btn"}
+              onClick={() => setFormat(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <label className="shader-picker">
+          <span className="shader-picker-label">Background</span>
+          <select
+            value={shaderId}
+            onChange={(event) => {
+              const next = event.target.value;
+              writeShaderPref(next);
+              onShader(next);
+            }}
+          >
+            {SHADER_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   return (
     <>
       <AtmosphereGate shaderId={shaderId} />
@@ -34,23 +84,14 @@ export default function App() {
             Home
           </a>
           <span className="site-nav-ctas">
-            <label className="shader-picker">
-              <span className="shader-picker-label">Background</span>
-              <select
-                value={shaderId}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  writeShaderPref(next);
-                  setShaderId(next);
-                }}
-              >
-                {SHADER_OPTIONS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <button
+              type="button"
+              className="site-nav-item site-nav-cta site-nav-settings"
+              aria-label="Settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Icon code={ICO.cog} />
+            </button>
             <a id="tv-jellyfin" className="site-nav-item site-nav-cta" href="https://tv.wizt.org">
               <Icon code={ICO.tv} />
               TV Jellyfin
@@ -59,6 +100,21 @@ export default function App() {
         </nav>
         <WidgetGrid />
       </main>
+      {settingsOpen ? (
+        <SettingsModal
+          shaderId={shaderId}
+          onShader={setShaderId}
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <TimeFormatProvider>
+      <Shell />
+    </TimeFormatProvider>
   );
 }

@@ -32,6 +32,7 @@ export const ICO = {
   gallery: "f02e9",
   server: "f048b",
   map: "f034d",
+  cog: "f013",
 };
 
 export function nfChar(code) {
