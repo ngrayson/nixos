@@ -308,7 +308,28 @@ ShellRoot {
 		return "Quickshell source changed\nLeft-click: reload bar";
 	}
 
-	function barTooltipText(kind: string): string {
+	function trayTooltipText(item): string {
+		if (!item)
+			return "Tray app";
+		const tooltipTitle = String(item.tooltipTitle || "").trim();
+		const title = String(item.title || "").trim();
+		const nameLine = tooltipTitle || title || "Tray app";
+		const lines = [nameLine];
+		const description = String(item.tooltipDescription || "").trim();
+		if (description !== "" && description !== nameLine)
+			lines.push(description);
+		if (item.status === Status.NeedsAttention)
+			lines.push("Needs attention");
+		if (item.onlyMenu)
+			lines.push("Left-click: menu");
+		else
+			lines.push("Left-click: show window");
+		if (item.hasMenu)
+			lines.push("Right-click: menu");
+		return lines.join("\n");
+	}
+
+	function barTooltipText(kind: string, trayItem): string {
 		if (kind === "nixos")
 			return nixosTooltipText();
 		if (kind === "qsreload")
@@ -329,6 +350,8 @@ ShellRoot {
 			return audioTooltipText();
 		if (kind === "power")
 			return "Power";
+		if (kind === "tray")
+			return trayTooltipText(trayItem);
 		return "";
 	}
 
@@ -984,17 +1007,20 @@ ShellRoot {
 
 			property Item tipItem: null
 			property string tipKind: ""
+			property var tipTray: null
 			property bool tipOn: false
 
-			function armTip(item, kind: string): void {
+			function armTip(item, kind: string, trayItem): void {
 				tipItem = item;
 				tipKind = kind;
+				tipTray = trayItem ?? null;
 				tipDelay.restart();
 			}
 
 			function disarmTip(): void {
 				tipDelay.stop();
 				tipOn = false;
+				tipTray = null;
 			}
 
 			Timer {
@@ -1177,7 +1203,10 @@ ShellRoot {
 							implicitWidth: 16
 							implicitHeight: 22
 							acceptedButtons: Qt.LeftButton
-							onClicked: shellRoot.trayCollapsed = !shellRoot.trayCollapsed
+							onClicked: {
+								barWindow.disarmTip();
+								shellRoot.trayCollapsed = !shellRoot.trayCollapsed;
+							}
 
 							Text {
 								anchors.centerIn: parent
@@ -1209,7 +1238,10 @@ ShellRoot {
 								hoverEnabled: true
 								scrollGestureEnabled: true
 
+								onEntered: barWindow.armTip(trayDelegate, "tray", modelData)
+								onExited: barWindow.disarmTip()
 								onClicked: mouse => {
+									barWindow.disarmTip();
 									if (mouse.button === Qt.LeftButton) {
 										if (modelData.onlyMenu) {
 											trayMenu.open();
@@ -1609,7 +1641,18 @@ ShellRoot {
 						anchors.centerIn: parent
 						color: Theme.text
 						font.pixelSize: 12
-						text: shellRoot.barTooltipText(barWindow.tipKind)
+						wrapMode: Text.Wrap
+						width: Math.min(360, implicitWidth)
+						text: {
+							const tray = barWindow.tipTray;
+							if (tray) {
+								void tray.title;
+								void tray.tooltipTitle;
+								void tray.tooltipDescription;
+								void tray.status;
+							}
+							return shellRoot.barTooltipText(barWindow.tipKind, tray);
+						}
 					}
 				}
 			}
