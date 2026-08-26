@@ -16,7 +16,7 @@ Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Gcp}`.
 ## Start here
 
 - New machine: [NEW-SYSTEM.md](./NEW-SYSTEM.md) (includes sops-nix / Bitwarden age-key bootstrap)
-- Agent rules: [AGENTS.md](./AGENTS.md) and `.cursor/rules/agent-workflow.mdc`
+- Agent rules: [AGENTS.md](./AGENTS.md)
 - Hearth source of truth: [hosts/Hearth/plan.md](./hosts/Hearth/plan.md)
 - Cursor CLI: [CURSOR_SETUP.md](./CURSOR_SETUP.md)
 - History / path table: [MIGRATION.md](./MIGRATION.md)
