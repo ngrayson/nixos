@@ -356,6 +356,7 @@ section h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 0 1rem;
+  container-type: inline-size;
 }
 
 .weather-place {
@@ -369,8 +370,18 @@ section h3 {
 /* Two short places share a line, but fall back to one when the card is too
    narrow to give each half a readable width. */
 .weather-place.is-short {
-  flex-basis: calc(50% - 0.5rem);
+  flex: 1 0 calc(50% - 0.5rem);
   min-width: min(100%, 11rem);
+}
+
+/* Two shorts on one row: the second place's top rule offsets the pair.
+   Keep the rule when the container is too narrow and they stack. */
+@container (min-width: 23rem) {
+  .weather-place.is-short {
+    margin-top: 0.15rem;
+    padding-top: 0;
+    border-top: 0;
+  }
 }
 
 .weather-place:first-of-type {
