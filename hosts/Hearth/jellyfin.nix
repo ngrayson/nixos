@@ -5,9 +5,10 @@
 # No subtitle knobs here on purpose: first-play caption delay is on-demand
 # ffmpeg extract of embedded ASS/SRT (whole-container read off COLD). After
 # the 2026-08-25 USB fix that is ~8s on a 1.4 GB episode and ~31s on a 5.8 GB
-# movie — not a Dashboard setting. See plan.md H3 before adding a pre-extract
-# unit; the investigation recommended no service.
+# movie — not a Dashboard setting. One-shot tool: `hearth-extract-sidecars`
+# (see extract-sidecars.nix). Do not add a systemd unit or timer.
 {pkgs, ...}: {
+  imports = [./extract-sidecars.nix];
   systemd.tmpfiles.rules = [
     # HDD (COLD). Created only when /mnt/cold is mounted; nofail so a missing
     # disk does not fail tmpfiles. Existing archive folders are left alone.
