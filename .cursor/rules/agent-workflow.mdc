@@ -14,7 +14,7 @@ Canonical tree: `~/.config/nixos` (flake `github:ngrayson/nixos`). Hosts: **Thes
 - **Hearth** is built on Tawa and activated with `hearth-deploy` (`scripts/hearth-deploy.sh`) from **Tawa's current branch**. Do not `os-rebuild switch --host Hearth` on Tawa, and do not routine-switch Hearth on-box. Exception: the first on-box Hearth switch after `hosts/Hearth/remote-access.nix` trust/sudo changes.
 - Git flake: **untracked files are invisible** to the build. `git add` anything Nix must see (new host fragments, QML, scripts).
 - Commit **after** a successful rebuild, not before. `os-rebuild` records `~/.cache/qs-nixos-status/applied.json` so the bar wrench does not false-fire (dirty-tree hash ≠ committed hash).
-- One logical change per switch. Prefer `os-rebuild build --host <Name>` / `dry-activate` before activating hardware, kernel, or disk changes (`boot` for those).
+- One logical change per switch. Before asking the user to activate, run `os-rebuild build` (this host) or `hearth-deploy build` (Hearth) and only ask if it succeeds; then give them `os-rebuild switch` / `hearth-deploy switch` plus a check (`readlink /run/current-system` or `qs-nixos-status`). Hardware / kernel / disk / Hearth headless flip: the user runs `dry-activate` then `boot`, then reboots.
 - Do not `nix flake update` unless asked. Do not copy hardware UUIDs between hosts.
 
 ```bash
