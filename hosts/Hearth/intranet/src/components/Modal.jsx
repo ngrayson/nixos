@@ -4,7 +4,7 @@ import { Icon } from "../lib/icons.jsx";
 
 // Portaled to body on purpose: widgets live in hug cards that are
 // overflow:hidden and whose height is measured by cloning their own subtree.
-export default function Modal({ title, label, icon, onClose, children }) {
+export default function Modal({ title, label, icon, onClose, children, size }) {
   useEffect(() => {
     const onKey = (event) => {
       if (event.key === "Escape") onClose();
@@ -20,7 +20,12 @@ export default function Modal({ title, label, icon, onClose, children }) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal-card" role="dialog" aria-modal="true" aria-label={label || title}>
+      <div
+        className={size === "wide" ? "modal-card modal-card-wide" : "modal-card"}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label || title}
+      >
         <div className="modal-head">
           <h2>
             {icon ? <Icon code={icon} /> : null}
