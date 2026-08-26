@@ -59,9 +59,6 @@ function Body({ data }) {
       ) : (
         <Meter label="Battery" percent={0} detail="none" icon={ICO.batteryOff} hideBar />
       )}
-      <ul className="health">
-        <li>Pi-hole: Pi-hole not on the LAN yet</li>
-      </ul>
     </>
   );
 }
