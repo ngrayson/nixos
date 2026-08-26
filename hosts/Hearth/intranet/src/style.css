@@ -132,6 +132,23 @@ main {
   font: inherit;
 }
 
+.site-nav-settings {
+  padding: 0.4rem 0.65rem;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.settings-label {
+  font-weight: 650;
+}
+
 .widget-card h2,
 section h2,
 .poll h2 {
