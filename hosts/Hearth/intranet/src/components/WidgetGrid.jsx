@@ -10,8 +10,8 @@ import Transit from "../widgets/Transit.jsx";
 import Weather from "../widgets/Weather.jsx";
 import WidgetCard from "./WidgetCard.jsx";
 
-const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
-const COLS = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 };
+const BREAKPOINTS = { xl: 1600, lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
+const COLS = { xl: 16, lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 };
 const ROW_HEIGHT = 36;
 const MARGIN_Y = 12;
 
@@ -42,12 +42,14 @@ function pxToRows(px) {
 // Each widget belongs to a column and stacks under the one above it. Columns
 // are independent, so a tall widget never pushes its neighbours down.
 function columnIds(showMap, showGallery) {
-  const middle = ["calendar", "health"];
-  if (showGallery) middle.push("gallery");
-  const right = [];
-  if (showMap) right.push("map");
-  right.push("buses");
-  return [["clock", "weather", "weatherCombo"], middle, right];
+  const left = ["clock", "weather", "weatherCombo"];
+  const calendar = ["calendar"];
+  const status = ["health"];
+  if (showGallery) status.push("gallery");
+  const transit = [];
+  if (showMap) transit.push("map");
+  transit.push("buses");
+  return { left, calendar, status, transit };
 }
 
 function column(ids, x, w, heights) {
@@ -70,22 +72,31 @@ function stack(ids, cols, heights) {
 }
 
 function buildLayouts(showMap, showGallery, heights) {
-  const [left, middle, right] = columnIds(showMap, showGallery);
-  const ids = [...left, ...middle, ...right];
+  const { left, calendar, status, transit } = columnIds(showMap, showGallery);
+  const middle = [...calendar, ...status];
+  const ids = [...left, ...middle, ...transit];
+
+  const xl = [
+    ...column(left, 0, 4, heights),
+    ...column(calendar, 4, 4, heights),
+    ...column(status, 8, 4, heights),
+    ...column(transit, 12, 4, heights),
+  ];
 
   const lg = [
     ...column(left, 0, 4, heights),
     ...column(middle, 4, 4, heights),
-    ...column(right, 8, 4, heights),
+    ...column(transit, 8, 4, heights),
   ];
 
   const md = [
     ...column(left, 0, 4, heights),
     ...column(middle, 4, 3, heights),
-    ...column(right, 7, 3, heights),
+    ...column(transit, 7, 3, heights),
   ];
 
   return {
+    xl,
     lg,
     md,
     sm: stack(ids, 6, heights),
