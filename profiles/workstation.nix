@@ -235,7 +235,6 @@ in {
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
       pkgs.vscode
-      pkgs.code-cursor
       # Claude Code CLI — Conveyor member token (`claude setup-token`) and local agents.
       pkgs.claude-code
       nix-search-cli
