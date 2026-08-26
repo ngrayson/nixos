@@ -47,7 +47,7 @@ main {
   z-index: 1;
   max-width: 80rem;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 3rem;
+  padding: 0 1.25rem 3rem;
 }
 
 @media (orientation: landscape) and (min-width: 1400px) {
@@ -66,9 +66,9 @@ main {
   flex-wrap: wrap;
   gap: 0.55rem 0.85rem;
   margin: 0 0 1.25rem;
-  padding: 0.35rem 0.15rem 0.55rem;
+  padding: 0.45rem 0.15rem 0.55rem;
   border-bottom: 1px solid color-mix(in srgb, var(--chrome) 80%, var(--accent));
-  background: color-mix(in srgb, var(--void) 72%, transparent);
+  background: color-mix(in srgb, var(--void) 88%, transparent);
   backdrop-filter: blur(var(--blur));
 }
 
@@ -356,6 +356,7 @@ section h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 0 1rem;
+  container-type: inline-size;
 }
 
 .weather-place {
@@ -369,8 +370,18 @@ section h3 {
 /* Two short places share a line, but fall back to one when the card is too
    narrow to give each half a readable width. */
 .weather-place.is-short {
-  flex-basis: calc(50% - 0.5rem);
+  flex: 1 0 calc(50% - 0.5rem);
   min-width: min(100%, 11rem);
+}
+
+/* Two shorts on one row: the second place's top rule offsets the pair.
+   Keep the rule when the container is too narrow and they stack. */
+@container (min-width: 23rem) {
+  .weather-place.is-short {
+    margin-top: 0.15rem;
+    padding-top: 0;
+    border-top: 0;
+  }
 }
 
 .weather-place:first-of-type {
@@ -977,7 +988,7 @@ section h3 {
 
 @media (max-width: 480px) {
   main {
-    padding: 0.85rem 0.75rem 2rem;
+    padding: 0 0.75rem 2rem;
   }
 
   .site-nav {

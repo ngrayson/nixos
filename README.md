@@ -16,10 +16,11 @@ Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Gcp}`.
 ## Start here
 
 - New machine: [NEW-SYSTEM.md](./NEW-SYSTEM.md) (includes sops-nix / Bitwarden age-key bootstrap)
-- Agent rules: [AGENTS.md](./AGENTS.md) and `.cursor/rules/agent-workflow.mdc`
+- Agent rules: [AGENTS.md](./AGENTS.md)
 - Hearth source of truth: [hosts/Hearth/plan.md](./hosts/Hearth/plan.md)
-- Cursor CLI: [CURSOR_SETUP.md](./CURSOR_SETUP.md)
 - History / path table: [MIGRATION.md](./MIGRATION.md)
+
+`claude` (Claude Code CLI) is a Nix-store package in `profiles/workstation.nix` — it's on PATH after `os-rebuild switch`, no post-rebuild install step needed. The "Claude Code" VS Code extension is a one-time manual install from the Extensions marketplace (not Nix-declared; no VS Code extensions module exists in this repo).
 
 `legacy/surface-standalone` is listed in BRANCHING.md as the pre-flake Surface rollback. It is **not** on `origin` today — do not invent the branch.
 

@@ -25,8 +25,8 @@
       ns = "nix-search";
       vpn = "sudo vortix";
       vpn-froot = "vpn-froot";
-      "agent-new" = "cd ~/Stellarium && ~/.local/bin/cursor-agent";
-      agent = "cd ~/Stellarium && ~/.local/bin/cursor-agent --resume";
+      "agent-new" = "cd ~/Stellarium && claude";
+      agent = "cd ~/Stellarium && claude --continue";
       config = "code ~/.config/nixos";
       fetch = "fastfetch";
       kitty = "kitty 2>/dev/null";

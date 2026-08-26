@@ -88,7 +88,6 @@
       "application/pdf" = "firefox.desktop";
       "text/plain" = "org.kde.kate.desktop";
       "x-scheme-handler/bitwarden" = "bitwarden.desktop";
-      "x-scheme-handler/cursor" = "cursor-url-handler.desktop";
     };
 
   # Deliberately omits `application/octet-stream`: it is the fallback type for every unrecognised
