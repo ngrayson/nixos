@@ -23,7 +23,6 @@
     ./xdg/config.nix
     ./xdg/data.nix
     ./xdg/mime.nix
-    ./xdg/cursor-icon.nix
     ./gui-session-launch.nix
   ];
 }

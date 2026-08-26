@@ -1,4 +1,4 @@
-# Kitty palette, VS Code / Cursor theme extension, Obsidian vault theme,
+# Kitty palette, VS Code theme extension, Obsidian vault theme,
 # Quickshell bar/lock JSON.
 {
   config,
@@ -161,7 +161,6 @@
   };
 
   extRel = ".vscode/extensions/stellarium.desktop-theme-0.0.1";
-  cursorExtRel = ".cursor/extensions/stellarium.desktop-theme-0.0.1";
 
   obsidianCss = ''
     /* Generated from home/theme — ${t.name} */
@@ -243,7 +242,7 @@
   patchEditors = pkgs.writeShellScript "patch-editor-color-theme" ''
     set -euo pipefail
     theme=${lib.escapeShellArg t.name}
-    # Cursor/Code settings are JSONC (trailing commas, optional comments). Strict
+    # Code settings are JSONC (trailing commas, optional comments). Strict
     # jq fails those files and takes home-manager-wiz.service down with them.
     py=${lib.getExe (pkgs.python3.withPackages (ps: [ps.json5]))}
     patch() {
@@ -271,7 +270,6 @@ with open(out, "w", encoding="utf-8", newline="\n") as fh:
 PY
       mv "$tmp" "$f"
     }
-    patch "$HOME/.config/Cursor/User/settings.json"
     patch "$HOME/.config/Code/User/settings.json"
   '';
 
@@ -302,8 +300,6 @@ in {
   home.file = {
     "${extRel}/package.json".text = builtins.toJSON vscodePackage;
     "${extRel}/themes/theme.json".text = builtins.toJSON vscodeTheme;
-    "${cursorExtRel}/package.json".text = builtins.toJSON vscodePackage;
-    "${cursorExtRel}/themes/theme.json".text = builtins.toJSON vscodeTheme;
     "${vaultTheme}/theme.css" = {
       text = obsidianCss;
       force = true;
