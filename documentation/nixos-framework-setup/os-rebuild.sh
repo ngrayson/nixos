@@ -178,7 +178,7 @@ classify_path() {
     hosts/*)
       printf '%s\n' "other-host"
       ;;
-    documentation/* | scripts/* | .cursor/* | *.md)
+    documentation/* | scripts/* | .claude/* | *.md)
       printf '%s\n' "tooling"
       ;;
     configuration.nix)

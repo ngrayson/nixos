@@ -473,7 +473,7 @@ untracked_flake_inputs() {
     path="${line:3}"
     [[ "$status" == "??" ]] || continue
     case "$path" in
-      documentation/* | scripts/* | .cursor/* | *.md) continue ;;
+      documentation/* | scripts/* | .claude/* | *.md) continue ;;
     esac
     UNTRACKED+=("$path")
   done < <(git -C "$NIXOS_DIR" status --porcelain=v1 --untracked-files=all)

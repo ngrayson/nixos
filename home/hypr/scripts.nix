@@ -472,7 +472,7 @@ in rec {
     path_is_config() {
       local path="$1"
       case "$path" in
-        documentation/* | scripts/* | .cursor/* | *.md) return 1 ;;
+        documentation/* | scripts/* | .claude/* | *.md) return 1 ;;
         "hosts/$HOST/"*) return 0 ;;
         hosts/*) return 1 ;;
         *) return 0 ;;
