@@ -499,7 +499,7 @@ copy_intranet_config_for_restic() {
   local remote_dir="/var/lib/hearth-intranet/config"
   local widget src copied=0
   ssh_hearth -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
-  for widget in clock weather transit health gallery calendar; do
+  for widget in clock weather transit health gallery calendar alerts; do
     src="$base/$widget/config.nix"
     [[ -f "$src" ]] || continue
     scp -q "$src" "${TARGET}:/tmp/hearth-${widget}.nix" || return 1
