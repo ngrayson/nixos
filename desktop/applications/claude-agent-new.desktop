@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Claude Agent (New)
+Comment=Create new Claude Code CLI agent instance
+Exec=kitty -e zsh -lic agent-new
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;
+Keywords=claude;agent;new;ai;cli;code;assistant;

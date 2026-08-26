@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Claude Agent Resume
+Comment=Open Claude Code CLI agent (resume most recent)
+Exec=kitty -e zsh -lic agent
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;
+Keywords=claude;agent;ai;cli;code;assistant;
