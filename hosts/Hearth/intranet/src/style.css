@@ -469,6 +469,32 @@ section h3 {
   margin: 0;
 }
 
+.modal-idle {
+  position: fixed;
+  z-index: 11;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.45rem;
+  margin: 0;
+  border-radius: 0;
+}
+
+.modal-idle .poll-fill {
+  transform: scaleX(0);
+  animation: modal-idle-fill 120s linear forwards;
+}
+
+@keyframes modal-idle-fill {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .modal-close {
   flex: 0 0 auto;
   padding: 0 0.35rem;
@@ -894,8 +920,13 @@ section h3 {
     transition: none;
   }
 
-  .poll-fill.is-awaiting {
+  .poll-fill.is-awaiting,
+  .modal-idle .poll-fill {
     animation: none;
+  }
+
+  .modal-idle .poll-fill {
+    transform: scaleX(0);
   }
 }
 
