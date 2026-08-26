@@ -149,6 +149,12 @@ function fmtWhen(event, hour12) {
   return `${start} – ${fmtTime(event.end, hour12)}`;
 }
 
+function isStillOnTodayList(event, now) {
+  if (event.allDay) return true;
+  const end = event.end || event.start;
+  return end > now;
+}
+
 function fmtDayLabel(date, today) {
   const diff = Math.round((startOfDay(date) - startOfDay(today)) / 86400000);
   if (diff === 0) return "Today";
@@ -289,8 +295,14 @@ export default function Calendar() {
   const { hour12 } = useTimeFormat();
   const [events, setEvents] = useState([]);
   const [open, setOpen] = useState(null);
+  const [now, setNow] = useState(() => new Date());
 
-  const today = startOfDay(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const today = startOfDay(now);
   const gridStart = addDays(today, -today.getDay());
   const gridEnd = addDays(gridStart, GRID_WEEKS * 7);
 
@@ -324,7 +336,8 @@ export default function Calendar() {
   const upcoming = [];
   for (let i = 0; i < BIG_DAYS; i += 1) {
     const date = addDays(today, i);
-    const dayEvents = byDay.get(dayKey(date)) || [];
+    const raw = byDay.get(dayKey(date)) || [];
+    const dayEvents = i === 0 ? raw.filter((event) => isStillOnTodayList(event, now)) : raw;
     if (dayEvents.length) {
       upcoming.push({
         key: dayKey(date),
