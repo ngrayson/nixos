@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Modal from "../components/Modal.jsx";
 import { widget } from "../lib/config.js";
 import { Empty, Fact, Heading, ICO, Icon } from "../lib/icons.jsx";
+import { formatTime, useTimeFormat } from "../lib/timeFormat.js";
 
 const FORECAST_DAYS = 7;
 const STRIP_DAYS = 4;
@@ -74,12 +75,9 @@ function moonPhase(frac) {
   return phases[Math.round(t * 8) % 8];
 }
 
-function fmtClock(iso) {
+function fmtClock(iso, hour12) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatTime(new Date(iso), { hour12 });
 }
 
 function fmtDeg(value) {
@@ -181,6 +179,7 @@ function ForecastStrip({ daily, unit }) {
 }
 
 function ForecastModal({ place, unit, aqi, onClose }) {
+  const { hour12 } = useTimeFormat();
   const daily = (place.forecast && place.forecast.daily) || {};
   const times = daily.time || [];
   const name = place.loc.name || "Location";
@@ -220,8 +219,8 @@ function ForecastModal({ place, unit, aqi, onClose }) {
                 <Fact code={ICO.wind} text={gust == null ? "—" : String(Math.round(gust))} />
               </p>
               <p className="facts">
-                <Fact code={ICO.sunrise} text={fmtClock(at(daily.sunrise, i))} />
-                <Fact code={ICO.sunset} text={fmtClock(at(daily.sunset, i))} />
+                <Fact code={ICO.sunrise} text={fmtClock(at(daily.sunrise, i), hour12)} />
+                <Fact code={ICO.sunset} text={fmtClock(at(daily.sunset, i), hour12)} />
               </p>
             </li>
           );
@@ -232,6 +231,7 @@ function ForecastModal({ place, unit, aqi, onClose }) {
 }
 
 function Place({ place, unit, detail, showName }) {
+  const { hour12 } = useTimeFormat();
   const cur = (place.forecast && place.forecast.current) || {};
   const daily = (place.forecast && place.forecast.daily) || {};
   const aqi = place.air && place.air.current ? place.air.current.us_aqi : null;
@@ -265,13 +265,13 @@ function Place({ place, unit, detail, showName }) {
       {detail === "long" ? (
         <>
           <p className="facts">
-            <Fact code={ICO.sunrise} text={fmtClock(daily.sunrise && daily.sunrise[0])} />
-            <Fact code={ICO.sunset} text={fmtClock(daily.sunset && daily.sunset[0])} />
+            <Fact code={ICO.sunrise} text={fmtClock(daily.sunrise && daily.sunrise[0], hour12)} />
+            <Fact code={ICO.sunset} text={fmtClock(daily.sunset && daily.sunset[0], hour12)} />
           </p>
           <p className="facts">
             <Fact code={phase.code} text={phase.label} />
-            <Fact code={ICO.moonrise} text={fmtClock(daily.moonrise && daily.moonrise[0])} />
-            <Fact code={ICO.moonset} text={fmtClock(daily.moonset && daily.moonset[0])} />
+            <Fact code={ICO.moonrise} text={fmtClock(daily.moonrise && daily.moonrise[0], hour12)} />
+            <Fact code={ICO.moonset} text={fmtClock(daily.moonset && daily.moonset[0], hour12)} />
           </p>
           <ForecastStrip daily={daily} unit={unit} />
         </>

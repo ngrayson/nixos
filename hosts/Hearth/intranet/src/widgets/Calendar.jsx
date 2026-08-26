@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ICAL from "ical.js";
 import Modal from "../components/Modal.jsx";
 import { Heading, ICO, Icon } from "../lib/icons.jsx";
+import { formatTime, useTimeFormat } from "../lib/timeFormat.js";
 
 const GRID_WEEKS = 3;
 const BIG_DAYS = 3;
@@ -137,15 +138,21 @@ function coveredDays(event) {
   return days;
 }
 
-function fmtTime(date) {
-  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+function fmtTime(date, hour12) {
+  return formatTime(date, { hour12 });
 }
 
-function fmtWhen(event) {
+function fmtWhen(event, hour12) {
   if (event.allDay) return "All day";
-  const start = fmtTime(event.start);
+  const start = fmtTime(event.start, hour12);
   if (!event.end || event.end <= event.start) return start;
-  return `${start} – ${fmtTime(event.end)}`;
+  return `${start} – ${fmtTime(event.end, hour12)}`;
+}
+
+function isStillOnTodayList(event, now) {
+  if (event.allDay) return true;
+  const end = event.end || event.start;
+  return end > now;
 }
 
 function fmtDayLabel(date, today) {
@@ -173,7 +180,7 @@ function googleEventUrl(event) {
   }
 }
 
-function EventModal({ event, onClose }) {
+function EventModal({ event, hour12, onClose }) {
   const url = googleEventUrl(event);
   return (
     <Modal icon={ICO.calendar} title={event.summary} onClose={onClose}>
@@ -186,7 +193,7 @@ function EventModal({ event, onClose }) {
             day: "numeric",
           })}
           {" · "}
-          {fmtWhen(event)}
+          {fmtWhen(event, hour12)}
         </span>
         {event.calendar ? (
           <span className="fact">
@@ -206,7 +213,7 @@ function EventModal({ event, onClose }) {
   );
 }
 
-function Upcoming({ days, onOpen }) {
+function Upcoming({ days, hour12, onOpen }) {
   if (!days.length) return null;
   return (
     <div className="cal-upcoming">
@@ -222,7 +229,7 @@ function Upcoming({ days, onOpen }) {
             {day.events.map((event, i) => (
               <li key={`${event.uid}-${i}`}>
                 <button type="button" onClick={() => onOpen(event)}>
-                  <span className="cal-when">{fmtWhen(event)}</span>
+                  <span className="cal-when">{fmtWhen(event, hour12)}</span>
                   <span className="cal-summary">{event.summary}</span>
                   {event.calendar ? <span className="cal-src">{event.calendar}</span> : null}
                 </button>
@@ -235,7 +242,7 @@ function Upcoming({ days, onOpen }) {
   );
 }
 
-function Grid({ weeks, byDay, todayKey, month, onOpen }) {
+function Grid({ weeks, byDay, todayKey, month, hour12, onOpen }) {
   return (
     <table className="cal cal-weeks">
       <thead>
@@ -266,7 +273,7 @@ function Grid({ weeks, byDay, todayKey, month, onOpen }) {
                       className="cal-chip"
                       key={`${event.uid}-${i}`}
                       onClick={() => onOpen(event)}
-                      title={`${fmtWhen(event)} ${event.summary}`}
+                      title={`${fmtWhen(event, hour12)} ${event.summary}`}
                     >
                       {event.summary}
                     </button>
@@ -285,10 +292,17 @@ function Grid({ weeks, byDay, todayKey, month, onOpen }) {
 }
 
 export default function Calendar() {
+  const { hour12 } = useTimeFormat();
   const [events, setEvents] = useState([]);
   const [open, setOpen] = useState(null);
+  const [now, setNow] = useState(() => new Date());
 
-  const today = startOfDay(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const today = startOfDay(now);
   const gridStart = addDays(today, -today.getDay());
   const gridEnd = addDays(gridStart, GRID_WEEKS * 7);
 
@@ -322,7 +336,8 @@ export default function Calendar() {
   const upcoming = [];
   for (let i = 0; i < BIG_DAYS; i += 1) {
     const date = addDays(today, i);
-    const dayEvents = byDay.get(dayKey(date)) || [];
+    const raw = byDay.get(dayKey(date)) || [];
+    const dayEvents = i === 0 ? raw.filter((event) => isStillOnTodayList(event, now)) : raw;
     if (dayEvents.length) {
       upcoming.push({
         key: dayKey(date),
@@ -346,15 +361,16 @@ export default function Calendar() {
       <p className="cal-caption">
         {today.toLocaleString(undefined, { month: "long", year: "numeric" })}
       </p>
-      <Upcoming days={upcoming} onOpen={setOpen} />
+      <Upcoming days={upcoming} hour12={hour12} onOpen={setOpen} />
       <Grid
         weeks={weeks}
         byDay={byDay}
         todayKey={dayKey(today)}
         month={today.getMonth()}
+        hour12={hour12}
         onOpen={setOpen}
       />
-      {open ? <EventModal event={open} onClose={() => setOpen(null)} /> : null}
+      {open ? <EventModal event={open} hour12={hour12} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }
