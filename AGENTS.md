@@ -11,6 +11,7 @@ Canonical tree: `~/.config/nixos` (flake `github:ngrayson/nixos`). Hosts: **Tawa
 - **Do not** write Tawa's `applied.json` after a Hearth deploy.
 - **Hearth** is built on the builder (usually Tawa) and activated with `hearth-deploy` (`scripts/hearth-deploy.sh`). switch/boot use `origin/deploy/hearth` unless `--from-checkout`. Do not routine-switch Hearth on-box. Exception: the first on-box Hearth switch after `hosts/Hearth/remote-access.nix` trust/sudo changes.
 - Git flake: **untracked files are invisible**. `git add` anything Nix must see.
+- Never commit plaintext secrets or PII. Encrypted files under secrets/ are fine; private age keys stay in Bitwarden. See `.cursor/rules/secrets.mdc`.
 - Commit **after** a successful rebuild, on the current branch. One logical change per switch.
 - Hardware / kernel / disk / Hearth headless flip: `boot`, then reboot. `test` is not a rollback.
 - Do not `nix flake update` unless asked. Do not copy hardware UUIDs, LUKS mappings, or swap devices between hosts.
