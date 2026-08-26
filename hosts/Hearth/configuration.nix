@@ -20,6 +20,7 @@
     ./intranet-gallery.nix
     ./intranet-calendar.nix
     ./intranet-maps-key.nix
+    ./weather-alert.nix
     ./restic.nix
   ];
 }

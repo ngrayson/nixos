@@ -62,6 +62,7 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
     console rescue post-headless, or a gigabit ethernet adapter later).
 11. **GitOps:** start **push-based (deploy-rs over Tailscale)**; graduate to
     **comin on `deploy/hearth`** once the health-check script exists.
+    **Superseded by decision 21** — comin cancelled 2026-08-25.
 12. **Secrets:** **sops-nix** on-host, **Bitwarden Pro as master vault** for
     one-time setup/re-keying. Confirmed.
 13. **Network interim:** TV and Hearth both stay on **GiGstreem Wi-Fi, no
@@ -97,6 +98,15 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
     on GiGstreem. TV hosting still requires GiGstreem `172.16.141.38` — flip
     SSID for playback tests, then come back to AncientGlade to continue
     this agent. Fixed by H0-from-elsewhere / H7, not by another LAN hack.
+
+### Decisions round 3 (2026-08-25)
+
+21. **GitOps end state: push-based only.** `hearth-deploy` is the deploy path
+    and **comin is cancelled** (supersedes decision 11). Comin implements one
+    of the five H7 guardrails; its one real gain — applying changes without
+    Tawa awake — is exactly what breaks guardrail 2, because the path filter
+    only runs when the pin advances through `hearth-deploy`. Any future puller
+    needs that filter enforced server-side on `deploy/hearth` first. See H7.
 
 ## 3. Target architecture
 
@@ -171,12 +181,43 @@ desktop is currently the only recovery console.
 - Disk is a **4 TB Seagate IronWolf** (ST4000NE001) NTFS volume **COLD**.
   **Do not format.** Mounted at `/mnt/cold` with `nofail` +
   `x-systemd.device-timeout=10s`. `/srv/media` emptied; unplug drill passed.
-- Leftover ops: hub still enumerating at USB2 480 Mb/s — move it to the
-  USB-C SuperSpeed port when convenient.
+- **USB link fixed (2026-08-25 PM).** The enclosure used to negotiate
+  **480 Mb/s / USB 2.10** behind a USB2.1 hub (`usb3/3-4/3-4.1`), capping
+  reads at 40 MB/s — the cause of the caption delay under H3. Moved to the
+  laptop's USB-C port on a SuperSpeed-rated cable: now enumerates at
+  **10 Gb/s** (`usb2/2-1/2-1.1`) and cold-reads at **197 MB/s** (platter
+  limit — link no longer the bottleneck). Two gotchas for next time: the
+  first C-to-C cable tried was charge-only (enumerated USB2 with zero
+  SuperSpeed link, no error anywhere), and the enclosure does not re-attach
+  on plug-in alone — it needs a **power cycle** after any cable move. The
+  GenesysLogic hub that shows up with COLD is *inside the enclosure*; it
+  power-cycles with the drive.
 - `hearth-disk park` before unplugging COLD; replug remounts and starts
   Jellyfin; `hearth-deploy health` is expected to fail while parked.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
-  Leave Anime/Music/… at the volume root.
+  Leave `Anime/`, `Downloads/`, … at the volume root. There is no `Music`
+  there; the audio archive lives at `media/music`.
+- ntfs-3g mounts COLD case-sensitively, so `music` and `Music` are two
+  different directories. The archive shipped as `Music` and was renamed to
+  lowercase to match the tmpfiles rule. Do not "fix" the case back: a mismatch
+  leaves the populated tree unscanned beside an empty twin that Jellyfin logs as
+  "inaccessible or empty, skipping".
+- Casing has **three** sides, and renaming the disk only fixes one. The library
+  path also lives in server state, outside Nix, at
+  `/var/lib/jellyfin/root/default/Music/{music.mblink,options.xml}`. Change both
+  whenever the directory moves, then restart `jellyfin` and rescan.
+- `music.mblink` must hold the path with **no trailing newline** (21 bytes for
+  `/mnt/cold/media/music`). Jellyfin does not trim it; a newline becomes part of
+  the lookup and reads as the same "inaccessible or empty" skip as a case
+  mismatch. Write it with `printf`, not `echo`, or edit the folder in
+  Dashboard → Libraries.
+- `hearth-healthcheck.sh` now fails the deploy if any library `.mblink` ends in a
+  newline, names a directory that does not exist, or disagrees with its
+  `options.xml` **in either direction** — a stale `<Path>` a rename left behind
+  fails too, since Jellyfin keeps scanning it. A missing library root is a
+  failure rather than a skipped check, so the probe cannot quietly disappear if
+  Jellyfin's layout moves. An empty music shelf should never again survive a
+  green switch.
 
 ### H3 — Jellyfin consolidation (Tawa → Hearth)
 - Copy Tawa's media files into `/mnt/cold/media` (rsync over LAN/tailnet).
@@ -185,6 +226,47 @@ desktop is currently the only recovery console.
 - **Fresh start** for server state (decision 14): no `/var/lib/jellyfin`
   copy; users/watch history recreated on Hearth.
 - Acceptance: one Jellyfin on the network; clients repointed.
+- **Captions lag on first play — COLD's USB2 link was why (fixed).**
+  Embedded ASS/SRT tracks are extracted on demand with
+  `ffmpeg -i <file> -map <n> -c:s copy`, which demuxes the *whole* container;
+  video direct-plays immediately, so the picture runs uncaptioned until that
+  full-file read finishes. The wait is roughly `filesize / read speed`.
+  Measured 2026-08-25 AM at the old **40 MB/s** (USB2 link): 15s for a
+  ~700 MB episode, 35s for 1.4 GB, observed as bad as 152s with two
+  concurrent extractions. After the port/cable fix (H2) COLD cold-reads at
+  **197 MB/s**.
+  - ~~Fastest real win: move COLD off the USB2.1 hub~~ — **done 2026-08-25**,
+    see H2.
+  - **Residual delay, measured 2026-08-25 evening (post-USB fix).** Cold
+    extract of Tongari ep 02 (1.44 GB ASS): **7.4s**. Live Jellyfin first-play
+    of Gachiakuta 11 (1.45 GB, never cached): **8.0s**
+    (`SubtitleEncoder` 20:28:53→20:29:00). Cold extract of LOTR Fellowship
+    (5.80 GB, three `subrip` tracks in one ffmpeg): **31s**. Font dumps are
+    a separate, client-driven tail: 14 serial `-dump_attachment` calls on
+    Tongari took **3.8s** (~0.25s each). The 5s "good enough, do nothing"
+    bar is **not** met across the board.
+  - **Sidecar font question (measured).** Jellyfin 10.11 skips
+    `ExtractAllExtractableSubtitles` for external `.ass`/`.srt` (not `.mks`).
+    A manually placed `Title.eng.default.ass` next to Gachiakuta 12 was
+    picked up on item Refresh as `IsExternal` index 0 / default, and
+    `Stream.ass` returned in **107ms** with **no** `SubtitleEncoder` line.
+    Sidecars do **not** skip the font tail if the client then asks for
+    attachments: `GET /Videos/.../Attachments/{n}` still runs
+    `AttachmentExtractor` against the MKV (~0.76s per font). The size-
+    proportional wait is the extract; fonts stay iff the client fetches them.
+  - **Inventory (2026-08-25):** 1336 video files under
+    `media/{tv,movies}` (1.14 TB). 1278 have at least one subtitle track
+    (1952 tracks: 1598 ASS, 195 subrip, 144 PGS, 13 DVD, 2 mov_text);
+    7939 embedded font/other attachments. Three prototype sidecars were
+    left next to Gachiakuta 11/12 and Tongari 02. A full sequential pass
+    at 197 MB/s is **~1.6h** (all files) / **~1.5h** (files with subs).
+  - **Recommendation: no service; one-shot signed off and shipped.**
+    `hearth-extract-sidecars` (hosts/Hearth/extract-sidecars.nix) is the
+    manual pass — idempotent, text tracks only, no timer. New arrivals
+    call the same binary via H8 ingest (`--one`), not a timer.
+  - Not a fix: `EnableSubtitleExtraction` only *permits* on-the-fly
+    extraction; disabling it removes captions rather than speeding them up.
+    Jellyfin 10.11 has no pre-extract-during-scan option.
 
 ### H4 — Headless flip
 - New `profiles/media-server.nix`: base.nix + openssh + tailscale + jellyfin
@@ -244,12 +326,12 @@ desktop is currently the only recovery console.
 - Acceptance: `https://tv.wizt.org` serves Jellyfin for tailnet devices;
   nothing on Hearth listens on WAN for this vhost.
 
-### H7 — Automatic remote-dev updates (GitOps)
-**Decided (decision 11):** push-based deploys via `hearth-deploy` over
-OpenSSH/Tailscale (no agent on the server). The pin is **`deploy/hearth`**.
-Activator is `nixos-rebuild --target-host` (deploy-rs cannot `boot`; same
-path filter). **comin** on `deploy/hearth` only after health-check is
-trusted. Do not auto-switch `main`.
+### H7 — Automatic remote-dev updates (GitOps) — **shipped (push-based)**
+**Decided (decision 11, closed by decision 21):** push-based deploys via
+`hearth-deploy` over OpenSSH/Tailscale (no agent on the server). The pin is
+**`deploy/hearth`**. Activator is `nixos-rebuild --target-host` (deploy-rs
+cannot `boot`; same path filter). **comin is cancelled** — see "Why not comin"
+below. Do not auto-switch `main`.
 
 Guardrails that answer "unsupervised switch on main" regardless of tool:
 1. Hearth deploys from a **dedicated branch** (e.g. `deploy/hearth`), never
@@ -267,6 +349,26 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
    generation explicitly.
 5. Notifications (Discord webhook via H5 secret) on start/success/rollback.
 
+**Why not comin (2026-08-25).** `hearth-deploy` already satisfies all five
+guardrails; comin satisfies one (polling a dedicated branch). It has no path
+filtering, its `operation` is a static `switch`/`test`/`boot` per branch rather
+than conditional on what changed, and health-check plus rollback would have to
+be hand-written in `postDeploymentCommand`. Its only real gain is applying
+changes with Tawa asleep — but the filter works *because* the pin only advances
+through `hearth-deploy`, so promoting from a phone or the GitHub UI (the whole
+point) would bypass it and auto-apply shared-tree changes. Kernel bumps arrive
+via `flake.lock`, so guardrail 3 falls with guardrail 2. Comin is also absent
+from the pinned nixpkgs, so it needs a `flake.nix`/`flake.lock` input that the
+filter itself blocks, and it evaluates and builds on the target with no
+`--build-host`, which would run the intranet's `buildNpmPackage` on the media
+host and contradict guardrail 4. **Prerequisite for revisiting any puller:**
+enforce the path filter server-side on `deploy/hearth` (branch protection plus
+a required check running `refuse_shared_deploy_paths` logic). With that in
+place, `nixos-autodeploy` is the better candidate — `switchMode = "smart"`
+boots on kernel/initrd/module changes and switches otherwise, and its dirty
+flag suspends auto-updates after a manual push deploy — at the cost of a binary
+cache plus CI publishing a system path, which also restores build-on-Tawa.
+
 ### H8 — Acquisition pipeline (seedbox-first)
 - **Provider (decision 19): Ultra.cc** — stand up the slot before this phase.
 - Seedbox downloads; **Syncthing** pulls completed files to
@@ -276,6 +378,9 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
   stack (`common/vpn-vortix.nix` stunnel/FrootVPN — server-safe subset) or a
   dedicated namespace so torrent traffic cannot leak; upload hard-capped at 0.
 - Zero local seeding in both paths.
+- After each ingest move into `media/{movies,tv}`, run
+  `hearth-extract-sidecars --one <file>` so new titles get sidecars
+  without waiting for another library-wide pass.
 - The homepage/ingest UI from the original plan stays **last**, after H6-H7.
 
 ## 5. Risk register (from the audit)
@@ -288,7 +393,7 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 | Media on NVMe | **Resolved** — H2 shipped; media is on `/mnt/cold` |
 | Two Jellyfin servers | **Resolved** — Tawa's will be disabled (H3) |
 | Docker creep | **Resolved** — NixOS modules only |
-| Unsupervised switch on main | **Resolved** — deploy-rs first, comin on `deploy/hearth` later, plus H7 guardrails |
+| Unsupervised switch on main | **Resolved** — push-based `hearth-deploy` from the `deploy/hearth` pin, plus H7 guardrails. comin cancelled (decision 21): it would bypass the path filter |
 | On-box builds vs 8 GB RAM / small disk | **Mitigated** — space freed + headless RAM headroom; build-elsewhere preferred |
 | No secrets story | **Resolved** — sops-nix + Bitwarden Pro vault confirmed (H5) |
 | TV cannot run Tailscale | **Resolved** — TV + Hearth share GiGstreem (decision 13); wired LAN later |

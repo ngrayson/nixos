@@ -43,8 +43,10 @@ Once the change is on `main`, `origin/main...deploy/hearth` contains only Hearth
 Use the guided helper (zsh alias `os-rebuild`):
 
 ```bash
-os-rebuild switch                     # current hostname, current branch
+os-rebuild build                      # prove the OS builds (no sudo)
+os-rebuild switch                     # current hostname, current branch (user)
 os-rebuild build --host Theseus       # another host, build only
+# hardware / kernel / disk: user runs dry-activate, then boot, then reboot
 ```
 
 Direct equivalent:

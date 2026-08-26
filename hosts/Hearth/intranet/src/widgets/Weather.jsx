@@ -4,7 +4,7 @@ import { widget } from "../lib/config.js";
 import { Empty, Fact, Heading, ICO, Icon } from "../lib/icons.jsx";
 
 const FORECAST_DAYS = 7;
-const STRIP_DAYS = 5;
+const STRIP_DAYS = 4;
 
 function tempUnit(weather) {
   const u = String(weather.temperatureUnit || "F").toUpperCase();
@@ -231,7 +231,7 @@ function ForecastModal({ place, unit, aqi, onClose }) {
   );
 }
 
-function Place({ place, unit }) {
+function Place({ place, unit, detail, showName }) {
   const cur = (place.forecast && place.forecast.current) || {};
   const daily = (place.forecast && place.forecast.daily) || {};
   const aqi = place.air && place.air.current ? place.air.current.us_aqi : null;
@@ -239,9 +239,9 @@ function Place({ place, unit }) {
   const [open, setOpen] = useState(false);
   const name = place.loc.name || "Location";
   return (
-    <article className="weather-place">
+    <article className={detail === "short" ? "weather-place is-short" : "weather-place"}>
       <h3>
-        {name}
+        {showName ? name : null}
         <button
           type="button"
           className="forecast-btn"
@@ -262,7 +262,7 @@ function Place({ place, unit }) {
         <Fact code={ICO.wind} text={String(Math.round(cur.wind_speed_10m))} />
         <Fact code={ICO.aci} text={`ACI ${aqi == null ? "—" : aqi}`} tone={aqiTone(aqi)} />
       </p>
-      {placeDetail(place.loc) === "long" ? (
+      {detail === "long" ? (
         <>
           <p className="facts">
             <Fact code={ICO.sunrise} text={fmtClock(daily.sunrise && daily.sunrise[0])} />
@@ -283,18 +283,26 @@ function Place({ place, unit }) {
   );
 }
 
-export default function Weather() {
+// variant "focus" is one location rendered in full detail, titled after the
+// place. "combo" is every short-detail location, two to a line. Which config
+// entry lands in which widget comes from its own detail field.
+export default function Weather({ variant = "combo" }) {
   const weather = widget("weather");
   const locations = weather.locations || [];
   const valid = locations.filter((loc) => loc && loc.latitude != null && loc.longitude != null);
   const unit = tempUnit(weather);
+  const focus = variant === "focus";
+  const picked = focus
+    ? valid.filter((loc) => placeDetail(loc) === "long").slice(0, 1)
+    : valid.filter((loc) => placeDetail(loc) === "short");
+  const title = focus && picked.length ? `${picked[0].name || "Location"} Weather` : "Weather";
   const [places, setPlaces] = useState(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!valid.length) return;
+    if (!picked.length) return;
     let cancelled = false;
-    Promise.all(valid.map((loc) => loadPlace(loc, unit)))
+    Promise.all(picked.map((loc) => loadPlace(loc, unit)))
       .then((next) => {
         if (!cancelled) setPlaces(next);
       })
@@ -306,25 +314,34 @@ export default function Weather() {
     };
   }, []);
 
-  if (!valid.length) {
+  if (!picked.length) {
+    const want = focus ? "long" : "short";
     return (
       <Empty
-        text="set locations in intranet/config/weather/config.nix"
-        title="Weather"
+        text={`set a location with detail = "${want}" in intranet/config/weather/config.nix`}
+        title={title}
         code={ICO.weather}
       />
     );
   }
   if (failed) {
-    return <Empty text="weather unavailable" title="Weather" code={ICO.weather} />;
+    return <Empty text="weather unavailable" title={title} code={ICO.weather} />;
   }
-  if (!places) return <Heading title="Weather" code={ICO.weather} />;
+  if (!places) return <Heading title={title} code={ICO.weather} />;
   return (
     <>
-      <Heading title="Weather" code={ICO.weather} />
-      {places.map((place) => (
-        <Place key={place.loc.name || `${place.loc.latitude},${place.loc.longitude}`} place={place} unit={unit} />
-      ))}
+      <Heading title={title} code={ICO.weather} />
+      <div className="weather-places">
+        {places.map((place) => (
+          <Place
+            key={place.loc.name || `${place.loc.latitude},${place.loc.longitude}`}
+            place={place}
+            unit={unit}
+            detail={focus ? "long" : "short"}
+            showName={!focus}
+          />
+        ))}
+      </div>
     </>
   );
 }
