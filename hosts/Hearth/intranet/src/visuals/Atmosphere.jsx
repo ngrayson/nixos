@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Float } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
+import ShadertoyLayer from "./ShadertoyLayer.jsx";
 
 function cssVar(name, fallback) {
   if (typeof document === "undefined") return fallback;
@@ -74,12 +75,13 @@ function useAtmosphereGate() {
   return { wrapRef, reduce, play: visible && onScreen && !reduce };
 }
 
-export default function Atmosphere() {
+export default function Atmosphere({ shaderId = "geometry" }) {
   const { wrapRef, reduce, play } = useAtmosphereGate();
   const [colors, setColors] = useState({
     void: "#122221",
     accent: "#2fc7be",
   });
+  const toy = shaderId !== "geometry";
 
   useEffect(() => {
     setColors({
@@ -99,11 +101,17 @@ export default function Atmosphere() {
         camera={{ position: [0, 0, 3.6], fov: 48 }}
         style={{ width: "100%", height: "100%" }}
       >
-        <color attach="background" args={[colors.void]} />
-        <Field accent={colors.accent} />
-        <EffectComposer disableNormalPass>
-          <Bloom luminanceThreshold={0.8} intensity={0.85} mipmapBlur />
-        </EffectComposer>
+        {toy ? (
+          <ShadertoyLayer shaderId={shaderId} />
+        ) : (
+          <>
+            <color attach="background" args={[colors.void]} />
+            <Field accent={colors.accent} />
+            <EffectComposer disableNormalPass>
+              <Bloom luminanceThreshold={0.8} intensity={0.85} mipmapBlur />
+            </EffectComposer>
+          </>
+        )}
       </Canvas>
     </div>
   );

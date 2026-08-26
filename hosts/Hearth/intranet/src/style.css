@@ -111,6 +111,27 @@ main {
   color: var(--strong);
 }
 
+.shader-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.shader-picker-label {
+  font-weight: 650;
+}
+
+.shader-picker select {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--chrome));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--depth) 70%, transparent);
+  color: var(--strong);
+  font: inherit;
+}
+
 .widget-card h2,
 section h2,
 .poll h2 {
