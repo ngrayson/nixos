@@ -17,30 +17,46 @@ const MARGIN_Y = 12;
 
 const H = {
   weather: 12,
-  map: 14,
+  weatherCombo: 6,
+  map: 10,
   buses: 14,
   health: 8,
   gallery: 8,
   calendar: 10,
+  clock: 2.6,
 };
 
-const HUG = new Set(["clock", "weather", "buses", "health", "calendar"]);
+const HUG = new Set(["weather", "weatherCombo", "buses", "health", "calendar"]);
 
 function item(i, x, y, w, h) {
   return { i, x, y, w, h, static: true };
 }
 
+// Quarter-row granularity so a card is not padded out to the next whole 48px
+// row, while staying coarse enough not to re-fire on sub-pixel noise.
 function pxToRows(px) {
-  return Math.max(1, Math.ceil((px + MARGIN_Y) / (ROW_HEIGHT + MARGIN_Y)));
+  const rows = (px + MARGIN_Y) / (ROW_HEIGHT + MARGIN_Y);
+  return Math.max(1, Math.ceil(rows * 4) / 4);
 }
 
-function visibleIds(showMap, showGallery) {
-  const ids = ["clock", "weather"];
-  if (showMap) ids.push("map");
-  ids.push("buses", "health");
-  if (showGallery) ids.push("gallery");
-  ids.push("calendar");
-  return ids;
+// Each widget belongs to a column and stacks under the one above it. Columns
+// are independent, so a tall widget never pushes its neighbours down.
+function columnIds(showMap, showGallery) {
+  const middle = ["calendar", "health"];
+  if (showGallery) middle.push("gallery");
+  const right = [];
+  if (showMap) right.push("map");
+  right.push("buses");
+  return [["clock", "weather", "weatherCombo"], middle, right];
+}
+
+function column(ids, x, w, heights) {
+  let y = 0;
+  return ids.map((id) => {
+    const cell = item(id, x, y, w, heights[id]);
+    y += heights[id];
+    return cell;
+  });
 }
 
 function stack(ids, cols, heights) {
@@ -54,44 +70,20 @@ function stack(ids, cols, heights) {
 }
 
 function buildLayouts(showMap, showGallery, heights) {
-  const ids = visibleIds(showMap, showGallery);
-  const leftH = heights.clock + heights.weather;
+  const [left, middle, right] = columnIds(showMap, showGallery);
+  const ids = [...left, ...middle, ...right];
 
-  const lg = [];
-  if (showMap) {
-    lg.push(
-      item("clock", 0, 0, 6, heights.clock),
-      item("weather", 0, heights.clock, 6, heights.weather),
-      item("map", 6, 0, 6, leftH),
-    );
-  } else {
-    lg.push(item("clock", 0, 0, 12, heights.clock), item("weather", 0, heights.clock, 12, heights.weather));
-  }
-  const lgY = leftH;
-  lg.push(
-    item("buses", 0, lgY, 4, heights.buses),
-    item("health", 4, lgY, 4, heights.health),
-    item("calendar", 8, lgY, 4, heights.calendar),
-  );
-  if (showGallery) lg.push(item("gallery", 0, lgY + heights.buses, 6, heights.gallery));
+  const lg = [
+    ...column(left, 0, 4, heights),
+    ...column(middle, 4, 4, heights),
+    ...column(right, 8, 4, heights),
+  ];
 
-  const md = [];
-  if (showMap) {
-    md.push(
-      item("clock", 0, 0, 5, heights.clock),
-      item("weather", 0, heights.clock, 5, heights.weather),
-      item("map", 5, 0, 5, leftH),
-    );
-  } else {
-    md.push(item("clock", 0, 0, 10, heights.clock), item("weather", 0, heights.clock, 10, heights.weather));
-  }
-  const mdY = leftH;
-  md.push(
-    item("buses", 0, mdY, 3, heights.buses),
-    item("health", 3, mdY, 3, heights.health),
-    item("calendar", 6, mdY, 4, heights.calendar),
-  );
-  if (showGallery) md.push(item("gallery", 0, mdY + heights.buses, 6, heights.gallery));
+  const md = [
+    ...column(left, 0, 4, heights),
+    ...column(middle, 4, 3, heights),
+    ...column(right, 7, 3, heights),
+  ];
 
   return {
     lg,
@@ -110,28 +102,30 @@ function HugCard({ id, onHeight, children }) {
     const card = cardRef.current;
     if (!inner) return undefined;
     const report = () => {
-      const style = card ? getComputedStyle(card) : null;
-      const chrome = style
-        ? parseFloat(style.paddingTop) +
-          parseFloat(style.paddingBottom) +
-          parseFloat(style.borderTopWidth) +
-          parseFloat(style.borderBottomWidth)
-        : 0;
-      const width = (card || inner).getBoundingClientRect().width;
-      const probe = inner.cloneNode(true);
-      probe.style.cssText = [
+      if (!card) return;
+      const style = getComputedStyle(card);
+      const border = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+      // The clone must sit under a .widget-card ancestor. Measured loose in the
+      // body every card-scoped rule stops applying -- the heading alone falls
+      // back to the UA's h2 size and margins -- and the probe reads ~50px tall
+      // than the real content. Copying the card's classes and outer width
+      // reproduces its padding, so the content box matches too.
+      const host = document.createElement("div");
+      host.className = card.className;
+      host.style.cssText = [
         "position:absolute",
         "left:-99999px",
         "top:0",
         "visibility:hidden",
         "height:auto",
         "overflow:visible",
-        `width:${Math.max(0, width)}px`,
+        `width:${Math.max(0, card.getBoundingClientRect().width)}px`,
         "pointer-events:none",
       ].join(";");
-      document.body.appendChild(probe);
-      const px = probe.scrollHeight + chrome;
-      document.body.removeChild(probe);
+      host.appendChild(inner.cloneNode(true));
+      document.body.appendChild(host);
+      const px = host.scrollHeight + border;
+      document.body.removeChild(host);
       if (px < 16) return;
       onHeight(id, pxToRows(px));
     };
@@ -190,13 +184,13 @@ export default function WidgetGrid() {
           resizeConfig={{ enabled: false }}
         >
           <div key="clock">
-            <HugCard id="clock" onHeight={onHugHeight}>
+            <WidgetCard>
               <Clock />
-            </HugCard>
+            </WidgetCard>
           </div>
           <div key="weather">
             <HugCard id="weather" onHeight={onHugHeight}>
-              <Weather />
+              <Weather variant="focus" />
             </HugCard>
           </div>
           {showMap ? (
@@ -226,6 +220,11 @@ export default function WidgetGrid() {
           <div key="calendar">
             <HugCard id="calendar" onHeight={onHugHeight}>
               <Calendar />
+            </HugCard>
+          </div>
+          <div key="weatherCombo">
+            <HugCard id="weatherCombo" onHeight={onHugHeight}>
+              <Weather variant="combo" />
             </HugCard>
           </div>
         </ReactGridLayout>
