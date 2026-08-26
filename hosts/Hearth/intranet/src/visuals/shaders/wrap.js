@@ -11,6 +11,7 @@ export function wrapShadertoyFragment(source, channelCount = 0) {
   return `
 precision highp float;
 uniform vec3 iResolution;
+uniform vec3 iChannelResolution[4];
 uniform float iTime;
 uniform vec4 iMouse;
 ${channels}

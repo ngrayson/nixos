@@ -15,6 +15,9 @@ import srcLdcA from "./shaders/ldc3z4-bufferA.glsl?raw";
 import srcLdcB from "./shaders/ldc3z4-bufferB.glsl?raw";
 import srcLdcImage from "./shaders/ldc3z4-image.glsl?raw";
 import srcLtx from "./shaders/ltXczj.glsl?raw";
+import srcPixelGalaxy from "./shaders/pixel-galaxy.glsl?raw";
+import srcPreciousEgg from "./shaders/precious-egg.glsl?raw";
+import srcStarfieldGleam from "./shaders/starfield-gleam.glsl?raw";
 import { SHADERTOY_VERTEX, wrapShadertoyFragment } from "./shaders/wrap.js";
 
 function makeMaterial(source, channelCount = 0) {
@@ -149,5 +152,8 @@ export default function ShadertoyLayer({ shaderId }) {
   if (shaderId === "7fyXRh") return <SinglePass source={src7fy} />;
   if (shaderId === "ltXczj") return <SinglePass source={srcLtx} />;
   if (shaderId === "ldc3z4") return <Ldc3z4Pass />;
+  if (shaderId === "pixel-galaxy") return <SinglePass source={srcPixelGalaxy} />;
+  if (shaderId === "precious-egg") return <SinglePass source={srcPreciousEgg} />;
+  if (shaderId === "starfield-gleam") return <SinglePass source={srcStarfieldGleam} />;
   return null;
 }

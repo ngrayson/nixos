@@ -1,11 +1,22 @@
 export const SHADER_KEY = "hearth.shader";
-export const SHADER_IDS = ["geometry", "7fyXRh", "ldc3z4", "ltXczj"];
+export const SHADER_IDS = [
+  "geometry",
+  "7fyXRh",
+  "ldc3z4",
+  "ltXczj",
+  "pixel-galaxy",
+  "precious-egg",
+  "starfield-gleam",
+];
 
 export const SHADER_OPTIONS = [
   { id: "geometry", label: "Geometry" },
   { id: "7fyXRh", label: "Terrain" },
   { id: "ldc3z4", label: "PS2 menu" },
   { id: "ltXczj", label: "Plasma waves" },
+  { id: "pixel-galaxy", label: "Pixel Galaxy" },
+  { id: "precious-egg", label: "Precious Egg" },
+  { id: "starfield-gleam", label: "Starfield Gleam" },
 ];
 
 export function readShaderPref() {
