@@ -2,9 +2,11 @@
 # Ice Lake i5-1035G7: intel-media-driver (iHD) for VAAPI transcoding.
 # Enable VAAPI in Dashboard → Playback → Transcoding.
 #
-# No subtitle knobs here on purpose: the 15-20s blank-caption delay at play
-# start is on-demand extraction reading the whole container off COLD at USB2
-# speed, not a Jellyfin setting. See plan.md H3 before adding one.
+# No subtitle knobs here on purpose: first-play caption delay is on-demand
+# ffmpeg extract of embedded ASS/SRT (whole-container read off COLD). After
+# the 2026-08-25 USB fix that is ~8s on a 1.4 GB episode and ~31s on a 5.8 GB
+# movie — not a Dashboard setting. See plan.md H3 before adding a pre-extract
+# unit; the investigation recommended no service.
 {pkgs, ...}: {
   systemd.tmpfiles.rules = [
     # HDD (COLD). Created only when /mnt/cold is mounted; nofail so a missing
