@@ -260,14 +260,10 @@ desktop is currently the only recovery console.
     7939 embedded font/other attachments. Three prototype sidecars were
     left next to Gachiakuta 11/12 and Tongari 02. A full sequential pass
     at 197 MB/s is **~1.6h** (all files) / **~1.5h** (files with subs).
-  - **Recommendation: no service, optional one-shot, do not implement
-    without sign-off.** A systemd timer is not worth it at 197 MB/s.
-    A manual one-shot script (idempotent: skip when sidecar is newer than
-    the container; write `{basename}.{lang}.default.{ass|srt}`; group
-    jellyfin via the NTFS `umask=0002` mount; skip PGS/DVD) would erase
-    the extract wait and is still worth doing for LOTR-class files and
-    as a batch. New arrivals belong on the H8 ingest path, not a timer.
-    Repo home if it happens: `hosts/Hearth/`.
+  - **Recommendation: no service; one-shot signed off and shipped.**
+    `hearth-extract-sidecars` (hosts/Hearth/extract-sidecars.nix) is the
+    manual pass — idempotent, text tracks only, no timer. New arrivals
+    call the same binary via H8 ingest (`--one`), not a timer.
   - Not a fix: `EnableSubtitleExtraction` only *permits* on-the-fly
     extraction; disabling it removes captions rather than speeding them up.
     Jellyfin 10.11 has no pre-extract-during-scan option.
@@ -382,6 +378,9 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
   stack (`common/vpn-vortix.nix` stunnel/FrootVPN — server-safe subset) or a
   dedicated namespace so torrent traffic cannot leak; upload hard-capped at 0.
 - Zero local seeding in both paths.
+- After each ingest move into `media/{movies,tv}`, run
+  `hearth-extract-sidecars --one <file>` so new titles get sidecars
+  without waiting for another library-wide pass.
 - The homepage/ingest UI from the original plan stays **last**, after H6-H7.
 
 ## 5. Risk register (from the audit)
