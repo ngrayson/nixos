@@ -7,7 +7,7 @@ const IDLE_MS = 120_000;
 
 // Portaled to body on purpose: widgets live in hug cards that are
 // overflow:hidden and whose height is measured by cloning their own subtree.
-export default function Modal({ title, label, icon, onClose, children }) {
+export default function Modal({ title, label, icon, onClose, children, size }) {
   const [idleGen, setIdleGen] = useState(0);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function Modal({ title, label, icon, onClose, children }) {
       }}
     >
       <div
-        className="modal-card"
+        className={size === "wide" ? "modal-card modal-card-wide" : "modal-card"}
         role="dialog"
         aria-modal="true"
         aria-label={label || title}

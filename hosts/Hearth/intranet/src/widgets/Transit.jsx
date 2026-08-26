@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Modal from "../components/Modal.jsx";
 import { widget } from "../lib/config.js";
 import { Heading, ICO } from "../lib/icons.jsx";
 import { mapsBrowserKey, readMapProvider, writeMapProvider } from "../lib/mapProvider.js";
@@ -80,7 +81,7 @@ function loadGoogleMaps(key) {
   return mapsReady;
 }
 
-function GoogleTrafficMap({ lat, lng, zoom }) {
+function GoogleTrafficMap({ lat, lng, zoom, interactive = false }) {
   const ref = useRef(null);
   const [failed, setFailed] = useState(false);
 
@@ -103,7 +104,7 @@ function GoogleTrafficMap({ lat, lng, zoom }) {
           streetViewControl: false,
           fullscreenControl: false,
           clickableIcons: false,
-          gestureHandling: "greedy",
+          gestureHandling: interactive ? "greedy" : "none",
           colorScheme: "DARK",
         });
         const traffic = new window.google.maps.TrafficLayer();
@@ -117,10 +118,33 @@ function GoogleTrafficMap({ lat, lng, zoom }) {
       cancelled = true;
       if (el) el.replaceChildren();
     };
-  }, [lat, lng, zoom]);
+  }, [lat, lng, zoom, interactive]);
 
   if (failed) return <p className="empty">Google map failed to load.</p>;
   return <div ref={ref} className="local-map local-map-google" role="img" aria-label="Local traffic map" />;
+}
+
+function MapOpenHit({ onOpen }) {
+  const origin = useRef(null);
+  return (
+    <button
+      type="button"
+      className="map-open"
+      aria-label="Open fullscreen map"
+      onPointerDown={(event) => {
+        origin.current = { x: event.clientX, y: event.clientY };
+      }}
+      onPointerUp={(event) => {
+        const start = origin.current;
+        origin.current = null;
+        if (!start) return;
+        const dx = event.clientX - start.x;
+        const dy = event.clientY - start.y;
+        if (dx * dx + dy * dy > 100) return;
+        onOpen();
+      }}
+    />
+  );
 }
 
 function ProviderToggle({ value, onChange }) {
@@ -146,47 +170,75 @@ function ProviderToggle({ value, onChange }) {
   );
 }
 
+function WazeFrame({ src, title = "Local traffic map" }) {
+  return (
+    <iframe
+      className="local-map local-map-waze"
+      title={title}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      src={src}
+    />
+  );
+}
+
 export default function Transit() {
   const transit = widget("transit");
   const [provider, setProvider] = useState(readMapProvider);
+  const [open, setOpen] = useState(false);
   const query = (transit.mapQuery || "").trim();
   const ll = parseLatLng(query);
   const zoom = Number(transit.mapZoom || 10);
   const key = mapsBrowserKey();
+  const waze = wazeSrc(transit);
 
   const onProvider = (next) => {
     writeMapProvider(next);
     setProvider(next);
   };
 
-  let body = null;
+  let preview = null;
   if (provider === "off") {
-    body = <p className="empty">Map hidden. Pick Waze or Google to show it.</p>;
+    preview = <p className="empty">Map hidden. Pick Waze or Google to show it.</p>;
   } else if (provider === "google") {
-    if (!ll) body = <p className="empty">Set mapQuery to lat,lon for Google traffic.</p>;
-    else if (!key) body = <p className="empty">Google Maps key missing.</p>;
-    else body = (
-      <div className="map-chrome">
-        <GoogleTrafficMap lat={ll.lat} lng={ll.lng} zoom={zoom} />
-      </div>
-    );
+    if (!ll) preview = <p className="empty">Set mapQuery to lat,lon for Google traffic.</p>;
+    else if (!key) preview = <p className="empty">Google Maps key missing.</p>;
+    else {
+      preview = (
+        <div className="map-chrome map-chrome-preview">
+          {open ? <div className="local-map" aria-hidden="true" /> : (
+            <GoogleTrafficMap lat={ll.lat} lng={ll.lng} zoom={zoom} />
+          )}
+          <MapOpenHit onOpen={() => setOpen(true)} />
+        </div>
+      );
+    }
   } else {
-    const src = wazeSrc(transit);
-    if (!src) return null;
-    body = (
-      <div className="map-chrome">
-        <iframe
-          className="local-map local-map-waze"
-          title="Local traffic map"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          src={src}
-        />
+    if (!waze) return null;
+    preview = (
+      <div className="map-chrome map-chrome-preview">
+        {open ? <div className="local-map" aria-hidden="true" /> : <WazeFrame src={waze} />}
+        <MapOpenHit onOpen={() => setOpen(true)} />
       </div>
     );
   }
 
-  if (provider === "waze" && !wazeSrc(transit) && !query) return null;
+  if (provider === "waze" && !waze && !query) return null;
+
+  let modalMap = null;
+  if (open && provider === "google" && ll && key) {
+    modalMap = (
+      <div className="map-chrome">
+        <GoogleTrafficMap lat={ll.lat} lng={ll.lng} zoom={zoom} interactive />
+      </div>
+    );
+  } else if (open && provider === "waze" && waze) {
+    modalMap = (
+      <div className="map-chrome">
+        <WazeFrame src={waze} title="Fullscreen traffic map" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -194,7 +246,12 @@ export default function Transit() {
         <Heading title="Map" code={ICO.map} />
         <ProviderToggle value={provider} onChange={onProvider} />
       </div>
-      {body}
+      {preview}
+      {modalMap ? (
+        <Modal size="wide" icon={ICO.map} title="Map" onClose={() => setOpen(false)}>
+          {modalMap}
+        </Modal>
+      ) : null}
     </>
   );
 }
