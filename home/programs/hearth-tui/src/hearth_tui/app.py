@@ -13,6 +13,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Header, ListItem, ListView, Static
 
+from hearth_tui.screens.deploy import DeployScreen
 from hearth_tui.screens.disk import DiskScreen
 from hearth_tui.screens.status import StatusScreen
 
@@ -21,12 +22,14 @@ from hearth_tui.screens.status import StatusScreen
 SCREENS: dict[str, type[Screen]] = {
     "status": StatusScreen,
     "disk": DiskScreen,
+    "deploy": DeployScreen,
 }
 
 # (screen name, label) — display order for the main menu.
 MENU_ITEMS: list[tuple[str, str]] = [
     ("status", "Status — health check + network"),
     ("disk", "Disk — COLD status / resume / park"),
+    ("deploy", "Deploy — hearth-deploy.sh actions"),
 ]
 
 
