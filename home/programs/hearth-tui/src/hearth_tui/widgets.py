@@ -81,6 +81,60 @@ def _parse_system_stats(
     return cpu_pct, mem_total_kb, mem_avail_kb, temps
 
 
+#  UNKNOWN is not a fault: tun devices like tailscale0 always report it while
+#  carrying traffic, so it reads neutral rather than as a warning.
+_STATE_COLOURS = {"UP": "green", "DOWN": "red", "LOWERLAYERDOWN": "red"}
+
+
+def _parse_network(text: str) -> list[str]:
+    """Turn `ip -br addr` + `ip route show default` into aligned lines.
+
+    Drops loopback and IPv6 link-local addresses — every interface has a
+    `fe80::` and it says nothing about reachability — then pads the interface
+    and state columns so addresses line up down the panel.
+    """
+    addr_block, _, route_block = text.partition("---")
+
+    entries: list[tuple[str, str, list[str]]] = []
+    for line in addr_block.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        iface, state, *addrs = parts
+        # `ip -br` always reports state as an uppercase word (UP, DOWN,
+        # UNKNOWN, LOWERLAYERDOWN). Requiring that keeps a shell error such as
+        # "bash: ip: command not found" from being rendered as an interface —
+        # it fails to parse instead, and the caller falls back to raw output.
+        if not (state.isalpha() and state.isupper()):
+            continue
+        if iface == "lo":
+            continue
+        entries.append(
+            (iface, state, [a for a in addrs if not a.lower().startswith("fe80:")])
+        )
+
+    if not entries:
+        return []
+
+    iface_w = max(len(iface) for iface, _, _ in entries)
+    state_w = max(len(state) for _, state, _ in entries)
+
+    lines = []
+    for iface, state, addrs in entries:
+        colour = _STATE_COLOURS.get(state.upper(), "dim")
+        shown = "  ".join(addrs) if addrs else "(no address)"
+        lines.append(
+            f"{iface:<{iface_w}}  [{colour}]{state:<{state_w}}[/{colour}]  {shown}"
+        )
+
+    for line in route_block.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[0] == "default" and parts[1] == "via" and parts[3] == "dev":
+            lines.append(f"{'gw':<{iface_w}}  {parts[2]} via {parts[4]}")
+
+    return lines
+
+
 def _average_temps(temps: list[tuple[str, float]]) -> list[tuple[str, float]]:
     """Collapse per-zone readings into one averaged line per component.
 
@@ -240,14 +294,19 @@ class NetworkWidget(Static):
             result = ssh.run(
                 "bash",
                 "-c",
-                "ip -br addr; echo ---; ip -br link; echo ---; ip route show default",
+                "ip -br addr; echo ---; ip route show default",
                 timeout=15,
             )
         except ssh.SshError as exc:
             self.app.call_from_thread(self.update, f"[b]network[/b]\n[red]{exc}[/red]")
             return
         text = result.stdout or result.stderr or "(no output)"
-        self.app.call_from_thread(self.update, f"[b]network[/b]\n{text}")
+        # Fall back to the raw output rather than an empty panel if the shape
+        # is ever something the parser does not recognise.
+        lines = _parse_network(text) or [text.strip() or "(no output)"]
+        self.app.call_from_thread(
+            self.update, "[b]network[/b]\n" + "\n".join(lines)
+        )
 
 
 class DiskStatusWidget(Static):
