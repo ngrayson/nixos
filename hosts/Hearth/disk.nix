@@ -34,7 +34,7 @@
       On Hearth:  sudo hearth-disk park
 
       Commands:
-        status   Probe device, mount UUID, jellyfin, and :8096/health (no changes)
+        status   Probe device, mount UUID, Jellyfin, and :8096/health (no changes)
         park     Stop Jellyfin, unmount COLD, power off the enclosure (not the hub)
         resume   Mount COLD and start Jellyfin after the drive is plugged in
       EOF
@@ -99,9 +99,9 @@
           failed=1
         fi
         if systemctl is-active --quiet jellyfin; then
-          ok "jellyfin is active"
+          ok "Jellyfin is active"
         else
-          fail "jellyfin is not active ($(systemctl is-active jellyfin 2>/dev/null || true))"
+          fail "Jellyfin is not active ($(systemctl is-active jellyfin 2>/dev/null || true))"
           failed=1
         fi
         if curl -fsS --max-time 5 "$JELLYFIN_HEALTH" >/dev/null; then
