@@ -21,8 +21,12 @@ adds only selection, claiming, cadence, and local-machine hygiene.
 - **WIP = 1.** At most one card claimed by this loop at a time.
 - **Never `start_task`** — that boots a cloud pod and duplicates the work. Only
   exception: the opt-in offload valve below.
-- **Never approve or merge your own PRs.** Finish line = card in ReviewPR with
-  green CI; the user takes it from there.
+- **Merge your own PRs into `dev` once their checks pass.** A serial loop that
+  parks PRs in ReviewPR forces every later card to branch from an increasingly
+  stale `dev`, and cards planned in one batch routinely build on each other —
+  so an unmerged queue compounds into conflicts and stale file references.
+  Still never merged by the loop: a pack's finale PR into `dev` (that one is
+  the user's call) and anyone else's work.
 - **Only cards created by the session owner** (match against
   `mcp__conveyor__get_connection_context`), status Open, unassigned. Teammates'
   cards and pod-claimed cards are off limits.
@@ -129,6 +133,18 @@ Each invocation does the FIRST of these that produces work, then paces:
    what shipped, how verified, what to look at.
 6. Confirm CI actually started (read-only `gh pr checks`); do NOT wait on it —
    later iterations babysit.
+7. **Read merge state from Conveyor, never by polling the forge.** Conveyor is
+   the state store (see the ground rules), and a card at ReviewDev or beyond
+   IS the merge signal — `mcp__conveyor__get_task` answers "did it land?"
+   authoritatively. Reach for `gh` only for something Conveyor does not track,
+   and then use `--json state,mergedAt`: there is no `merged` field, and a
+   query naming one returns an error that an unguarded shell test silently
+   reads as "not yet".
+8. **Bound every wait.** A polling wait needs a deadline and must report on
+   BOTH outcomes, so a condition that can never come true surfaces as a
+   timeout instead of as silence. Never write an `until`/`while` loop whose
+   exit condition cannot be falsified — if the check errors, the loop spins
+   forever and its silence is indistinguishable from work still in progress.
 
 **Parked protocol** — after 2 genuinely different failed approaches, or on a
 decision only the user can make: post `[local-loop] parked: <reason + the
@@ -219,9 +235,25 @@ blocked by a dependency — never claim straight from the wait payload.
 and the queue is still empty, re-arm the fallback `ScheduleWakeup` and end the
 turn.
 
-## Pacing (dynamic /loop only)
+## Pacing
 
-Under `/loop` with no interval, end EVERY iteration with exactly one
+**A denied tool is not a denied goal.** Report a capability as unavailable only
+after checking the alternatives — the failure below is what that rule exists to
+prevent.
+
+Under `/loop` WITH an interval, the harness's `CronCreate` normally owns the
+cadence. If that call errors or is denied, do NOT report the schedule as
+impossible and stop: fall back to `ScheduleWakeup` with
+`delaySeconds = min(interval_seconds, 3600)` and say so in the iteration
+summary. Treat this as a normal branch, not an exotic one — the denial is
+intermittent, so the same invocation can succeed one hour and fail the next,
+which is precisely why the fallback has to be automatic. Only an interval above
+3600 s has no local option at all; point at the `schedule` skill (a durable
+cloud schedule) rather than silently doing nothing. A loop that cannot schedule
+its next iteration has no way to tell anyone — it does not crash or retry, it
+just stops while the session still looks alive.
+
+Under `/loop` with NO interval, self-pace: end EVERY iteration with exactly one
 `ScheduleWakeup` (prompt = the original /loop input verbatim):
 
 | State | Delay | Reason should say |
@@ -248,8 +280,10 @@ depth each iteration so the user can offload manually.
 
 ## What this is not
 
-- Not a reviewer: never `approve_task`, `approve_and_merge_pr`, or
-  `request_changes` on anything.
+- Not a reviewer of other people's work: never `approve_task` or
+  `request_changes` on anything, and never `approve_and_merge_pr` on a pack's
+  finale PR or on a card this loop did not open. Merging the loop's own passing
+  PRs into `dev` is expected — see the ground rules.
 - Not a pod: no sandbox, no WIP snapshots, and the dev DB + dev-server ports
   are shared with the user's interactive sessions — no destructive
   experiments, never reset the dev DB, reuse a running dev stack rather than
