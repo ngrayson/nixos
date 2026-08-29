@@ -26,8 +26,41 @@ function Body({ data }) {
     (root.usedPercent != null ? root.usedPercent + "%" : "—") +
     (root.avail ? " · " + root.avail + " free" : "");
   const cold = data.cold || {};
+  const cpu = data.cpu || {};
+  const mem = data.memory || {};
+  const temp = data.temperature;
+  const cpuDetail =
+    (cpu.usedPercent != null ? cpu.usedPercent + "%" : "—") +
+    (cpu.load1 != null ? " · load " + cpu.load1 : "");
+  const memDetail =
+    (mem.usedPercent != null ? mem.usedPercent + "%" : "—") +
+    (mem.totalGiB != null ? " · " + mem.usedGiB + " / " + mem.totalGiB + " GiB" : "");
   return (
     <>
+      <Meter
+        label="CPU"
+        percent={cpu.usedPercent}
+        detail={cpuDetail}
+        icon={ICO.cpu}
+        off={cpu.usedPercent == null}
+      />
+      <Meter
+        label="Memory"
+        percent={mem.usedPercent}
+        detail={memDetail}
+        icon={ICO.memory}
+        off={mem.usedPercent == null}
+      />
+      {temp && temp.celsius != null ? (
+        <Meter
+          label="Temperature"
+          percent={temp.celsius}
+          detail={temp.celsius + " °C"}
+          icon={ICO.temp}
+        />
+      ) : (
+        <Meter label="Temperature" percent={0} detail="unavailable" icon={ICO.temp} hideBar />
+      )}
       <Meter
         label="Disk usage"
         percent={root.usedPercent}
