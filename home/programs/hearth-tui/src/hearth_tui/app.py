@@ -15,6 +15,7 @@ from textual.widgets import Footer, Header, ListItem, ListView, Static
 
 from hearth_tui.screens.deploy import DeployScreen
 from hearth_tui.screens.disk import DiskScreen
+from hearth_tui.screens.restic import ResticScreen
 from hearth_tui.screens.status import StatusScreen
 
 # One entry per screen. Children add to this dict and to MainMenu's list —
@@ -23,6 +24,7 @@ SCREENS: dict[str, type[Screen]] = {
     "status": StatusScreen,
     "disk": DiskScreen,
     "deploy": DeployScreen,
+    "restic": ResticScreen,
 }
 
 # (screen name, label) — display order for the main menu.
@@ -30,6 +32,7 @@ MENU_ITEMS: list[tuple[str, str]] = [
     ("status", "Status — health check + network"),
     ("disk", "Disk — COLD status / resume / park"),
     ("deploy", "Deploy — hearth-deploy.sh actions"),
+    ("restic", "Restic — backup status + snapshots"),
 ]
 
 
