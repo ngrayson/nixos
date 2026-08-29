@@ -112,6 +112,7 @@ class HearthTuiApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("ctrl+s", "shell", "Shell"),
+        Binding("b", "btop", "btop"),
     ]
 
     def on_mount(self) -> None:
@@ -121,6 +122,13 @@ class HearthTuiApp(App):
     def action_shell(self) -> None:
         with self.suspend():
             subprocess.run(["ssh", ssh.HOST])
+
+    def action_btop(self) -> None:
+        # -t forces a TTY: btop is a curses app, and a bare `ssh host btop`
+        # gets no terminal to draw on. action_shell above needs no such flag
+        # because an interactive login session allocates one on its own.
+        with self.suspend():
+            subprocess.run(["ssh", "-t", ssh.HOST, "btop"])
 
 
 def main() -> None:
