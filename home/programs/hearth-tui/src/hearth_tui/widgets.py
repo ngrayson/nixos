@@ -80,6 +80,39 @@ def _parse_system_stats(
     return cpu_pct, mem_total_kb, mem_avail_kb, temps
 
 
+def _average_temps(temps: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """Collapse per-zone readings into one averaged line per component.
+
+    Hearth exposes a dozen thermal zones — several `acpitz`, an `iwlwifi_1`,
+    per-core `coretemp` entries — which is more than a glance-and-look-away
+    panel can carry. Zones of the same component differ only by a trailing
+    index (`iwlwifi_1`, `coretemp2`), so stripping that groups them; a name
+    with no index, like `x86_pkg_temp`, is its own component and passes
+    through unchanged. First-seen order is preserved so the display doesn't
+    reshuffle between refreshes.
+    """
+    # An underscore-separated index is unambiguous (`iwlwifi_1`), so it always
+    # folds away.
+    bases = [(re.sub(r"_\d+$", "", name), celsius) for name, celsius in temps]
+
+    # A bare trailing digit is not: `SEN1`/`SEN2` are an indexed set, but
+    # Hearth's `B0D4` is simply the ACPI device's name, and trimming it to
+    # "B0D" would report a sensor that does not exist. Fold it only where it
+    # actually groups two or more distinct zones.
+    stems: dict[str, set[str]] = {}
+    for name, _ in bases:
+        stem = re.sub(r"\d+$", "", name)
+        if stem:
+            stems.setdefault(stem, set()).add(name)
+
+    groups: dict[str, list[float]] = {}
+    for name, celsius in bases:
+        stem = re.sub(r"\d+$", "", name)
+        component = stem if stem and len(stems.get(stem, ())) > 1 else name
+        groups.setdefault(component, []).append(celsius)
+    return [(name, sum(values) / len(values)) for name, values in groups.items()]
+
+
 def _nixos_dir() -> Path:
     """Same NIXOS_DIR convention as scripts/hearth-deploy.sh (default ~/.config/nixos)."""
     return Path(os.environ.get("NIXOS_DIR", "~/.config/nixos")).expanduser()
@@ -253,6 +286,7 @@ class SystemWidget(Static):
     DEFAULT_CSS = f"""
     SystemWidget {{
         {WIDGET_BORDER_CSS}
+        {HALF_WIDTH_CSS}
     }}
     """
 
@@ -281,7 +315,7 @@ class SystemWidget(Static):
             total_gb = mem_total_kb / (1024 * 1024)
             pct = round((mem_total_kb - mem_avail_kb) / mem_total_kb * 100)
             lines.append(f"mem    {used_gb:.1f}G / {total_gb:.1f}G ({pct}%)")
-        for name, celsius in temps:
+        for name, celsius in _average_temps(temps):
             lines.append(f"{name}  {celsius:.1f}°C")
         if not lines:
             lines = [text.strip() or "(no output)"]

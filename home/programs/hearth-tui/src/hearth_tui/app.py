@@ -12,7 +12,7 @@ import subprocess
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Header, ListView, Static
 
@@ -57,6 +57,10 @@ class MainMenu(Screen):
     MainMenu #stats > Horizontal {
         height: auto;
     }
+    MainMenu #disk-system-col {
+        width: 1fr;
+        height: auto;
+    }
     """
 
     BINDINGS = [
@@ -70,8 +74,9 @@ class MainMenu(Screen):
         with VerticalScroll(id="stats"):
             with Horizontal():
                 yield HealthcheckWidget()
-                yield DiskStatusWidget()
-            yield SystemWidget()
+                with Vertical(id="disk-system-col"):
+                    yield DiskStatusWidget()
+                    yield SystemWidget()
             yield NetworkWidget()
             with Horizontal():
                 yield ResticRunWidget()
