@@ -1,6 +1,8 @@
-"""Disk screen: wraps `hearth-disk status/resume/park` (hosts/Hearth/disk.nix)
-instead of re-deriving its checks, so parking/resuming COLD no longer needs a
-raw `ssh hearth sudo hearth-disk ...` call or the `hearth-unmount` alias.
+"""Disk screen: runs the correct `hearth-disk` action for COLD's current
+state (hosts/Hearth/disk.nix) instead of asking the operator to pick.
+
+Status itself lives on the home screen as `hearth_tui.widgets.DiskStatusWidget`
+— this screen is action-only.
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, RichLog, Static
+from textual.widgets import Footer, Header, RichLog
 
 from hearth_tui import ssh
 from hearth_tui.formatting import parse_ok_fail_lines
@@ -22,69 +24,70 @@ PARK_CONFIRM_MESSAGE = (
 
 
 class DiskScreen(Screen):
-    """COLD disk status, resume, and park."""
+    """Parks COLD if it's mounted with Jellyfin active, resumes it if it's
+    plugged in but unmounted. Any other combination is left for the operator
+    to sort out manually — never guessed.
+    """
 
-    BINDINGS = [
-        Binding("s", "refresh_status", "Status"),
-        Binding("u", "resume", "Resume"),
-        Binding("p", "park", "Park"),
-        Binding("escape", "app.pop_screen", "Back"),
-    ]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
 
     def compose(self) -> ComposeResult:
         yield Header()
         with VerticalScroll():
-            yield Static("Loading…", id="disk-status")
             yield RichLog(id="disk-log", wrap=True, markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
-        self.action_refresh_status()
+        self.query_one("#disk-log", RichLog).write("[b]checking COLD status…[/b]")
+        self.decide_action()
 
-    def action_refresh_status(self) -> None:
-        self.query_one("#disk-status", Static).update("Refreshing…")
-        self.run_status()
+    @work(thread=True)
+    def decide_action(self) -> None:
+        result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
+        text = result.stdout + result.stderr
+        rows = parse_ok_fail_lines(text)
+        # hearth-disk status's probe order (hosts/Hearth/disk.nix probe_status):
+        # device present, mounted, jellyfin active, jellyfin health.
+        device_present = rows[0][0] if len(rows) > 0 else False
+        mounted = rows[1][0] if len(rows) > 1 else False
+        jellyfin_active = rows[2][0] if len(rows) > 2 else False
 
-    def action_resume(self) -> None:
-        self.query_one("#disk-log", RichLog).write("[b]resume[/b]")
-        self.run_resume()
+        if mounted and jellyfin_active:
+            self.app.call_from_thread(self._confirm_park)
+        elif device_present and not mounted:
+            self.app.call_from_thread(self._start_stream, "resume")
+        else:
+            if rows:
+                lines = [
+                    f"[green]ok[/green]   {message}" if passed else f"[red]fail[/red] {message}"
+                    for passed, message in rows
+                ]
+            else:
+                lines = [text.strip() or "(no output)"]
+            self.app.call_from_thread(
+                self.query_one("#disk-log", RichLog).write,
+                "[yellow]Not a clean park-or-resume state — check status "
+                "and act manually:[/yellow]\n" + "\n".join(lines),
+            )
 
-    def action_park(self) -> None:
+    def _confirm_park(self) -> None:
         self.app.push_screen(ConfirmModal(PARK_CONFIRM_MESSAGE), self._on_park_confirmed)
 
     def _on_park_confirmed(self, confirmed: bool | None) -> None:
         if not confirmed:
+            self.query_one("#disk-log", RichLog).write("park cancelled")
             return
-        self.query_one("#disk-log", RichLog).write("[b]park[/b]")
-        self.run_park()
+        self._start_stream("park")
 
-    @work(thread=True)
-    def run_status(self) -> None:
-        result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
-        text = result.stdout + result.stderr
-        rows = parse_ok_fail_lines(text)
-        if rows:
-            lines = [
-                f"[green]ok[/green]   {message}" if passed else f"[red]fail[/red] {message}"
-                for passed, message in rows
-            ]
-        else:
-            lines = [text.strip() or "(no output)"]
-        self.app.call_from_thread(self.query_one("#disk-status", Static).update, "\n".join(lines))
+    def _start_stream(self, action: str) -> None:
+        self.query_one("#disk-log", RichLog).write(f"[b]{action}[/b]")
+        self.run_action_stream(action)
 
     @work
-    async def run_resume(self) -> None:
+    async def run_action_stream(self, action: str) -> None:
         log = self.query_one("#disk-log", RichLog)
-        async for line in ssh.stream("hearth-disk", "resume", sudo=True):
-            log.write(line)
-        self.action_refresh_status()
-
-    @work
-    async def run_park(self) -> None:
-        log = self.query_one("#disk-log", RichLog)
-        async for line in ssh.stream("hearth-disk", "park", sudo=True):
+        async for line in ssh.stream("hearth-disk", action, sudo=True):
             if "safe to unplug" in line:
                 log.write(f"[b yellow]{line}[/b yellow]")
             else:
                 log.write(line)
-        self.action_refresh_status()

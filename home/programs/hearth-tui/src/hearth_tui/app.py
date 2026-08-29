@@ -12,49 +12,93 @@ import subprocess
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, ListItem, ListView, Static
+from textual.widgets import Footer, Header, ListView, Static
 
 from hearth_tui import ssh
 from hearth_tui.screens.deploy import DeployScreen
 from hearth_tui.screens.disk import DiskScreen
 from hearth_tui.screens.logs import LogsScreen
-from hearth_tui.screens.restic import ResticScreen
-from hearth_tui.screens.status import StatusScreen
+from hearth_tui.widgets import (
+    DiskStatusWidget,
+    HealthcheckWidget,
+    MenuList,
+    NetworkWidget,
+    ResticRunWidget,
+    ResticSnapshotsWidget,
+    SystemWidget,
+)
 
-# One entry per screen. Children add to this dict and to MainMenu's list —
-# a one-line change each, per the pack's plan.
+# One entry per screen. Children add to this dict and to MENU_ITEMS —
+# a one-line change each, per the pack's plan. Status/restic/disk status are
+# home-screen widgets, not screens — see hearth_tui.widgets.
 SCREENS: dict[str, type[Screen]] = {
-    "status": StatusScreen,
     "disk": DiskScreen,
     "deploy": DeployScreen,
-    "restic": ResticScreen,
     "logs": LogsScreen,
 }
 
 # (screen name, label) — display order for the main menu.
 MENU_ITEMS: list[tuple[str, str]] = [
-    ("status", "Status — health check + network"),
-    ("disk", "Disk — COLD status / resume / park"),
+    ("disk", "Disk — park if mounted+active, resume if unmounted"),
     ("deploy", "Deploy — hearth-deploy.sh actions"),
-    ("restic", "Restic — backup status + snapshots"),
     ("logs", "Logs — live journalctl tail"),
 ]
 
 
 class MainMenu(Screen):
-    """Landing screen: pick a screen to open."""
+    """Landing screen: glance at status/restic stats, then pick a screen below."""
 
-    BINDINGS = [Binding("q", "app.quit", "Quit")]
+    DEFAULT_CSS = """
+    MainMenu {
+        border: round $primary;
+    }
+    MainMenu #stats > Horizontal {
+        height: auto;
+    }
+    """
+
+    BINDINGS = [
+        Binding("q", "app.quit", "Quit"),
+        Binding("r", "refresh_stats", "Refresh"),
+    ]
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static("hearth-tui", id="title")
-        yield ListView(
-            *(ListItem(Static(label), name=name) for name, label in MENU_ITEMS),
-            id="menu",
-        )
+        with VerticalScroll(id="stats"):
+            with Horizontal():
+                yield HealthcheckWidget()
+                yield DiskStatusWidget()
+            yield SystemWidget()
+            yield NetworkWidget()
+            with Horizontal():
+                yield ResticRunWidget()
+                yield ResticSnapshotsWidget()
+        yield MenuList(MENU_ITEMS, id="menu")
         yield Footer()
+
+    def on_mount(self) -> None:
+        # VerticalScroll is itself focusable (for scrolling with arrow keys);
+        # without this, initial focus lands on #stats instead of the menu, so
+        # arrow keys would scroll the stats panel rather than move the
+        # selection — the menu must stay keyboard-driven regardless of
+        # whatever the stats widgets are doing in their refresh workers.
+        self.query_one(MenuList).focus()
+
+    def on_screen_resume(self) -> None:
+        # Refresh whenever we come back from a pushed screen (e.g. after a
+        # disk park/resume), so stale pre-action status doesn't linger.
+        self.action_refresh_stats()
+
+    def action_refresh_stats(self) -> None:
+        self.query_one(HealthcheckWidget).refresh_data()
+        self.query_one(DiskStatusWidget).refresh_data()
+        self.query_one(SystemWidget).refresh_data()
+        self.query_one(NetworkWidget).refresh_data()
+        self.query_one(ResticRunWidget).refresh_data()
+        self.query_one(ResticSnapshotsWidget).refresh_data()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         name = event.item.name
