@@ -201,10 +201,17 @@ class HealthcheckWidget(Static):
             return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
-        if rows:
+        # COLD's mount belongs to the disk widget beside this one, which
+        # reports it in the same words. Services — Jellyfin included — stay
+        # here. Anchor on the mount check's own phrasing ("/mnt/cold is
+        # mounted…", "…is not mounted") rather than the bare path: the
+        # library rows point at /mnt/cold/<name> and are service state, not a
+        # second mount report.
+        shown = [row for row in rows if not row[1].startswith("/mnt/cold is")]
+        if shown:
             lines = [
                 f"[green]ok[/green]   {message}" if passed else f"[red]fail[/red] {message}"
-                for passed, message in rows
+                for passed, message in shown
             ]
         else:
             lines = [text.strip() or "(no output)"]
@@ -281,11 +288,19 @@ class DiskStatusWidget(Static):
             return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
+        # Broadcast before filtering: the park/resume decision reads the
+        # Jellyfin rows that the display below drops.
         self.app.call_from_thread(self.post_message, self.StatusReady(rows))
-        if rows:
+
+        # Jellyfin belongs to the health widget beside this one. Match
+        # case-insensitively — `hearth-disk status` says "jellyfin is active"
+        # but "Jellyfin health ...", and an undeployed Hearth may still be
+        # emitting either spelling.
+        shown = [row for row in rows if "jellyfin" not in row[1].lower()]
+        if shown:
             lines = [
                 f"[green]ok[/green]   {message}" if passed else f"[red]fail[/red] {message}"
-                for passed, message in rows
+                for passed, message in shown
             ]
         else:
             lines = [text.strip() or "(no output)"]
