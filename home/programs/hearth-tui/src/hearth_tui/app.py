@@ -8,13 +8,17 @@ Run from Tawa/Theseus; talks to Hearth over the `hearth` SSH alias (hearth_tui.s
 
 from __future__ import annotations
 
+import subprocess
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Header, ListItem, ListView, Static
 
+from hearth_tui import ssh
 from hearth_tui.screens.deploy import DeployScreen
 from hearth_tui.screens.disk import DiskScreen
+from hearth_tui.screens.logs import LogsScreen
 from hearth_tui.screens.restic import ResticScreen
 from hearth_tui.screens.status import StatusScreen
 
@@ -25,6 +29,7 @@ SCREENS: dict[str, type[Screen]] = {
     "disk": DiskScreen,
     "deploy": DeployScreen,
     "restic": ResticScreen,
+    "logs": LogsScreen,
 }
 
 # (screen name, label) — display order for the main menu.
@@ -33,6 +38,7 @@ MENU_ITEMS: list[tuple[str, str]] = [
     ("disk", "Disk — COLD status / resume / park"),
     ("deploy", "Deploy — hearth-deploy.sh actions"),
     ("restic", "Restic — backup status + snapshots"),
+    ("logs", "Logs — live journalctl tail"),
 ]
 
 
@@ -59,10 +65,17 @@ class MainMenu(Screen):
 class HearthTuiApp(App):
     """Terminal dashboard for Hearth."""
 
-    BINDINGS = [Binding("q", "quit", "Quit")]
+    BINDINGS = [
+        Binding("q", "quit", "Quit"),
+        Binding("ctrl+s", "shell", "Shell"),
+    ]
 
     def on_mount(self) -> None:
         self.push_screen(MainMenu())
+
+    def action_shell(self) -> None:
+        with self.suspend():
+            subprocess.run(["ssh", ssh.HOST])
 
 
 def main() -> None:
