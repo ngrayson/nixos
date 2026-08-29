@@ -52,7 +52,7 @@ class DiskScreen(Screen):
     def action_park(self) -> None:
         self.app.push_screen(ConfirmModal(PARK_CONFIRM_MESSAGE), self._on_park_confirmed)
 
-    def _on_park_confirmed(self, confirmed: bool) -> None:
+    def _on_park_confirmed(self, confirmed: bool | None) -> None:
         if not confirmed:
             return
         self.query_one("#disk-log", RichLog).write("[b]park[/b]")

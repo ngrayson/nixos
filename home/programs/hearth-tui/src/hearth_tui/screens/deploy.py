@@ -57,7 +57,7 @@ class DeployScreen(Screen):
         else:
             self._run_action(action)
 
-    def _on_confirmed(self, action: str, confirmed: bool) -> None:
+    def _on_confirmed(self, action: str, confirmed: bool | None) -> None:
         if not confirmed:
             return
         self._run_action(action)
