@@ -12,3 +12,7 @@ secrets/*.plaintext.yaml
 # Hearth intranet: local widget settings (build reads these; not the examples)
 /hosts/Hearth/intranet/config/*/config.nix
 
+# Python bytecode caches (e.g. home/programs/hearth-tui/)
+__pycache__/
+*.pyc
+
