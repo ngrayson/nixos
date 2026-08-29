@@ -10,6 +10,7 @@ name here.
 from __future__ import annotations
 
 import asyncio
+import shlex
 import subprocess
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -17,21 +18,37 @@ from pathlib import Path
 HOST = "hearth"
 
 
+def _remote_command(args: tuple[str, ...], sudo: bool) -> str:
+    """Quote args into one shell-safe string.
+
+    ssh joins argv elements after the hostname with plain spaces before
+    handing them to the remote shell, with no re-quoting — so passing
+    e.g. ("bash", "-c", "ip -br addr; ...") as separate argv elements lets
+    the remote shell re-split the script on its embedded spaces instead of
+    treating it as one token. Pre-quoting into a single argv element avoids
+    that.
+    """
+    remote = ["sudo", *args] if sudo else list(args)
+    return shlex.join(remote)
+
+
 def run(*args: str, sudo: bool = False, timeout: float = 15) -> subprocess.CompletedProcess:
     """Run a short-lived command on Hearth and capture its output."""
-    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", HOST]
-    if sudo:
-        cmd.append("sudo")
-    cmd.extend(args)
+    cmd = [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=8",
+        HOST,
+        _remote_command(args, sudo),
+    ]
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
 async def stream(*args: str, sudo: bool = False) -> AsyncIterator[str]:
     """Run a long-lived command on Hearth, yielding decoded stdout lines as they arrive."""
-    cmd = ["ssh", "-o", "BatchMode=yes", HOST]
-    if sudo:
-        cmd.append("sudo")
-    cmd.extend(args)
+    cmd = ["ssh", "-o", "BatchMode=yes", HOST, _remote_command(args, sudo)]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
     )
