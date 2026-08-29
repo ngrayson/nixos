@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hearth-tui"
+version = "0.1.0"
+dependencies = ["textual"]
+
+[project.scripts]
+hearth-tui = "hearth_tui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
