@@ -13,17 +13,20 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Header, ListItem, ListView, Static
 
+from hearth_tui.screens.disk import DiskScreen
 from hearth_tui.screens.status import StatusScreen
 
 # One entry per screen. Children add to this dict and to MainMenu's list —
 # a one-line change each, per the pack's plan.
 SCREENS: dict[str, type[Screen]] = {
     "status": StatusScreen,
+    "disk": DiskScreen,
 }
 
 # (screen name, label) — display order for the main menu.
 MENU_ITEMS: list[tuple[str, str]] = [
     ("status", "Status — health check + network"),
+    ("disk", "Disk — COLD status / resume / park"),
 ]
 
 
