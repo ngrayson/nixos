@@ -47,15 +47,26 @@ def run(*args: str, sudo: bool = False, timeout: float = 15) -> subprocess.Compl
 
 
 async def stream(*args: str, sudo: bool = False) -> AsyncIterator[str]:
-    """Run a long-lived command on Hearth, yielding decoded stdout lines as they arrive."""
+    """Run a long-lived command on Hearth, yielding decoded stdout lines as they arrive.
+
+    A caller that stops iterating early (e.g. a Textual worker cancelled to
+    switch to a different tail) must not leave `ssh` and the remote command
+    (a `journalctl -f`, say) running orphaned — the `finally` below terminates
+    the local ssh client on early exit, which tears down the remote side too.
+    """
     cmd = ["ssh", "-o", "BatchMode=yes", HOST, _remote_command(args, sudo)]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
     )
     assert proc.stdout is not None
-    async for raw_line in proc.stdout:
-        yield raw_line.decode(errors="replace").rstrip("\n")
-    await proc.wait()
+    try:
+        async for raw_line in proc.stdout:
+            yield raw_line.decode(errors="replace").rstrip("\n")
+        await proc.wait()
+    finally:
+        if proc.returncode is None:
+            proc.terminate()
+            await proc.wait()
 
 
 def run_script(
