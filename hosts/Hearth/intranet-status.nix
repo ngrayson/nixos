@@ -55,10 +55,122 @@
           }
           break
 
+
+      def read_text(path):
+          try:
+              with open(path, encoding="utf-8") as fh:
+                  return fh.read().strip()
+          except OSError:
+              return None
+
+
+      def cpu_times():
+          with open("/proc/stat", encoding="utf-8") as fh:
+              parts = fh.readline().split()
+          vals = [int(v) for v in parts[1:]]
+          idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
+          return sum(vals), idle
+
+
+      def cpu_usage():
+          # A single /proc/stat read is cumulative since boot, so sample twice.
+          try:
+              total0, idle0 = cpu_times()
+              time.sleep(0.5)
+              total1, idle1 = cpu_times()
+          except (OSError, ValueError, IndexError):
+              return None
+          dt = total1 - total0
+          if dt <= 0:
+              return None
+          return max(0, min(100, round(100.0 * (dt - (idle1 - idle0)) / dt)))
+
+
+      def load1():
+          try:
+              return round(os.getloadavg()[0], 2)
+          except OSError:
+              return None
+
+
+      def memory():
+          info = {}
+          try:
+              with open("/proc/meminfo", encoding="utf-8") as fh:
+                  for line in fh:
+                      key, _, rest = line.partition(":")
+                      info[key] = int(rest.split()[0])
+          except (OSError, ValueError, IndexError):
+              return None
+          total = info.get("MemTotal")
+          avail = info.get("MemAvailable")
+          if not total or avail is None:
+              return None
+          used = total - avail
+          return {
+              "usedPercent": round(100.0 * used / total),
+              "usedGiB": round(used / 1048576.0, 1),
+              "totalGiB": round(total / 1048576.0, 1),
+          }
+
+
+      def temperature_probe():
+          base = "/sys/class/hwmon"
+          prefer = ("coretemp", "k10temp", "zenpower")
+          best = None
+          for entry in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+              node = os.path.join(base, entry)
+              if read_text(os.path.join(node, "name")) not in prefer:
+                  continue
+              for fname in sorted(os.listdir(node)):
+                  if not (fname.startswith("temp") and fname.endswith("_input")):
+                      continue
+                  raw = read_text(os.path.join(node, fname))
+                  if raw is None or not raw.lstrip("-").isdigit():
+                      continue
+                  label = read_text(os.path.join(node, fname[: -len("_input")] + "_label")) or ""
+                  # "Package id 0" (Intel) / "Tctl" (AMD) is the whole-die number;
+                  # per-core sensors rank behind it.
+                  rank = 0 if label in ("Package id 0", "Tctl", "Tdie") else 1
+                  cand = (rank, round(int(raw) / 1000.0, 1), label or entry)
+                  if best is None or cand[0] < best[0]:
+                      best = cand
+          if best is not None:
+              return best
+          thermal = "/sys/class/thermal"
+          for zone in sorted(os.listdir(thermal)) if os.path.isdir(thermal) else []:
+              if not zone.startswith("thermal_zone"):
+                  continue
+              znode = os.path.join(thermal, zone)
+              ztype = read_text(os.path.join(znode, "type"))
+              if ztype not in ("x86_pkg_temp", "acpitz"):
+                  continue
+              raw = read_text(os.path.join(znode, "temp"))
+              if raw is None or not raw.lstrip("-").isdigit():
+                  continue
+              best = (0 if ztype == "x86_pkg_temp" else 1, round(int(raw) / 1000.0, 1), ztype)
+              if ztype == "x86_pkg_temp":
+                  break
+          return best
+
+
+      def cpu_temperature():
+          try:
+              best = temperature_probe()
+          except OSError:
+              return None
+          if best is None:
+              return None
+          return {"celsius": best[1], "sensor": best[2]}
+
+
       payload = {
           "root": root,
           "cold": cold,
           "battery": battery,
+          "cpu": {"usedPercent": cpu_usage(), "load1": load1(), "cores": os.cpu_count()},
+          "memory": memory(),
+          "temperature": cpu_temperature(),
           "pihole": {"enabled": False},
           "generatedAt": int(time.time()),
       }
