@@ -71,6 +71,7 @@ class HearthTuiApp(App):
     ]
 
     def on_mount(self) -> None:
+        self.theme = "ansi-dark"
         self.push_screen(MainMenu())
 
     def action_shell(self) -> None:
