@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 from textual import work
+from textual.message import Message
 from textual.widgets import ListItem, ListView, Static
 
 from hearth_tui import ssh
@@ -245,6 +246,17 @@ class NetworkWidget(Static):
 class DiskStatusWidget(Static):
     """COLD device/mount/Jellyfin status (hosts/Hearth/disk.nix's `hearth-disk status`)."""
 
+    class StatusReady(Message):
+        """Posted after each probe so the menu can name the action it would run.
+
+        Carries the rows exactly as parsed, never a filtered view: the disk
+        action is decided from the Jellyfin rows as well as the mount ones.
+        """
+
+        def __init__(self, rows: list[tuple[bool, str]]) -> None:
+            super().__init__()
+            self.rows = rows
+
     DEFAULT_CSS = f"""
     DiskStatusWidget {{
         {WIDGET_BORDER_CSS}
@@ -265,9 +277,11 @@ class DiskStatusWidget(Static):
             result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
         except ssh.SshError as exc:
             self.app.call_from_thread(self.update, f"[b]disk[/b]\n[red]{exc}[/red]")
+            self.app.call_from_thread(self.post_message, self.StatusReady([]))
             return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
+        self.app.call_from_thread(self.post_message, self.StatusReady(rows))
         if rows:
             lines = [
                 f"[green]ok[/green]   {message}" if passed else f"[red]fail[/red] {message}"
