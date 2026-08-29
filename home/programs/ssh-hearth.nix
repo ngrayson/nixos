@@ -38,6 +38,15 @@ in {
         ControlMaster auto
         ControlPath ~/.ssh/cm-%r@%h:%p
         ControlPersist 10m
+        # ControlPersist keeps the control socket alive after the last session
+        # closes, so a master whose TCP connection died silently (laptop
+        # suspend, Wi-Fi roam) still accepts new sessions and then hangs them
+        # with no data flowing. Without keepalive probes OpenSSH never notices,
+        # and the caller's own timeout is the only thing that ever fires —
+        # which is how hearth-tui hit a 15s TimeoutExpired mid-refresh. Three
+        # missed 15s probes tear the dead master down instead.
+        ServerAliveInterval 15
+        ServerAliveCountMax 3
 
       # Tailscale SSH convenience (no key). Do not use for hearth-deploy.
       Host hearth-tailnet
