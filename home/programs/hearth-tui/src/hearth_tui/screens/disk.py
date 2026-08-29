@@ -43,7 +43,16 @@ class DiskScreen(Screen):
 
     @work(thread=True)
     def decide_action(self) -> None:
-        result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
+        try:
+            result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
+        except ssh.SshError as exc:
+            # Never guess an action from a status we could not read — a park
+            # decided on missing evidence would stop Jellyfin and unmount COLD.
+            self.app.call_from_thread(
+                self.query_one("#disk-log", RichLog).write,
+                f"[red]Could not read COLD status: {exc}[/red]",
+            )
+            return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
         # hearth-disk status's probe order (hosts/Hearth/disk.nix probe_status):
@@ -86,8 +95,15 @@ class DiskScreen(Screen):
     @work
     async def run_action_stream(self, action: str) -> None:
         log = self.query_one("#disk-log", RichLog)
-        async for line in ssh.stream("hearth-disk", action, sudo=True):
-            if "safe to unplug" in line:
-                log.write(f"[b yellow]{line}[/b yellow]")
-            else:
-                log.write(line)
+        try:
+            async for line in ssh.stream("hearth-disk", action, sudo=True):
+                if "safe to unplug" in line:
+                    log.write(f"[b yellow]{line}[/b yellow]")
+                else:
+                    log.write(line)
+        except ssh.SshError as exc:
+            log.write(f"[red]{action} interrupted: {exc}[/red]")
+            log.write(
+                "[yellow]COLD may be mid-transition — check `hearth-disk status` "
+                "before unplugging anything.[/yellow]"
+            )

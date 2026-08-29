@@ -160,7 +160,11 @@ class HealthcheckWidget(Static):
             )
             return
 
-        result = ssh.run_script(script, sudo=True, timeout=30)
+        try:
+            result = ssh.run_script(script, sudo=True, timeout=30)
+        except ssh.SshError as exc:
+            self.app.call_from_thread(self.update, f"[b]health[/b]\n[red]{exc}[/red]")
+            return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
         if rows:
@@ -191,12 +195,16 @@ class NetworkWidget(Static):
 
     @work(thread=True)
     def run_network(self) -> None:
-        result = ssh.run(
-            "bash",
-            "-c",
-            "ip -br addr; echo ---; ip -br link; echo ---; ip route show default",
-            timeout=15,
-        )
+        try:
+            result = ssh.run(
+                "bash",
+                "-c",
+                "ip -br addr; echo ---; ip -br link; echo ---; ip route show default",
+                timeout=15,
+            )
+        except ssh.SshError as exc:
+            self.app.call_from_thread(self.update, f"[b]network[/b]\n[red]{exc}[/red]")
+            return
         text = result.stdout or result.stderr or "(no output)"
         self.app.call_from_thread(self.update, f"[b]network[/b]\n{text}")
 
@@ -220,7 +228,11 @@ class DiskStatusWidget(Static):
 
     @work(thread=True)
     def run_status(self) -> None:
-        result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
+        try:
+            result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
+        except ssh.SshError as exc:
+            self.app.call_from_thread(self.update, f"[b]disk[/b]\n[red]{exc}[/red]")
+            return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
         if rows:
@@ -253,7 +265,11 @@ class SystemWidget(Static):
 
     @work(thread=True)
     def run_system_stats(self) -> None:
-        result = ssh.run("bash", "-c", SYSTEM_STATS_SCRIPT, timeout=15)
+        try:
+            result = ssh.run("bash", "-c", SYSTEM_STATS_SCRIPT, timeout=15)
+        except ssh.SshError as exc:
+            self.app.call_from_thread(self.update, f"[b]system[/b]\n[red]{exc}[/red]")
+            return
         text = result.stdout or result.stderr or ""
         cpu_pct, mem_total_kb, mem_avail_kb, temps = _parse_system_stats(text)
 
@@ -291,14 +307,20 @@ class ResticRunWidget(Static):
 
     @work(thread=True)
     def run_refresh(self) -> None:
-        result = ssh.run(
-            "systemctl",
-            "show",
-            RESTIC_UNIT,
-            "-p",
-            "ActiveState,Result,ExecMainStartTimestamp,ExecMainExitTimestamp",
-            timeout=15,
-        )
+        try:
+            result = ssh.run(
+                "systemctl",
+                "show",
+                RESTIC_UNIT,
+                "-p",
+                "ActiveState,Result,ExecMainStartTimestamp,ExecMainExitTimestamp",
+                timeout=15,
+            )
+        except ssh.SshError as exc:
+            self.app.call_from_thread(
+                self.update, f"[b]restic — last run[/b]\n[red]{exc}[/red]"
+            )
+            return
         text = (result.stdout or result.stderr or "(no output)").strip()
         self.app.call_from_thread(self.update, f"[b]restic — last run[/b]\n{text}")
 
@@ -325,7 +347,13 @@ class ResticSnapshotsWidget(Static):
 
     @work(thread=True)
     def run_refresh(self) -> None:
-        cat_result = ssh.run("systemctl", "cat", RESTIC_UNIT, sudo=True, timeout=15)
+        try:
+            cat_result = ssh.run("systemctl", "cat", RESTIC_UNIT, sudo=True, timeout=15)
+        except ssh.SshError as exc:
+            self.app.call_from_thread(
+                self.update, f"[b]restic — snapshots[/b]\n[red]{exc}[/red]"
+            )
+            return
         restic_bin, repo, password_file = _parse_unit_config(cat_result.stdout)
         if not (restic_bin and repo and password_file):
             self.app.call_from_thread(
@@ -335,17 +363,23 @@ class ResticSnapshotsWidget(Static):
             )
             return
 
-        snap_result = ssh.run(
-            restic_bin,
-            "-r",
-            repo,
-            "--password-file",
-            password_file,
-            "snapshots",
-            "--json",
-            sudo=True,
-            timeout=30,
-        )
+        try:
+            snap_result = ssh.run(
+                restic_bin,
+                "-r",
+                repo,
+                "--password-file",
+                password_file,
+                "snapshots",
+                "--json",
+                sudo=True,
+                timeout=30,
+            )
+        except ssh.SshError as exc:
+            self.app.call_from_thread(
+                self.update, f"[b]restic — snapshots[/b]\n[red]{exc}[/red]"
+            )
+            return
         self._render_snapshots(snap_result.stdout, snap_result.stderr)
 
     def _render_snapshots(self, stdout: str, stderr: str) -> None:
