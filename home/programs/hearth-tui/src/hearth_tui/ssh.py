@@ -54,7 +54,16 @@ def run(*args: str, sudo: bool = False, timeout: float = 15) -> subprocess.Compl
         _remote_command(args, sudo),
     ]
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        # stdin=DEVNULL, never inherited: ssh reads stdin by default, so under
+        # the TUI it would consume the terminal Textual is reading and swallow
+        # the operator's keystrokes.
+        return subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
     except subprocess.TimeoutExpired as exc:
         raise SshError(f"{HOST}: timed out after {timeout}s running {args[0]}") from exc
     except OSError as exc:
@@ -72,7 +81,10 @@ async def stream(*args: str, sudo: bool = False) -> AsyncIterator[str]:
     cmd = ["ssh", "-o", "BatchMode=yes", HOST, _remote_command(args, sudo)]
     try:
         proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
     except OSError as exc:
         raise SshError(f"{HOST}: {exc}") from exc
