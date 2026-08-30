@@ -418,18 +418,21 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ## 6. Open questions
 
-1. **Better router:** ~~which model / when~~ — **reframed 2026-08-30. Do not
-   buy yet; the fault is not diagnosed.** The real symptom is that the TV and
-   phones drop on `AncientGlade` (the on-hand TP-Link AX3000) and now sit on
-   GiGstreem, stable but outside the intranet — no Pi-hole, no
-   `home.wizt.org`. Measurement cleared the uplink (3.1 ms), Hearth (3.8 ms),
-   and AncientGlade's *latency* (5.7 ms), but those tests ran on a client that
-   never drops, so they say nothing about association stability. Free checks
-   come first (DHCP lease time, split vs merged SSID, firmware, eco features,
-   DTIM). Two constraints found while investigating: Caddy binds the tailnet
-   address only, so the TV could never reach `home.wizt.org` on *any* Wi-Fi
-   network; and phones can run Tailscale, so they may need no network change
-   at all. If the free checks fail, buy an **access point**, not a router. See
+1. **Better router:** ~~which model / when~~ — **diagnosed 2026-08-30; likely
+   no purchase.** The fault is that the TV and phones drop **mid-use** on
+   `AncientGlade`, which runs a **merged SSID with Smart Connect**. Smart
+   Connect steers clients between bands by deauthenticating them, and cheap TV
+   and phone radios often fail to re-associate. This explains why stationary
+   Tawa never drops on the same AP, why latency measured fine (5.7 ms — the
+   link is healthy *while associated*), and why a 2.4 GHz channel change did
+   nothing. TWT and OFDMA are already disabled, so Smart Connect is the one
+   known drop-causing feature left on. **Fix is free:** split the SSIDs, pin
+   the TV to 5 GHz, pin the 5 GHz channel, update firmware. If that holds, move
+   the TV and Hearth onto AncientGlade for a real DHCP reservation — which is
+   what the TV actually needs, since it only wants Jellyfin at an address that
+   never changes (a TV remote makes retyping painful) and does **not** need
+   `home.wizt.org`. Buy an **access point** only if 5 GHz coverage at the TV
+   proves short. See
    [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
 2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
    sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is

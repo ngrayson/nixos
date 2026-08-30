@@ -107,37 +107,58 @@ fine.
   [`profiles/media-server.nix`](../profiles/media-server.nix) already sets
   `networking.networkmanager.wifi.powersave = false`, and it is working.
 
-## The open question: why does AncientGlade drop sleeping clients?
+## Diagnosis: Smart Connect band steering
 
-The asymmetry to explain: **Tawa stays associated to AncientGlade; the TV and
-phones do not.** The clearest difference between those clients is that Tawa is
-a desktop that never sleeps, while a TV and phones sleep constantly and rely on
-the AP buffering frames for them and on renewing DHCP leases after waking.
+**Confirmed inputs (2026-08-30):** the TV and phones drop **mid-use**, not after
+idling, and `AncientGlade` runs a **merged SSID with Smart Connect enabled**.
 
-That points at AP-side handling of power-saving clients rather than at RF
-quality — consistent with the latency measurements, which found nothing wrong
-with the link itself. **This is a hypothesis, not a finding.** Three earlier
-hypotheses in this document's history were tested and killed (a saturated
-building uplink, 2.4 GHz channel congestion, and steering on the building's
-APs); this one has not been tested at all.
+That combination is a well-known failure mode. Smart Connect moves a client
+between the 2.4 GHz and 5 GHz radios by **deauthenticating it** to force
+re-association on the other band. Well-behaved clients re-associate in
+milliseconds. Cheap TV and phone radios frequently do not — they take the
+deauth as a disconnect and drop the session.
 
-Checks worth running on AncientGlade before any purchase, cheapest first:
+This explains every observation on record, including the one that defeated the
+three earlier hypotheses:
 
-1. **DHCP lease time and pool size.** Short leases plus a sleeping client is a
-   classic drop-off pattern. Longer leases, and a pool large enough for every
-   device, cost nothing.
-2. **Merged vs split SSID.** If Smart Connect / band steering is on, splitting
-   2.4 GHz and 5 GHz into separately named SSIDs and pinning the TV to one
-   stops band-flap re-association failures.
-3. **Firmware version.** Some Archer AX-series firmware had known 2.4 GHz
-   stability regressions.
-4. **Any "eco", "green", or airtime-fairness feature**, which can be
-   aggressive with idle clients.
-5. **DTIM interval**, which governs how the AP buffers for sleeping clients.
+| Observation | Explained by steering? |
+|---|---|
+| TV and phones drop **mid-use** | Yes — steering decisions fire on load and signal changes at any time, including mid-session |
+| **Tawa never drops** on the same AP | Yes — a stationary desktop with a strong, stable signal never triggers a steering decision, so it is never deauthed |
+| Latency measured **fine** (5.7 ms) | Yes — the link is healthy *while associated*; steering breaks association, not throughput |
+| Moving 2.4 GHz ch7 → ch11 **changed nothing** | Yes — this was never RF congestion |
+| GiGstreem holds the same clients fine | Yes — the building's managed APs use standards-based roaming (802.11k/v/r) rather than deauth-based steering |
 
-If those are exhausted and the drops persist, the AX3000 is genuinely unfit for
-the role and replacing the radio — an **access point**, not a router — becomes
-the justified purchase.
+**Ruled out:** DFS radar events, another common cause of mid-use drops. The
+5 GHz radio was observed on channels 149 and 153, both UNII-3 and non-DFS, so
+no radar-triggered channel change is possible there.
+
+**Also already eliminated (2026-08-30):** **TWT** (Target Wake Time) and
+**OFDMA** are both already disabled on the AX3000. Those are the other two
+Wi-Fi 6 features that commonly cause client compatibility failures, so they are
+off the table — which leaves Smart Connect as the one known drop-causing
+feature still enabled.
+
+**Not ruled out:** auto channel selection. The 5 GHz radio was seen to move
+from ch149 to ch153 during the investigation. That was most likely a
+reconfiguration side effect, but a router periodically re-selecting its channel
+on "auto" also drops clients mid-use, and pinning the channel costs nothing.
+
+### The fix, in order, all free
+
+1. **Disable Smart Connect.** Split into two separately named SSIDs — e.g.
+   `AncientGlade` (5 GHz) and `AncientGlade-2G` (2.4 GHz). This is the primary
+   fix and directly targets the diagnosis.
+2. **Pin the TV to the 5 GHz SSID.** With bands split, the TV can no longer be
+   steered at all. 5 GHz is also the less contended band here (21 APs versus
+   45).
+3. **Pin the 5 GHz channel** manually instead of leaving it on auto, to remove
+   re-selection as a second source of mid-use drops.
+4. **Update firmware** while in the admin UI.
+
+If the drops stop, no purchase is needed and the plan below unblocks. If they
+persist after all four, the AX3000's radio is genuinely unfit and Goal C
+applies.
 
 ## Constraint discovered 2026-08-30: the intranet is tailnet-only
 
@@ -189,27 +210,36 @@ depend on which Wi-Fi they are on.
 them on the connection that currently works, which means the remaining question
 is only about one device.
 
-### Goal B — get the TV onto the intranet. Diagnose before buying.
+### Goal B — the TV. Fix the steering first; everything else follows.
 
-The TV cannot run Tailscale, so it needs LAN-local access, and it currently
-drops on the only LAN that could offer it. Two sub-problems:
+**Clarified requirement (2026-08-30):** the TV does **not** need
+`home.wizt.org`. Jellyfin alone is enough. What it needs is an address that
+**never changes**, because re-entering one with a TV remote's on-screen
+keyboard is the actual pain being solved.
 
-**B1 — make `AncientGlade` hold the TV.** Work the checklist in "The open
-question" above (lease time, split SSID, firmware, eco features, DTIM). All
-free. Until this is attempted, there is no evidence that a *new* AP would
-behave any differently, because the fault mode has never been characterised.
+That reduces the whole problem to *stable addressing for Hearth on whatever
+network the TV is on* — which is exactly the H1 blocker, and it converges with
+the steering fix:
 
-**B2 — make the intranet reachable from the LAN at all.** Even a perfectly
-stable AncientGlade does not deliver `home.wizt.org` to the TV, because Caddy
-listens on the tailnet address only. Either bind Caddy to Hearth's LAN address
-as well (with a firewall rule — see open question 3) and resolve the name
-locally, or accept Jellyfin-by-IP for the TV and drop the hostname
-requirement. **This is a config decision, not a purchase**, and it is
-independent of which router the TV sits behind.
+**B1 — fix Smart Connect** (above). Free, and the linchpin: until the TV can
+stay associated to AncientGlade, it cannot move there, and GiGstreem is the
+only network it can use.
 
-Note that B2 has a bearing on B1's urgency: if the TV only ever needed Jellyfin
-by IP, it can have that on GiGstreem today at `172.16.141.38:8096`, and the
-whole router question reduces to whether Pi-hole DNS is worth moving it.
+**B2 — then move the TV and Hearth to AncientGlade together.** This is what
+delivers the fixed address. On GiGstreem, Hearth's `172.16.141.38` is a
+*hand-pinned* static address on a DHCP pool nobody controls — decision 18
+records the accepted risk that the pool reissues `.38` while Hearth is offline,
+which is precisely the event that forces a retype on the TV remote. On
+AncientGlade the address is a **real DHCP reservation**, and the collision risk
+goes away. Pi-hole for the TV comes along for free, since AncientGlade's DHCP
+can hand out the DNS server.
+
+**B3 — enter the address once in the TV's Jellyfin app**, which stores it.
+No hostname, no DNS, no Caddy changes required.
+
+Note what is *not* needed: binding Caddy to the LAN, resolving `home.wizt.org`
+locally, or exposing the intranet beyond the tailnet. Those stay tailnet-only
+as designed (decision 7).
 
 ### Goal C — only if B1's checklist is exhausted, buy an access point.
 
@@ -251,38 +281,32 @@ whenever signal allows.
 
 ## Open questions
 
-1. **What is the drop pattern on AncientGlade?** Do the TV and phones drop
-   after idling, or during active use? Which band were they on — 2.4 GHz,
-   5 GHz, or a merged Smart Connect SSID? This is the single most useful
-   unknown: it separates a sleeping-client bug from an RF or firmware fault,
-   and it decides whether the free checklist is even pointed the right way.
-2. **Does the free checklist fix it?** Lease time, split SSID, firmware, eco
-   features, DTIM. Until this is run, no purchase can be justified, because
-   the fault has never been characterised.
-3. **Is `172.16.141.0/24` a building-wide shared segment?** Three tenant-facing
+1. **Does disabling Smart Connect stop the drops?** The one test that matters.
+   Free, reversible, and it gates every other decision in this document. If it
+   works, nothing is bought and Goal B proceeds.
+2. **Is `172.16.141.0/24` a building-wide shared segment?** Three tenant-facing
    SSIDs are visible, and an unidentified `172.16.141.36` appeared in Tawa's
    ARP table alongside Tawa's `.23` and Hearth's `.38`. If neighbours share
    that L2, Jellyfin at `172.16.141.38:8096` is already reachable by the
    building — Hearth's sshd is key-only and fine, but Jellyfin is not
-   authenticated at the network layer. This becomes urgent if Caddy is bound to
-   the LAN address per B2. Not verified: scanning the subnet means scanning
-   neighbours.
-4. **Does the TV actually need `home.wizt.org`, or is Jellyfin-by-IP enough?**
-   If by-IP suffices, the TV can stay on GiGstreem indefinitely and the only
-   remaining reason to move it is Pi-hole. This question can collapse most of
-   this document.
-5. **Where should Pi-hole run?** plan.md schedules it on the Pi Zero W behind
-   the wired LAN. But the Pi Zero W is 2.4 GHz-only with no ethernet, and the
-   devices that need it are on GiGstreem. DNS on Hearth — already stable on
-   GiGstreem at `172.16.141.38` — would serve the TV directly and the phones
-   over the tailnet, without anything moving. Worth deciding before the wired
-   LAN is built around the Pi.
-6. **Is the on-hand switch PoE?** Decides whether Goal C needs an injector.
-7. **Should Hearth actually be wired?** It is on Wi-Fi today and performing
-   well. plan.md decision 15 assumes a USB-A NIC that is not installed. Wiring
-   it is still worthwhile for a media server, but it is not currently blocking
-   anything.
-8. **Does the Opal have a role?** Only if AncientGlade is retired; adding it
+   authenticated at the network layer. Moving Hearth and the TV to
+   AncientGlade (Goal B2) resolves this as a side effect. Not verified:
+   scanning the subnet means scanning neighbours.
+3. **Does AncientGlade cover the TV's location on 5 GHz?** Goal B pins the TV
+   to the 5 GHz band, which has shorter range than 2.4 GHz. If the TV sits far
+   from the router this is the thing that fails, and it is the only remaining
+   scenario in which an access point gets bought.
+4. **Where should Pi-hole run?** plan.md schedules it on the Pi Zero W behind
+   the wired LAN, but that Pi is 2.4 GHz-only with no ethernet. If the TV moves
+   to AncientGlade (Goal B2), AncientGlade's DHCP can hand out whatever
+   resolver address is chosen, and DNS on Hearth would serve the TV directly
+   and the phones over the tailnet. Worth deciding before the wired LAN is
+   built around the Pi.
+5. **Is the on-hand switch PoE?** Only matters if Goal C is ever reached.
+6. **Should Hearth actually be wired?** It is on Wi-Fi today and performing
+   well (3.8 ms). plan.md decision 15 assumes a USB-A NIC that is not
+   installed. Worthwhile for a media server, but not blocking anything.
+7. **Does the Opal have a role?** Only if AncientGlade is retired; adding it
    behind AncientGlade would mean triple NAT.
 
 ## Sources
