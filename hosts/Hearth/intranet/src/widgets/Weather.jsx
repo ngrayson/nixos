@@ -136,17 +136,26 @@ function loadPlace(loc, unit) {
     "&wind_speed_unit=" +
     wind +
     "&timezone=auto";
-  const air =
-    "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" +
-    encodeURIComponent(loc.latitude) +
-    "&longitude=" +
-    encodeURIComponent(loc.longitude) +
-    "&current=us_aqi&timezone=auto";
-  return Promise.all([fetchJson(forecast), fetchJson(air)]).then(([forecastJson, airJson]) => ({
+  // ACI is not fetched here: it comes from /aqi.json, which hearth-intranet-aqi
+  // writes server-side from AirNow's monitoring stations (the API key must not
+  // reach the browser). Open-Meteo's us_aqi was a modeled value that disagreed
+  // with AirNow.gov and most weather apps.
+  return fetchJson(forecast).then((forecastJson) => ({
     loc,
     forecast: forecastJson,
-    air: airJson,
   }));
+}
+
+const AQI_REFRESH_MS = 600000;
+
+// aqi.json carries one entry per configured location, each tagged with its
+// index in weather.locations. Match on that index rather than array position:
+// each Weather variant renders only a filtered subset of the locations, so
+// positions do not line up.
+function aqiAt(payload, index) {
+  const rows = (payload && payload.locations) || [];
+  const row = rows.find((r) => r && r.index === index);
+  return row && row.aqi != null ? row.aqi : null;
 }
 
 function ForecastStrip({ daily, unit }) {
@@ -230,11 +239,10 @@ function ForecastModal({ place, unit, aqi, onClose }) {
   );
 }
 
-function Place({ place, unit, detail, showName }) {
+function Place({ place, unit, detail, showName, aqi }) {
   const { hour12 } = useTimeFormat();
   const cur = (place.forecast && place.forecast.current) || {};
   const daily = (place.forecast && place.forecast.daily) || {};
-  const aqi = place.air && place.air.current ? place.air.current.us_aqi : null;
   const phase = moonPhase(daily.moon_phase && daily.moon_phase[0]);
   const [open, setOpen] = useState(false);
   const name = place.loc.name || "Location";
@@ -289,20 +297,25 @@ function Place({ place, unit, detail, showName }) {
 export default function Weather({ variant = "combo" }) {
   const weather = widget("weather");
   const locations = weather.locations || [];
-  const valid = locations.filter((loc) => loc && loc.latitude != null && loc.longitude != null);
+  // Carry each location's index in the configured list through the filtering
+  // below, so the ACI lookup can find its row in aqi.json.
+  const valid = locations
+    .map((loc, index) => ({ loc, index }))
+    .filter(({ loc }) => loc && loc.latitude != null && loc.longitude != null);
   const unit = tempUnit(weather);
   const focus = variant === "focus";
   const picked = focus
-    ? valid.filter((loc) => placeDetail(loc) === "long").slice(0, 1)
-    : valid.filter((loc) => placeDetail(loc) === "short");
-  const title = focus && picked.length ? `${picked[0].name || "Location"} Weather` : "Weather";
+    ? valid.filter(({ loc }) => placeDetail(loc) === "long").slice(0, 1)
+    : valid.filter(({ loc }) => placeDetail(loc) === "short");
+  const title = focus && picked.length ? `${picked[0].loc.name || "Location"} Weather` : "Weather";
   const [places, setPlaces] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [aqiData, setAqiData] = useState(null);
 
   useEffect(() => {
     if (!picked.length) return;
     let cancelled = false;
-    Promise.all(picked.map((loc) => loadPlace(loc, unit)))
+    Promise.all(picked.map(({ loc, index }) => loadPlace(loc, unit).then((p) => ({ ...p, index }))))
       .then((next) => {
         if (!cancelled) setPlaces(next);
       })
@@ -311,6 +324,32 @@ export default function Weather({ variant = "combo" }) {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // ACI polls independently of the forecast: a missing or failed aqi.json
+  // leaves the reading as "—" rather than taking the whole card down.
+  useEffect(() => {
+    if (!picked.length) return undefined;
+    let cancelled = false;
+    function poll() {
+      fetch("/aqi.json")
+        .then((res) => {
+          if (!res.ok) throw new Error("aqi " + res.status);
+          return res.json();
+        })
+        .then((data) => {
+          if (!cancelled) setAqiData(data);
+        })
+        .catch(() => {
+          if (!cancelled) setAqiData(null);
+        });
+    }
+    poll();
+    const id = setInterval(poll, AQI_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
     };
   }, []);
 
@@ -339,6 +378,7 @@ export default function Weather({ variant = "combo" }) {
             unit={unit}
             detail={focus ? "long" : "short"}
             showName={!focus}
+            aqi={aqiAt(aqiData, place.index)}
           />
         ))}
       </div>
