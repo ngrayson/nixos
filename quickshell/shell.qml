@@ -233,6 +233,7 @@ ShellRoot {
 		if (!device.anyMounted)
 			lines.push("Not mounted");
 		lines.push(device.anyBusy ? "In use" : "Safe to remove");
+		lines.push("Left-click: open in Dolphin");
 		lines.push("Right-click: eject");
 		return lines.join("\n");
 	}
@@ -1269,11 +1270,19 @@ ShellRoot {
 								required property var modelData
 
 								tipKind: "usb"
-								acceptedButtons: Qt.RightButton
+								acceptedButtons: Qt.LeftButton | Qt.RightButton
 								// StatusPill arms the tip without a payload, so re-arm
 								// with this device attached.
 								onEntered: barWindow.armTip(usbPill, "usb", usbPill.modelData)
 								onClicked: mouse => {
+									if (mouse.button === Qt.LeftButton) {
+										barWindow.disarmTip();
+										// Hyprland.dispatch, not a Process: Dolphin must
+										// outlive the bar, and this is how the other pills
+										// launch GUI apps.
+										Hyprland.dispatch("exec qs-usb-open " + usbPill.modelData.disk);
+										return;
+									}
 									if (mouse.button !== Qt.RightButton)
 										return;
 									barWindow.disarmTip();
