@@ -8,11 +8,11 @@ from __future__ import annotations
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, ListItem, ListView, RichLog, Static
+from textual.widgets import Footer, Header, ListView, RichLog
 
 from hearth_tui import ssh
+from hearth_tui.widgets import MenuList
 
 UNITS: list[str] = ["jellyfin", "caddy", "restic-backups-hearth", "tailscaled", "sshd"]
 
@@ -24,6 +24,20 @@ TAIL_GROUP = "logs-tail"
 class LogsScreen(Screen):
     """Live journalctl tail for one of Hearth's key services at a time."""
 
+    DEFAULT_CSS = """
+    LogsScreen {
+        border: round $primary;
+    }
+    LogsScreen #log-output {
+        border: round $primary;
+        padding: 0 1;
+        height: 1fr;
+    }
+    LogsScreen #log-units {
+        height: auto;
+    }
+    """
+
     BINDINGS = [
         Binding("x", "stop_stream", "Stop"),
         Binding("escape", "app.pop_screen", "Back"),
@@ -31,14 +45,17 @@ class LogsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Horizontal():
-            yield ListView(
-                *(ListItem(Static(unit), name=unit) for unit in UNITS),
-                id="log-units",
-            )
-            with VerticalScroll():
-                yield RichLog(id="log-output", wrap=True, markup=False, max_lines=2000)
+        yield RichLog(id="log-output", wrap=True, markup=False, max_lines=2000)
+        yield MenuList([(unit, unit) for unit in UNITS], id="log-units")
         yield Footer()
+
+    def on_mount(self) -> None:
+        # Mirrors MainMenu/DeployScreen: focus the menu so arrow keys drive
+        # unit selection immediately instead of landing elsewhere.
+        self.query_one("#log-output", RichLog).border_title = "logs"
+        menu = self.query_one(MenuList)
+        menu.border_title = "units"
+        menu.focus()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         unit = event.item.name
@@ -46,7 +63,7 @@ class LogsScreen(Screen):
             return
         log = self.query_one("#log-output", RichLog)
         log.clear()
-        log.write(f"-- following {unit} --")
+        log.border_title = f"following {unit}"
         self.run_tail(unit)
 
     def action_stop_stream(self) -> None:
@@ -59,4 +76,5 @@ class LogsScreen(Screen):
             async for line in ssh.stream("journalctl", "-u", unit, "-f", "-n", "100"):
                 log.write(line)
         except ssh.SshError as exc:
-            log.write(f"[red]tail stopped: {exc}[/red]")
+            # markup=False (journal lines are arbitrary text), so no [red] here.
+            log.write(f"tail stopped: {exc}")

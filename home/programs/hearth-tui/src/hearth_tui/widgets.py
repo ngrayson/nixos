@@ -35,6 +35,9 @@ height: auto;
 # MainMenu.compose) so each takes exactly half that row's width.
 HALF_WIDTH_CSS = "width: 1fr;"
 
+# Shared in-flight placeholder, so every panel reports a refresh identically.
+REFRESHING = "[dim]Refreshing…[/dim]"
+
 # Two /proc/stat samples 0.2s apart give an instantaneous CPU% (a single
 # sample only has cumulative totals since boot); /proc/meminfo and the
 # thermal-zone files under /sys need no extra packages on any Linux host.
@@ -232,10 +235,11 @@ class HealthcheckWidget(Static):
     """
 
     def on_mount(self) -> None:
+        self.border_title = "health"
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        self.update("Refreshing…")
+        self.update(REFRESHING)
         self.run_healthcheck()
 
     @work(thread=True)
@@ -251,7 +255,7 @@ class HealthcheckWidget(Static):
         try:
             result = ssh.run_script(script, sudo=True, timeout=30)
         except ssh.SshError as exc:
-            self.app.call_from_thread(self.update, f"[b]health[/b]\n[red]{exc}[/red]")
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
         text = result.stdout + result.stderr
         rows = parse_ok_fail_lines(text)
@@ -269,7 +273,7 @@ class HealthcheckWidget(Static):
             ]
         else:
             lines = [text.strip() or "(no output)"]
-        self.app.call_from_thread(self.update, "[b]health[/b]\n" + "\n".join(lines))
+        self.app.call_from_thread(self.update, "\n".join(lines))
 
 
 class NetworkWidget(Static):
@@ -282,10 +286,11 @@ class NetworkWidget(Static):
     """
 
     def on_mount(self) -> None:
+        self.border_title = "network"
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        self.update("Refreshing…")
+        self.update(REFRESHING)
         self.run_network()
 
     @work(thread=True)
@@ -298,15 +303,13 @@ class NetworkWidget(Static):
                 timeout=15,
             )
         except ssh.SshError as exc:
-            self.app.call_from_thread(self.update, f"[b]network[/b]\n[red]{exc}[/red]")
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
         text = result.stdout or result.stderr or "(no output)"
         # Fall back to the raw output rather than an empty panel if the shape
         # is ever something the parser does not recognise.
         lines = _parse_network(text) or [text.strip() or "(no output)"]
-        self.app.call_from_thread(
-            self.update, "[b]network[/b]\n" + "\n".join(lines)
-        )
+        self.app.call_from_thread(self.update, "\n".join(lines))
 
 
 class DiskStatusWidget(Static):
@@ -331,10 +334,11 @@ class DiskStatusWidget(Static):
     """
 
     def on_mount(self) -> None:
+        self.border_title = "disk"
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        self.update("Refreshing…")
+        self.update(REFRESHING)
         self.run_status()
 
     @work(thread=True)
@@ -342,7 +346,7 @@ class DiskStatusWidget(Static):
         try:
             result = ssh.run("hearth-disk", "status", sudo=True, timeout=15)
         except ssh.SshError as exc:
-            self.app.call_from_thread(self.update, f"[b]disk[/b]\n[red]{exc}[/red]")
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             self.app.call_from_thread(self.post_message, self.StatusReady([]))
             return
         text = result.stdout + result.stderr
@@ -363,7 +367,7 @@ class DiskStatusWidget(Static):
             ]
         else:
             lines = [text.strip() or "(no output)"]
-        self.app.call_from_thread(self.update, "[b]disk[/b]\n" + "\n".join(lines))
+        self.app.call_from_thread(self.update, "\n".join(lines))
 
 
 class SystemWidget(Static):
@@ -379,10 +383,11 @@ class SystemWidget(Static):
     """
 
     def on_mount(self) -> None:
+        self.border_title = "system"
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        self.update("Refreshing…")
+        self.update(REFRESHING)
         self.run_system_stats()
 
     @work(thread=True)
@@ -390,7 +395,7 @@ class SystemWidget(Static):
         try:
             result = ssh.run("bash", "-c", SYSTEM_STATS_SCRIPT, timeout=15)
         except ssh.SshError as exc:
-            self.app.call_from_thread(self.update, f"[b]system[/b]\n[red]{exc}[/red]")
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
         text = result.stdout or result.stderr or ""
         cpu_pct, mem_total_kb, mem_avail_kb, temps = _parse_system_stats(text)
@@ -407,7 +412,7 @@ class SystemWidget(Static):
             lines.append(f"{name}  {celsius:.1f}°C")
         if not lines:
             lines = [text.strip() or "(no output)"]
-        self.app.call_from_thread(self.update, "[b]system[/b]\n" + "\n".join(lines))
+        self.app.call_from_thread(self.update, "\n".join(lines))
 
 
 class ResticRunWidget(Static):
@@ -421,10 +426,11 @@ class ResticRunWidget(Static):
     """
 
     def on_mount(self) -> None:
+        self.border_title = "restic — last run"
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        self.update("Refreshing…")
+        self.update(REFRESHING)
         self.run_refresh()
 
     @work(thread=True)
@@ -439,12 +445,10 @@ class ResticRunWidget(Static):
                 timeout=15,
             )
         except ssh.SshError as exc:
-            self.app.call_from_thread(
-                self.update, f"[b]restic — last run[/b]\n[red]{exc}[/red]"
-            )
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
         text = (result.stdout or result.stderr or "(no output)").strip()
-        self.app.call_from_thread(self.update, f"[b]restic — last run[/b]\n{text}")
+        self.app.call_from_thread(self.update, text)
 
 
 class ResticSnapshotsWidget(Static):
@@ -461,10 +465,11 @@ class ResticSnapshotsWidget(Static):
     """
 
     def on_mount(self) -> None:
+        self.border_title = "restic — snapshots"
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        self.update("Refreshing…")
+        self.update(REFRESHING)
         self.run_refresh()
 
     @work(thread=True)
@@ -472,9 +477,7 @@ class ResticSnapshotsWidget(Static):
         try:
             cat_result = ssh.run("systemctl", "cat", RESTIC_UNIT, sudo=True, timeout=15)
         except ssh.SshError as exc:
-            self.app.call_from_thread(
-                self.update, f"[b]restic — snapshots[/b]\n[red]{exc}[/red]"
-            )
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
         restic_bin, repo, password_file = _parse_unit_config(cat_result.stdout)
         if not (restic_bin and repo and password_file):
@@ -498,9 +501,7 @@ class ResticSnapshotsWidget(Static):
                 timeout=30,
             )
         except ssh.SshError as exc:
-            self.app.call_from_thread(
-                self.update, f"[b]restic — snapshots[/b]\n[red]{exc}[/red]"
-            )
+            self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
         self._render_snapshots(snap_result.stdout, snap_result.stderr)
 
@@ -527,4 +528,4 @@ class ResticSnapshotsWidget(Static):
                 text = "\n".join(lines)
         else:
             text = f"[red]Unexpected restic output: {stdout.strip()}[/red]"
-        self.app.call_from_thread(self.update, f"[b]restic — snapshots[/b]\n{text}")
+        self.app.call_from_thread(self.update, text)
