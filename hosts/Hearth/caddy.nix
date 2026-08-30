@@ -143,6 +143,10 @@ in {
           root * /run/hearth-intranet
           file_server
         }
+        handle /aqi.json {
+          root * /run/hearth-intranet
+          file_server
+        }
         handle /gallery.json {
           root * /run/hearth-intranet
           file_server
