@@ -405,7 +405,8 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
 ## 6. Open questions
 
 1. **Better router:** which model / when — gates the final H1 wired topology.
-   (TBD.)
+   See [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md)
+   for candidates and pricing; model choice still Nick's call.
 2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
    sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
    decided).
