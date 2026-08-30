@@ -1,169 +1,213 @@
-# Router recommendations for Hearth's wired LAN (H1)
+# Router requirements and recommendations for Hearth's LAN (H1)
 
-Resolves open question 1 in [`hosts/Hearth/plan.md`](../hosts/Hearth/plan.md) §6
-("**Better router:** which model / when — gates the final H1 wired topology").
+**Second pass, 2026-08-30.** This replaces the first version of this document,
+which recommended a ~$228 purchase. Measurement does not support that
+recommendation, and three of the first version's load-bearing assumptions were
+wrong. Corrections are recorded in "What changed" below rather than quietly
+edited out, because the wrong framing is easy to re-derive from the repo's own
+docs.
 
-The ISP-provided GiGstreem gateway **has no DHCP-reservation UI** (plan.md
-decision 18). That is the concrete blocker: Hearth's address is currently pinned
-by hand at `172.16.141.38/24` on its own NetworkManager profile, and the ISP
-pool can reissue `.38` if Hearth is offline. Replacing the edge router is what
-unblocks the final H1 topology.
+Relates to open question 1 in [`hosts/Hearth/plan.md`](../hosts/Hearth/plan.md) §6.
 
-**Researched 2026-08-30. Prices move constantly — re-check before buying.**
+## Verdict
 
-## Requirements
+**No router purchase is justified by the current evidence.** The reported
+symptoms — a smart TV and phones repeatedly dropping their connections, and
+YouTube stuttering — are not caused by inadequate hardware on hand. Every path
+that could be measured from inside the flake is healthy, including the TP-Link
+that was suspected. The two problems the first version conflated are separate,
+and neither is solved by the router it recommended:
 
-From plan.md §3 (target architecture), §4 (H1), decisions 13/15/18, and the
-Conveyor cards "Wire Hearth to the dedicated LAN (H1-final)" and "Run Pi-hole on
-the Raspberry Pi Zero W".
+- **Clients dropping** is an association problem on the apartment's managed
+  Wi-Fi, which no downstream purchase can change.
+- **The H1 blocker** is DHCP reservations, and the TP-Link already on the wall
+  has an Address Reservation page.
 
-- **Static DHCP reservations are mandatory.** This is the whole reason for the
-  purchase (decision 18). Anything that cannot pin a MAC to an address is
-  disqualified.
-- **Already on hand — do not re-buy:** a spare TP-Link router (becomes the
-  downstream NAT box for the dedicated server LAN), an ethernet switch, a
-  Raspberry Pi Zero W (LAN DNS via Pi-hole, its own card), and a USB-A gigabit
-  adapter for Hearth (separate purchase, not a router).
-- **Position in the topology:** the new router sits at the WAN edge. Per
-  plan.md §3 the final chain is
-  `Internet → new router → TP-Link (NAT, server LAN) → switch → Hearth + Pi Zero W`.
-  It does **not** need to serve the dedicated server LAN itself — the on-hand
-  TP-Link does that — but it must serve the rest of the household.
-- **Wi-Fi coverage** at least matching the current ISP gateway, since the LG TV,
-  phones, workstations, and the future Go2 kiosk are on it today.
-- **At least one wired hand-off** toward the TP-Link/switch/Hearth chain, on top
-  of household duty. The on-hand switch can fan out from a single port.
-- **No budget was ever stated.** Options below span roughly $100–$320. Setting a
-  ceiling is left as an open question rather than guessed at.
+The next step costs nothing: move the affected clients onto the router you
+already own.
 
-## How these prices were gathered
+## What changed from the first version
 
-| Source | Method | Reliable? |
+| First version assumed | Actually |
+|---|---|
+| A new router replaces the GiGstreem gateway at the WAN edge | The apartment gateway **cannot be removed**. Anything bought sits behind it. Double NAT is a permanent condition, not an open question. |
+| A **spare TP-Link router** is on hand to become the downstream NAT box (plan.md decision 2) | The TP-Link AX3000 **is AncientGlade** — active, and the box that was under suspicion. The real spare is a GL.iNet GL-SFT1200 "Opal". |
+| The problem is router capability or capacity | Measured: it is not. See below. |
+
+Because the edge position is not available, WAN-edge features — multi-WAN,
+2.5 GbE WAN, IPS routing — are money spent on a role that cannot be filled.
+That removes most of the first version's rationale for the UniFi Cloud Gateway
+Ultra.
+
+## Hardware actually on hand
+
+| Device | State | Relevant capability |
 |---|---|---|
-| Newegg | product pages read directly | yes, exact figures below |
-| store.ui.com | product pages read directly | yes, exact figures below |
-| Amazon | **could not be read** — prices are rendered client-side in JavaScript, so the page HTML carries no figure | no Amazon prices are quoted here |
+| **TP-Link AX3000** (dual-band Wi-Fi 6) | Active. SSID `AncientGlade`, WAN `172.16.141.4` → LAN `192.168.0.0/24` | **Address Reservation** (static DHCP). 2.4 GHz + 5 GHz. EasyMesh-capable. |
+| **GL.iNet GL-SFT1200 "Opal"** | Spare, unplugged | Wi-Fi 5 AC1200, dual-core 1 GHz, 128 MB RAM, 3× **gigabit** ports (1 WAN / 2 LAN), USB 2.0. OpenWrt-based, so static leases are standard. |
+| Ethernet switch | On hand | Fan-out for the wired segment. PoE status unverified. |
+| Raspberry Pi Zero W | On hand, **Pi-hole not yet deployed** | 2.4 GHz only, no ethernet without a USB OTG adapter. |
 
-Amazon commonly differs from Newegg on this hardware, so it is worth a manual
-price check there before ordering. No Amazon number is stated in this doc
-because none could be verified, and inventing one would be worse than omitting
-it.
+The Opal is a genuine option for a small dedicated server LAN — gigabit ports
+mean Hearth↔switch traffic never touches its modest CPU. Its limits are Wi-Fi 5,
+two LAN ports, and that inserting it *behind* AncientGlade would make three
+layers of NAT. It is a replacement for AncientGlade's routing role, not an
+addition to it.
 
-Static-DHCP support below is from vendor documentation and platform behavior,
-not hands-on testing on each unit. All four platforms (UniFi, Omada, TP-Link
-consumer, ASUS) expose per-client address reservation; verify in the admin UI on
-arrival if it is critical.
+## Measurements
 
-## Track A: separate router + Wi-Fi access point(s)
+Taken 2026-08-30 from Tawa, which is dual-homed: wired to GiGstreem
+(`172.16.141.23`) and on AncientGlade's Wi-Fi (`192.168.0.119`). 20-40 ICMP
+echoes per path. **Zero packet loss on every path tested.**
 
-Modular: the routing box and the radios are replaced or upgraded independently.
-Neither of these gateways has a Wi-Fi radio, so an AP is **required**, not
-optional — budget for both lines.
+| Path | Avg | Max | Reading |
+|---|---|---|---|
+| GiGstreem gateway, wired | **1.2 ms** | 2.9 ms | pristine |
+| Internet (`1.1.1.1`) via GiGstreem | **3.1 ms** | 11.4 ms | excellent |
+| **Hearth** (GiGstreem Wi-Fi, the media server) | **3.8 ms** | 8.8 ms | healthy |
+| AncientGlade router, Wi-Fi from Tawa | 21.0 ms | 104 ms | see caveat |
+| AncientGlade, same test, power save off | **5.7 ms** | 20.4 ms | healthy |
 
-| Component | Price | Ports | Static DHCP | Notes |
-|---|---|---|---|---|
-| **UniFi Cloud Gateway Ultra** (UCG-Ultra) | **$129.00** (store.ui.com) | 1× 2.5 GbE WAN, 4× 1 GbE LAN | Yes | Runs the UniFi Network controller **onboard** — no separate Cloud Key needed. No Wi-Fi. 1 Gbps IPS routing, multi-WAN. |
-| + **UniFi U7 Lite** AP | **$99.00** (store.ui.com) | PoE | — | Wi-Fi 7, ceiling mount. Cheapest current-gen UniFi AP. |
-| + **UniFi U7 Pro** AP | **$189.00** (store.ui.com) | PoE | — | Wi-Fi 7, 6 GHz, 6 spatial streams. Step up in coverage and capacity. |
-| **TP-Link Omada ER605 v2** | ~$50–88 street; **out of stock at Newegg** as of 2026-08-30 | 1× WAN + up to 3 configurable WAN/LAN gigabit | Yes | Cheapest credible Track A router. Gigabit only — no 2.5 GbE. Omada controller is separate (software, or hardware controller). |
-| + **TP-Link EAP650** AP | **$129.99** (Newegg, third-party seller *NothingButSavings*; other sellers $132–136) | PoE+ | — | Wi-Fi 6 AX3000 ceiling mount. |
+**Caveat on the AncientGlade figures.** Tawa is a desktop with an Intel AX201
+whose driver defaults to `iwlmvm.power_scheme = 2` (power save on). Disabling
+power save for one test moved the same link from 21 ms to 5.7 ms. That is a
+property of Tawa's radio, not of the TP-Link — measured here only so it can be
+discounted as a confound, and reverted afterwards. AncientGlade's Wi-Fi is
+fine.
 
-**Track A totals:** UniFi $228 (Ultra + U7 Lite) to $318 (Ultra + U7 Pro).
-Omada roughly $180–220 depending on ER605 availability.
+## What the measurements rule out
 
-**Pros:** radios and routing upgrade independently; PoE ceiling APs cover a
-house far better than a router's built-in antennas sitting on a desk; UniFi's
-controller gives real per-client visibility and painless fixed-IP assignment,
-which is exactly the pain point being solved; adding a second AP later is
-additive rather than a replacement.
+- **A congested or oversubscribed uplink.** 3.1 ms to Cloudflare with an 11 ms
+  worst case. An earlier theory that the apartment's shared building link was
+  saturated is not supported.
+- **The TP-Link AX3000 being defective.** Once the measuring client's power
+  save was discounted, its link measured 5.7 ms average. Replacing it would
+  buy nothing.
+- **2.4 GHz channel congestion.** Tested directly rather than assumed:
+  AncientGlade was moved from channel 7 (5 MHz from a 25-AP pile on channel 6,
+  the worst available setting) to channel 11. Latency did not meaningfully
+  change. The move is worth keeping — AncientGlade is now the strongest AP on
+  its own channel instead of 12 dB down on an adjacent one — but congestion
+  was not the cause.
+- **Hearth's own Wi-Fi.** 3.8 ms average, 1.2 ms deviation.
+  [`profiles/media-server.nix`](../profiles/media-server.nix) already sets
+  `networking.networkmanager.wifi.powersave = false`, and it is working.
 
-**Cons:** two devices and two power draws; APs generally want PoE (the on-hand
-switch may not be PoE — check, or budget a PoE injector); more upfront cost;
-more concepts to learn. The ER605's gigabit-only WAN caps the connection if
-GiGstreem service exceeds 1 Gbps.
+## What remains: client steering on the building network
 
-## Track B: all-in-one router + Wi-Fi
+The surviving explanation is the only one consistent with the full symptom set,
+including the fact that **Hearth does not drop while the TV and phones do,
+on the same SSID**.
 
-| Model | Price | Ports | Static DHCP | Notes |
-|---|---|---|---|---|
-| **TP-Link Archer BE230** | **~$99** (Newegg) | 2× 2.5 G + 3× 1 G, USB 3.0 | Yes | Dual-band Wi-Fi 7 (BE3600), no 6 GHz. Cheapest sensible Wi-Fi 7. |
-| **TP-Link Archer BE550** | **$199.99** (Newegg, marked down from $249.99) | full 2.5 G ports | Yes | Tri-band Wi-Fi 7 BE9300, ~2,000 sq ft, EasyMesh. Widely recommended as the best mainstream pick. |
-| **ASUS RT-BE92U** | **$199.99–$219.99** (Newegg, varies by listing; refurb **$159**) | 1× 10 GbE WAN/LAN, 4× 2.5 GbE LAN | Yes | Tri-band Wi-Fi 7 BE9700, AiMesh. Best port loadout at this price. |
+GiGstreem is not a single home router. The RF survey shows it broadcasting from
+multiple APs (channels 1, 6 ×2, and 11), alongside two other building networks
+(`WindsorStaff`, `Tera Guest`) — a managed multi-AP deployment for the
+building. Deployments like that commonly run aggressive client steering:
+band steering, 802.11k/v/r roaming assistance, and minimum-RSSI thresholds that
+deliberately kick clients below a signal floor to force them onto a better AP.
 
-**Pros:** one box, one power brick, one admin UI; materially cheaper at the
-budget end; consumer firmware is familiar and DHCP reservation is a couple of
-clicks; ASUS/TP-Link mesh (AiMesh/EasyMesh) lets a second unit be added later if
-coverage falls short.
+Cheap radios handle that badly. A smart TV and phones get bounced between APs
+and bands and drop the connection; Hearth's Intel card negotiates the same
+environment without trouble. That asymmetry is the signature.
 
-**Cons:** radios and routing are welded together — a Wi-Fi generation bump means
-replacing the whole router, including the parts that were fine; router-position
-compromises Wi-Fi placement, since the box must sit where the WAN drop is; less
-per-client network visibility.
+This is inferred from the topology and the symptom pattern, not confirmed on
+the AP itself — the building's equipment is not ours to inspect. It is
+falsifiable: if the TV stops dropping once it is on an SSID that does no
+steering, the explanation holds.
+
+**None of this is fixable by buying a router**, because the offending AP stays
+regardless. It *is* fixable by not using that AP for the affected clients.
 
 ## Recommendation
 
-**Track A pick: UniFi Cloud Gateway Ultra ($129) + U7 Lite ($99) — $228.**
-The Ultra running the controller onboard removes the usual UniFi objection (a
-separate Cloud Key), and its fixed-IP-per-client UI is a direct answer to the
-DHCP-reservation problem that motivated this whole purchase. Start with the
-U7 Lite; the U7 Pro at $189 is the upgrade if one AP does not cover the house,
-and under Track A that upgrade does not touch the router.
+### Step 1 — move the affected clients onto AncientGlade. $0.
 
-**Track B pick: TP-Link Archer BE550 at $199.99.** Tri-band with full 2.5 G
-ports, currently $50 off, and the most consistently recommended mainstream
-Wi-Fi 7 router in 2026 coverage. If the budget is tight, the **Archer BE230 at
-~$99** does everything H1 actually requires — the reservation UI, 2.5 G ports,
-and a wired hand-off — and only gives up 6 GHz and some range. If port count
-matters more than brand familiarity, the **ASUS RT-BE92U** at roughly the same
-price adds a 10 GbE port and four 2.5 GbE LAN ports.
+Put the TV, the phones, and Hearth on `AncientGlade` instead of `GiGstreem`.
+One AP, no steering, no minimum-RSSI kicks, and a DHCP server with an Address
+Reservation page.
 
-**Verdict on the tradeoff Nick raised.** The modular track is the better fit
-here, but the deciding factor is coverage, not ideology. This household already
-runs a deliberately layered network (edge router, downstream NAT box, dedicated
-server LAN, Pi-hole DNS, Tailscale mesh) and clearly intends to keep growing it —
-that is the environment where a controller with real per-client visibility earns
-its price, and where "replace the AP without touching the router" pays off over a
-few years. At $228 versus $199.99 the modular option is also essentially price
-neutral against the mid-range all-in-one.
+This solves three things at once:
 
-The honest counter-argument: if one router placed at the WAN drop already covers
-the house acceptably today, Track B is less hardware, less to learn, and the
-Archer BE230 at ~$99 solves the actual blocker for half the money. **If the ISP
-gateway's current Wi-Fi coverage is adequate from where it sits, buy the BE230
-and move on** — H1 is blocked on DHCP reservations, not on Wi-Fi quality.
+1. The drops, if the steering explanation is right.
+2. The H1 blocker — stable addressing, which is the entire reason a purchase
+   was being considered (plan.md decision 18).
+3. Jellyfin stays local. **The TV and Hearth must move together**: the TV
+   cannot run Tailscale, so it needs Hearth on its own LAN (plan.md §3).
 
-Either way this is Nick's call; nothing here should be bought without setting a
-budget first.
+This is the H1-final topology minus the cabling, reachable today with hardware
+on the wall.
+
+### Step 2 — verify coverage before spending anything.
+
+The open risk is that AncientGlade's single AP does not cover the apartment as
+well as the building's several APs do. That is answerable for free by walking
+the space with a phone on the AncientGlade SSID and watching signal and
+playback. Prefer its 5 GHz band where reachable: the survey found 45 APs on
+2.4 GHz versus 21 on 5 GHz.
+
+### Step 3 — only if coverage is genuinely short, buy an access point.
+
+Not a router. The routing, NAT, and DHCP are already handled by a competent
+Wi-Fi 6 box; the only thing potentially missing is radio coverage, and an AP is
+the part that supplies it.
+
+| Option | Price | Notes |
+|---|---|---|
+| **Second TP-Link EasyMesh node** | varies | Simplest path — the AX3000 is EasyMesh-capable, so a matching node extends the existing SSID with no new admin surface. |
+| **TP-Link EAP650** | **$129.99** (Newegg, 2026-08-30) | Wi-Fi 6 AX3000 ceiling AP, wired backhaul, far better placement than a router on a desk. Needs PoE — **confirm whether the on-hand switch supplies it, or budget an injector.** |
+| **UniFi U7 Lite** | **$99.00** (store.ui.com, 2026-08-30) | Wi-Fi 7 ceiling AP, PoE. Only worth it if the UniFi controller is wanted for its own sake; it needs a controller to manage. |
+
+Prices carried over from the first version's research, gathered the same day
+from Newegg and store.ui.com product pages. Amazon prices could not be read
+(rendered client-side), so none are quoted — worth a manual check before
+ordering.
+
+### What not to buy
+
+The first version's picks — **UniFi Cloud Gateway Ultra + U7 Lite ($228)** and
+**TP-Link Archer BE550 ($199.99)**. The UCG-Ultra is a WAN-edge gateway with no
+edge to sit at. The BE550 replaces a router that measured healthy, to fix a
+problem located on someone else's AP.
+
+## RF environment, for reference
+
+Scan from Tawa, 2026-08-30. 45 APs visible on 2.4 GHz, 21 on 5 GHz.
+
+```
+ch 1    15-18 APs   strongest 89
+ch 6    24-25 APs   strongest 82-84
+ch 11    5-13 APs   strongest 69   <- AncientGlade now here, and loudest on it
+```
+
+5 GHz is materially less contended and is where the TV and phones should be
+whenever signal allows.
 
 ## Open questions
 
-1. **Budget ceiling** — never stated. The spread above is $99 to $318.
-2. **Wi-Fi coverage today** — is the ISP gateway's coverage actually adequate
-   from its current position? This is the single input that decides Track A vs
-   Track B, and it is answerable for free by walking the house with a phone.
-3. **Is the on-hand switch PoE?** Track A's APs need PoE or an injector; an
-   unbudgeted injector narrows the price gap.
-4. **Double NAT.** The planned chain puts the on-hand TP-Link behind the new
-   router doing its own NAT. Both UniFi and Omada could serve the server LAN as
-   a VLAN off the edge router instead, retiring the TP-Link and flattening the
-   topology. Not a recommendation — plan.md §3 deliberately specifies the
-   layered design — but worth deciding before buying, since it changes whether
-   the TP-Link stays in the picture.
-5. **AncientGlade's fate** — the current downstream Wi-Fi router at
-   `192.168.0.0/24` (see the comment in [`common/lan.nix`](../common/lan.nix)).
-   Retired, or kept as a secondary AP?
-6. **LG TV and Go2 kiosk** — do they stay on Wi-Fi, or eventually get wired?
-   Wiring the TV would reduce the Wi-Fi coverage requirement considerably.
+1. **Does moving the TV and phones to AncientGlade stop the drops?** This is
+   the test that confirms or kills the steering explanation, and it gates
+   every remaining decision here. Free.
+2. **Does AncientGlade cover the apartment?** The one input that decides
+   whether any hardware is bought at all.
+3. **Is `172.16.141.0/24` a building-wide shared segment?** Three tenant-facing
+   SSIDs are visible, and an unidentified `172.16.141.36` appeared in Tawa's
+   ARP table alongside Tawa's `.23` and Hearth's `.38`. If neighbours share
+   that L2, Jellyfin is reachable by the building — Hearth's sshd is key-only
+   and fine, but Jellyfin is not authenticated at the network layer. This is a
+   security argument for the H1 topology that the first version never raised.
+   Not verified: scanning the subnet means scanning neighbours.
+4. **Is the on-hand switch PoE?** Decides whether Step 3 needs an injector.
+5. **Does the Opal replace AncientGlade, or stay in the box?** Only relevant if
+   AncientGlade is ever retired; adding it behind AncientGlade would mean
+   triple NAT.
+6. **Wiring the TV.** Still the highest-value physical change available: it
+   removes the heaviest client from the air entirely and gives Jellyfin a clean
+   path, for the price of a cable.
 
 ## Sources
 
-- [Cloud Gateway Ultra — Ubiquiti Store](https://store.ui.com/us/en/products/ucg-ultra)
-- [Access Point U7 Pro — Ubiquiti Store](https://store.ui.com/us/en/products/u7-pro)
-- [Access Point U7 Lite — Ubiquiti Store](https://store.ui.com/us/en/products/u7-lite)
-- [UniFi Cloud Gateway Ultra review — iFeeltech](https://ifeeltech.com/blog/unifi-cloud-gateway-ultra-review)
-- [TP-Link Archer BE550 — Newegg](https://www.newegg.com/tp-link-archer-be550-6-ghz-5760-mbps-5-ghz-2880-mbps-2-4-ghz-574-mbps/p/N82E16833704711)
-- [TP-Link Archer BE230 — Newegg](https://www.newegg.com/tp-link-archer-be230-ieee-802-11be-ax-ac-n-a-5-ghz-ieee-802-11be-ax-n-g-b-2-4-ghz/p/N82E16833704758)
+- [Opal (GL-SFT1200) specifications — GL.iNet](https://www.gl-inet.com/en-us/products/gl-sft1200)
+- [How to use Pi-Hole DNS Server on TP-Link routers](https://www.tp-link.com/us/support/faq/3230/)
 - [TP-Link EAP650 — Newegg](https://www.newegg.com/tp-link-eap650/p/N82E16833704652)
-- [TP-Link ER605 V2 — Newegg](https://www.newegg.com/tp-link-er605-v2-10-100-1000mbps/p/N82E16833704600)
-- [ASUS RT-BE92U — Newegg](https://www.newegg.com/asus-rt-be92u-ieee-802-11a-ieee-802-11b-ieee-802-11g-wifi-4-wifi-5-wifi-6-wifi-6e-wifi-7-ipv4-ipv6/p/N82E16833320608)
-- [Best Wi-Fi 7 routers 2026 — Tom's Hardware](https://www.tomshardware.com/networking/routers/best-wi-fi-router-deals)
+- [Access Point U7 Lite — Ubiquiti Store](https://store.ui.com/us/en/products/u7-lite)
+- Measurements above: `ping`, `nmcli device wifi list` from Tawa, 2026-08-30.

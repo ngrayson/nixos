@@ -31,8 +31,14 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
 
 1. **Role: headless home server.** The Hyprland desktop from the migration is
    transitional and will be removed once remote access is proven.
-2. **Hardware on hand:** 4 TB Seagate IronWolf HDD (`COLD` at `/mnt/cold`), ethernet switch, spare TP-Link router,
-   Raspberry Pi Zero W (Pi-hole/DNS). Two-tier storage.
+2. **Hardware on hand:** 4 TB Seagate IronWolf HDD (`COLD` at `/mnt/cold`), ethernet switch,
+   Raspberry Pi Zero W (Pi-hole/DNS — not yet deployed). Two-tier storage.
+   **Corrected 2026-08-30:** there is no *spare* TP-Link router. The TP-Link
+   AX3000 is `AncientGlade`, active on the wall (WAN `172.16.141.4` → LAN
+   `192.168.0.0/24`), and it supports Address Reservation. The only spare
+   router is a GL.iNet GL-SFT1200 "Opal" (Wi-Fi 5, 3× gigabit ports,
+   OpenWrt-based). See
+   [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
 3. **Jellyfin consolidates on Hearth.** `hosts/Tawa/jellyfin.nix` will be
    removed from Tawa's imports (deliberate, coordinated change — not a parity
    violation).
@@ -68,6 +74,11 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
 13. **Network interim:** TV and Hearth both stay on **GiGstreem Wi-Fi, no
     static route**. The TP-Link/switch wired LAN is **deferred until a better
     router is acquired** (H1 re-scoped accordingly).
+    **Superseded 2026-08-30:** the wired LAN is no longer gated on a purchase.
+    The on-hand AX3000 (`AncientGlade`) already does Address Reservation, so
+    the "better router" precondition is dropped — see open question 1 and
+    [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
+    Staying on GiGstreem is also the likely cause of the TV's drops.
 14. **Jellyfin migration:** **fresh start** on Hearth — no `/var/lib/jellyfin`
     state copy from Tawa; only media files transfer.
 
@@ -117,7 +128,8 @@ Internet ── GiGstreem ── Wi-Fi: LG TV (Jellyfin at 172.16.141.38 when He
                     └── AncientGlade (NAT) ── Hearth 192.168.0.133
                          (Cursor agent sessions until remote-dev works)
 
-Final (after better router acquired):
+Final (no purchase required as of 2026-08-30 — the on-hand AX3000 fills the
+"new router" slot below; see documentation/router-recommendations.md):
 Internet ── new router ── TP-Link router (NAT, dedicated server LAN)
                                │
                          ethernet switch
@@ -404,9 +416,17 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ## 6. Open questions
 
-1. **Better router:** which model / when — gates the final H1 wired topology.
-   See [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md)
-   for candidates and pricing; model choice still Nick's call.
+1. **Better router:** ~~which model / when~~ — **largely resolved 2026-08-30, and
+   the answer is "probably none".** Measurement found no defect in the hardware
+   on hand: GiGstreem's wired path is 1.2 ms, the internet path 3.1 ms, Hearth's
+   own Wi-Fi 3.8 ms, and AncientGlade healthy once the measuring client's power
+   save was discounted. The TV-and-phones drops look like client steering on the
+   apartment's managed multi-AP Wi-Fi, which no downstream purchase can change.
+   The DHCP-reservation blocker (decision 18) is solvable today on the AX3000's
+   Address Reservation page. Next step is free: move the TV, phones, and Hearth
+   onto `AncientGlade` and re-test. Buy an **access point**, not a router, and
+   only if coverage then proves short. See
+   [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
 2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
    sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
    decided).
