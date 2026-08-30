@@ -100,11 +100,11 @@ else
         # diverge exactly when the file carries one. Do not probe for the newline
         # with a command substitution; that strips it too and always looks clean.
         if (($(wc -c <"$link") != $(printf '%s' "$path" | wc -c))); then
-          fail "Jellyfin library '$lib' mblink ends in a newline; write it with printf, not echo"
+          fail "Jellyfin '$lib' mblink ends in a newline; write it with printf, not echo"
         elif [[ ! -d "$path" ]]; then
-          fail "Jellyfin library '$lib' points at missing '$path' (COLD is case-sensitive)"
+          fail "Jellyfin '$lib' points at missing '$path' (COLD is case-sensitive)"
         else
-          ok "Jellyfin library '$lib' resolves to $path"
+          ok "Jellyfin '$lib': $path"
         fi
       done
 
@@ -119,11 +119,11 @@ else
       have="$(printf '%s\n' "${linked[@]}" | sort -u)"
       while IFS= read -r stale; do
         [[ -n "$stale" ]] || continue
-        fail "Jellyfin library '$lib' options.xml declares '$stale' with no mblink (stale after a rename)"
+        fail "Jellyfin '$lib' options.xml declares '$stale' with no mblink (stale after a rename)"
       done < <(comm -13 <(printf '%s\n' "$have") <(printf '%s\n' "$declared"))
       while IFS= read -r undeclared; do
         [[ -n "$undeclared" ]] || continue
-        fail "Jellyfin library '$lib' options.xml does not declare mblink path '$undeclared'"
+        fail "Jellyfin '$lib' options.xml does not declare mblink path '$undeclared'"
       done < <(comm -23 <(printf '%s\n' "$have") <(printf '%s\n' "$declared"))
     done <<<"$libdirs"
   fi

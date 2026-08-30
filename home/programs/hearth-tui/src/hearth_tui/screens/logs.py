@@ -55,5 +55,8 @@ class LogsScreen(Screen):
     @work(exclusive=True, group=TAIL_GROUP)
     async def run_tail(self, unit: str) -> None:
         log = self.query_one("#log-output", RichLog)
-        async for line in ssh.stream("journalctl", "-u", unit, "-f", "-n", "100"):
-            log.write(line)
+        try:
+            async for line in ssh.stream("journalctl", "-u", unit, "-f", "-n", "100"):
+                log.write(line)
+        except ssh.SshError as exc:
+            log.write(f"[red]tail stopped: {exc}[/red]")

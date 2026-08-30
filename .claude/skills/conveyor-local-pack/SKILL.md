@@ -188,9 +188,16 @@ child back to Open, restore the tree, and take the next child whose
 dependency chain doesn't run through the parked one. Everything remaining
 blocked → idle long; the user's chat reply is the un-park signal.
 
-## Pacing (dynamic /loop only)
+## Pacing
 
-Under `/loop` with no interval, end EVERY iteration with exactly one
+Under `/loop` WITH an interval, `CronCreate` owns the cadence — and if that
+call errors or is denied, fall back to `ScheduleWakeup` at
+`min(interval_seconds, 3600)` rather than reporting the schedule as
+impossible. See [conveyor-local-loop](../conveyor-local-loop/SKILL.md)'s
+Pacing section for the full rule; it applies unchanged when a pack is holding
+the loop's WIP slot.
+
+Under `/loop` with NO interval, self-pace: end EVERY iteration with exactly one
 `ScheduleWakeup` (prompt = the original /loop input verbatim, card argument
 included):
 

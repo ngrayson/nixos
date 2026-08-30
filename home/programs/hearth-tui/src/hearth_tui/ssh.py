@@ -18,6 +18,16 @@ from pathlib import Path
 HOST = "hearth"
 
 
+class SshError(Exception):
+    """A remote call could not be completed — timed out, or ssh itself failed.
+
+    Every helper below raises this instead of leaking `subprocess.TimeoutExpired`
+    or `OSError`, so callers running inside a Textual worker can catch one type
+    and render the failure. An uncaught exception in a worker takes the whole
+    app down, which is exactly what a flaky hop used to do.
+    """
+
+
 def _remote_command(args: tuple[str, ...], sudo: bool) -> str:
     """Quote args into one shell-safe string.
 
@@ -43,7 +53,21 @@ def run(*args: str, sudo: bool = False, timeout: float = 15) -> subprocess.Compl
         HOST,
         _remote_command(args, sudo),
     ]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    try:
+        # stdin=DEVNULL, never inherited: ssh reads stdin by default, so under
+        # the TUI it would consume the terminal Textual is reading and swallow
+        # the operator's keystrokes.
+        return subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise SshError(f"{HOST}: timed out after {timeout}s running {args[0]}") from exc
+    except OSError as exc:
+        raise SshError(f"{HOST}: {exc}") from exc
 
 
 async def stream(*args: str, sudo: bool = False) -> AsyncIterator[str]:
@@ -55,14 +79,25 @@ async def stream(*args: str, sudo: bool = False) -> AsyncIterator[str]:
     the local ssh client on early exit, which tears down the remote side too.
     """
     cmd = ["ssh", "-o", "BatchMode=yes", HOST, _remote_command(args, sudo)]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+    except OSError as exc:
+        raise SshError(f"{HOST}: {exc}") from exc
     assert proc.stdout is not None
     try:
         async for raw_line in proc.stdout:
             yield raw_line.decode(errors="replace").rstrip("\n")
         await proc.wait()
+    except OSError as exc:
+        # asyncio.CancelledError is a BaseException, not an OSError, so a
+        # worker cancelled to switch tails still unwinds through `finally`
+        # untouched — only real I/O failures become SshError.
+        raise SshError(f"{HOST}: {exc}") from exc
     finally:
         if proc.returncode is None:
             proc.terminate()
@@ -83,7 +118,14 @@ def run_script(
     if sudo:
         cmd.append("sudo")
     cmd.extend(["bash", "-s"])
-    with local_script_path.open("rb") as stdin:
-        return subprocess.run(
-            cmd, stdin=stdin, capture_output=True, text=True, timeout=timeout
-        )
+    try:
+        with local_script_path.open("rb") as stdin:
+            return subprocess.run(
+                cmd, stdin=stdin, capture_output=True, text=True, timeout=timeout
+            )
+    except subprocess.TimeoutExpired as exc:
+        raise SshError(
+            f"{HOST}: timed out after {timeout}s running {local_script_path.name}"
+        ) from exc
+    except OSError as exc:
+        raise SshError(f"{HOST}: {exc}") from exc

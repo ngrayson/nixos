@@ -33,6 +33,11 @@ export const ICO = {
   server: "f048b",
   map: "f034d",
   cog: "f013",
+  cpu: "f0ee0",
+  memory: "f035b",
+  // Distinct from `thermometer` above, which is the weather glyph — keeping them
+  // apart stops Server Status from echoing the Weather card.
+  temp: "f050f",
 };
 
 export function nfChar(code) {
