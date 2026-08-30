@@ -129,9 +129,21 @@ three earlier hypotheses:
 | Moving 2.4 GHz ch7 → ch11 **changed nothing** | Yes — this was never RF congestion |
 | GiGstreem holds the same clients fine | Yes — the building's managed APs use standards-based roaming (802.11k/v/r) rather than deauth-based steering |
 
-**Ruled out:** DFS radar events, another common cause of mid-use drops. The
-5 GHz radio was observed on channels 149 and 153, both UNII-3 and non-DFS, so
-no radar-triggered channel change is possible there.
+**DFS radar — initially ruled out, then confirmed as a live risk.** An earlier
+pass dismissed DFS because the 5 GHz radio was observed on channels 149 and
+153, both UNII-3 and non-DFS. That reasoning was wrong: it checked the channel
+the radio happened to occupy, not whether auto-selection was free to move it.
+
+Across this investigation the 5 GHz radio was observed on **ch149, then ch153,
+then ch100**. Channel 100 is 5500 MHz — **UNII-2C, a DFS channel**. On a DFS
+channel the AP must vacate immediately upon radar detection, including false
+positives, which drops every associated client mid-session. That is exactly the
+reported symptom, and with auto-selection enabled the radio can wander back
+into the DFS range (100-144) at any time.
+
+**This may be the true cause, or a second independent cause alongside Smart
+Connect.** Both are addressed by the fix list below, and neither costs
+anything.
 
 **Also already eliminated (2026-08-30):** **TWT** (Target Wake Time) and
 **OFDMA** are both already disabled on the AX3000. Those are the other two
@@ -146,14 +158,20 @@ on "auto" also drops clients mid-use, and pinning the channel costs nothing.
 
 ### The fix, in order, all free
 
-1. **Disable Smart Connect.** Split into two separately named SSIDs — e.g.
-   `AncientGlade` (5 GHz) and `AncientGlade-2G` (2.4 GHz). This is the primary
-   fix and directly targets the diagnosis.
+1. **Disable Smart Connect** *and give the two bands different SSID names* —
+   e.g. `AncientGlade` (5 GHz) and `AncientGlade-2G` (2.4 GHz). **Done
+   2026-08-30, but only half:** Smart Connect is off, so the AP no longer
+   force-steers by deauthentication, yet both radios still broadcast the
+   identical name `AncientGlade`. Until the 2.4 GHz SSID is renamed, the TV
+   cannot be pinned to a band because it cannot tell them apart.
 2. **Pin the TV to the 5 GHz SSID.** With bands split, the TV can no longer be
    steered at all. 5 GHz is also the less contended band here (21 APs versus
    45).
-3. **Pin the 5 GHz channel** manually instead of leaving it on auto, to remove
-   re-selection as a second source of mid-use drops.
+3. **Pin the 5 GHz channel to a non-DFS channel — 149, 153, 157, or 161.**
+   Do not leave it on auto. This is at least as important as step 1: auto
+   selection has been observed moving the radio onto ch100 (DFS), where a
+   radar event drops all clients mid-use. UNII-3 channels carry no radar
+   obligation and cannot be vacated.
 4. **Update firmware** while in the admin UI.
 
 If the drops stop, no purchase is needed and the plan below unblocks. If they
