@@ -158,20 +158,33 @@ on "auto" also drops clients mid-use, and pinning the channel costs nothing.
 
 ### The fix, in order, all free
 
-1. **Disable Smart Connect** *and give the two bands different SSID names* —
-   e.g. `AncientGlade` (5 GHz) and `AncientGlade-2G` (2.4 GHz). **Done
-   2026-08-30, but only half:** Smart Connect is off, so the AP no longer
-   force-steers by deauthentication, yet both radios still broadcast the
-   identical name `AncientGlade`. Until the 2.4 GHz SSID is renamed, the TV
-   cannot be pinned to a band because it cannot tell them apart.
+1. **Disable Smart Connect.** **Done 2026-08-30.** The AP no longer
+   force-steers clients by deauthentication, which was the primary diagnosis.
+
+   Both radios still broadcast the identical name `AncientGlade`, so the bands
+   need distinguishing before the TV can be pinned to one. **Rename the 5 GHz
+   SSID, not the 2.4 GHz one** — e.g. `AncientGlade` stays on 2.4 GHz and
+   5 GHz becomes `AncientGlade-5G`. Many of the household's smart-home devices
+   are 2.4 GHz-only and already provisioned against the name `AncientGlade`;
+   renaming that band would force a re-pair of every one of them through its
+   own app, while renaming 5 GHz costs one password entry per phone, laptop,
+   and TV. It also fails gracefully: any 5 GHz client not moved simply
+   associates to 2.4 GHz under the unchanged name.
+
+   Note this rename is a **convenience, not part of the fix**. With Smart
+   Connect off the AP no longer steers regardless of naming; distinct names
+   only make the band a deliberate choice rather than the client's.
+   After renaming, the TV must be joined to the 5 GHz SSID explicitly — it
+   will not move on its own.
 2. **Pin the TV to the 5 GHz SSID.** With bands split, the TV can no longer be
    steered at all. 5 GHz is also the less contended band here (21 APs versus
    45).
 3. **Pin the 5 GHz channel to a non-DFS channel — 149, 153, 157, or 161.**
-   Do not leave it on auto. This is at least as important as step 1: auto
-   selection has been observed moving the radio onto ch100 (DFS), where a
-   radar event drops all clients mid-use. UNII-3 channels carry no radar
-   obligation and cannot be vacated.
+   **Done 2026-08-30: pinned to 153**, from a previous setting in the 131-ish
+   range. Everything from 100 to 144 is UNII-2C and therefore DFS, so the radio
+   had been sitting on a channel it could be legally forced off at any moment —
+   which corroborates the DFS diagnosis. Channel 153 is UNII-3, carries no
+   radar obligation, and cannot be vacated.
 4. **Update firmware** while in the admin UI.
 
 If the drops stop, no purchase is needed and the plan below unblocks. If they
