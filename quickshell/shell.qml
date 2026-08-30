@@ -1299,8 +1299,10 @@ ShellRoot {
 									color: usbPill.modelData.anyBusy ? Theme.muted : Theme.text
 									font.pixelSize: 12
 									font.family: "IosevkaTermSlab NF"
-									// nf-md-eject
-									text: String.fromCodePoint(0xF0158)
+									// md-eject. Verified by glyph NAME in the installed font,
+									// not just by the codepoint being mapped: 0xF0158 is
+									// md-close_box_outline and rendered a close box here.
+									text: String.fromCodePoint(0xF01EA)
 								}
 							}
 						}
