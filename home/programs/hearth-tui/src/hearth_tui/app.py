@@ -78,7 +78,6 @@ class MainMenu(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static("hearth-tui", id="title")
         with VerticalScroll(id="stats"):
             with Horizontal():
                 yield HealthcheckWidget()
@@ -98,7 +97,9 @@ class MainMenu(Screen):
         # arrow keys would scroll the stats panel rather than move the
         # selection — the menu must stay keyboard-driven regardless of
         # whatever the stats widgets are doing in their refresh workers.
-        self.query_one(MenuList).focus()
+        menu = self.query_one(MenuList)
+        menu.border_title = "menu"
+        menu.focus()
 
     def on_screen_resume(self) -> None:
         # Refresh whenever we come back from a pushed screen (e.g. after a
@@ -134,6 +135,10 @@ class MainMenu(Screen):
 
 class HearthTuiApp(App):
     """Terminal dashboard for Hearth."""
+
+    # Shown by every screen's Header — replaces the Static title the main
+    # screen used to render below the Header, which duplicated it.
+    TITLE = "hearth-tui"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),

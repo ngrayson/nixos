@@ -59,7 +59,9 @@ class DeployScreen(Screen):
         # would land on whichever widget Textual picks first rather than
         # driving the actions menu.
         self.query_one("#deploy-log", RichLog).border_title = "rebuild output"
-        self.query_one(MenuList).focus()
+        menu = self.query_one(MenuList)
+        menu.border_title = "actions"
+        menu.focus()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         action = event.item.name
