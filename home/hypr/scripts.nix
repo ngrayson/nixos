@@ -731,6 +731,66 @@ in rec {
   # Safe eject for one whole USB disk: unmount every mounted partition, then
   # power the disk off. Fail-closed — a disk that would not fully unmount is
   # never powered off (same stance as hosts/Hearth/disk.nix's park abort).
+  # Open one USB disk in Dolphin, mounting it first if nothing on it is
+  # mounted yet. A pill is shown for plugged-in-but-unmounted disks too, so
+  # left-click has to handle that case or it looks broken.
+  hyprUsbOpen = pkgs.writeShellScriptBin "qs-usb-open" ''
+    set -eu
+    disk="''${1:-}"
+    [ -n "$disk" ] || {
+      printf 'usage: qs-usb-open /dev/sdX\n' >&2
+      exit 2
+    }
+
+    LSBLK="${lib.getExe' pkgs.util-linux "lsblk"}"
+    UDISKS="${lib.getExe' pkgs.udisks "udisksctl"}"
+    DOLPHIN="${lib.getExe pkgs.kdePackages.dolphin}"
+
+    # No removable/USB guard here, unlike qs-usb-eject: opening a folder is
+    # not destructive. The block-device check just makes a typo fail loudly.
+    [ -b "$disk" ] || {
+      printf 'qs-usb-open: %s is not a block device\n' "$disk" >&2
+      exit 1
+    }
+
+    first_mountpoint() {
+      "$LSBLK" -nrpo MOUNTPOINT "$disk" | while read -r mnt; do
+        [ -n "''${mnt:-}" ] || continue
+        printf '%s\n' "$mnt"
+        break
+      done
+    }
+
+    mnt="$(first_mountpoint)"
+
+    if [ -z "''${mnt:-}" ]; then
+      # Nothing mounted — mount the first partition that has a filesystem.
+      part="$("$LSBLK" -nrpo NAME,FSTYPE "$disk" | while read -r dev fstype; do
+        [ -n "''${fstype:-}" ] || continue
+        printf '%s\n' "$dev"
+        break
+      done)"
+      if [ -z "''${part:-}" ]; then
+        printf 'qs-usb-open: %s has no mountable filesystem\n' "$disk" >&2
+        exit 1
+      fi
+      "$UDISKS" mount -b "$part" >/dev/null || {
+        printf 'qs-usb-open: could not mount %s\n' "$part" >&2
+        exit 1
+      }
+      # Re-query rather than parsing udisksctl's "Mounted X at Y" line — the
+      # message format is not a stable interface.
+      mnt="$(first_mountpoint)"
+    fi
+
+    if [ -z "''${mnt:-}" ]; then
+      printf 'qs-usb-open: %s is still not mounted; not opening a file manager\n' "$disk" >&2
+      exit 1
+    fi
+
+    exec "$DOLPHIN" "$mnt"
+  '';
+
   hyprUsbEject = pkgs.writeShellScriptBin "qs-usb-eject" ''
     set -eu
     disk="''${1:-}"
