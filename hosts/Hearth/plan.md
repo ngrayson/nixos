@@ -74,11 +74,13 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
 13. **Network interim:** TV and Hearth both stay on **GiGstreem Wi-Fi, no
     static route**. The TP-Link/switch wired LAN is **deferred until a better
     router is acquired** (H1 re-scoped accordingly).
-    **Superseded 2026-08-30:** the wired LAN is no longer gated on a purchase.
-    The on-hand AX3000 (`AncientGlade`) already does Address Reservation, so
-    the "better router" precondition is dropped — see open question 1 and
+    **Still current as of 2026-08-30, for a corrected reason.** The blocker is
+    not that no router can do DHCP reservations — the on-hand AX3000
+    (`AncientGlade`) can. It is that **the TV and phones drop on AncientGlade**
+    and have been moved to GiGstreem, where they are stable but outside the
+    intranet. Until those drops are diagnosed, moving clients onto the server
+    LAN trades working Wi-Fi for broken Wi-Fi. See
     [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
-    Staying on GiGstreem is also the likely cause of the TV's drops.
 14. **Jellyfin migration:** **fresh start** on Hearth — no `/var/lib/jellyfin`
     state copy from Tawa; only media files transfer.
 
@@ -416,16 +418,18 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ## 6. Open questions
 
-1. **Better router:** ~~which model / when~~ — **largely resolved 2026-08-30, and
-   the answer is "probably none".** Measurement found no defect in the hardware
-   on hand: GiGstreem's wired path is 1.2 ms, the internet path 3.1 ms, Hearth's
-   own Wi-Fi 3.8 ms, and AncientGlade healthy once the measuring client's power
-   save was discounted. The TV-and-phones drops look like client steering on the
-   apartment's managed multi-AP Wi-Fi, which no downstream purchase can change.
-   The DHCP-reservation blocker (decision 18) is solvable today on the AX3000's
-   Address Reservation page. Next step is free: move the TV, phones, and Hearth
-   onto `AncientGlade` and re-test. Buy an **access point**, not a router, and
-   only if coverage then proves short. See
+1. **Better router:** ~~which model / when~~ — **reframed 2026-08-30. Do not
+   buy yet; the fault is not diagnosed.** The real symptom is that the TV and
+   phones drop on `AncientGlade` (the on-hand TP-Link AX3000) and now sit on
+   GiGstreem, stable but outside the intranet — no Pi-hole, no
+   `home.wizt.org`. Measurement cleared the uplink (3.1 ms), Hearth (3.8 ms),
+   and AncientGlade's *latency* (5.7 ms), but those tests ran on a client that
+   never drops, so they say nothing about association stability. Free checks
+   come first (DHCP lease time, split vs merged SSID, firmware, eco features,
+   DTIM). Two constraints found while investigating: Caddy binds the tailnet
+   address only, so the TV could never reach `home.wizt.org` on *any* Wi-Fi
+   network; and phones can run Tailscale, so they may need no network change
+   at all. If the free checks fail, buy an **access point**, not a router. See
    [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
 2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
    sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
