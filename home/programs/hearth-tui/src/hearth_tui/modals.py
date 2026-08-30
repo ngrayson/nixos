@@ -16,7 +16,11 @@ from hearth_tui.disk_action import DiskAction, confirm_message, render_rows
 class ConfirmModal(ModalScreen[bool]):
     """Yes/No confirmation dialog. Dismisses with True (yes) or False (no/cancel)."""
 
-    BINDINGS = [("escape", "cancel", "Cancel")]
+    BINDINGS = [
+        Binding("y", "confirm", "Yes"),
+        Binding("n", "cancel", "No"),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
 
     def __init__(self, message: str) -> None:
         super().__init__()
@@ -28,8 +32,17 @@ class ConfirmModal(ModalScreen[bool]):
             yield Button("Yes", id="confirm-yes", variant="error")
             yield Button("No", id="confirm-no", variant="primary")
 
+    def on_mount(self) -> None:
+        # Without focus a Button ignores enter/space, which left the mouse as
+        # the only way to answer. Focus No, not Yes: this dialog guards
+        # deploy switch/boot, so a stray enter must not activate a live server.
+        self.query_one("#confirm-no", Button).focus()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(event.button.id == "confirm-yes")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
 
     def action_cancel(self) -> None:
         self.dismiss(False)
