@@ -171,6 +171,10 @@ ShellRoot {
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
 	property bool trayCollapsed: false
 
+	// One entry per plugged-in removable USB disk, from qs-usb-status. Empty
+	// (and the cluster hidden) whenever nothing mountable is plugged in.
+	property var usbDevices: []
+
 	// Hidden while the running system matches the flake and flake.lock is current.
 	property bool nixosRebuildPending: false
 	property int nixosUpdates: 0
@@ -206,6 +210,31 @@ ShellRoot {
 			args.push("--online");
 		readNixosStatus.command = args;
 		readNixosStatus.running = true;
+	}
+
+	function refreshUsbStatus(): void {
+		if (readUsbStatus.running)
+			return;
+		readUsbStatus.running = true;
+	}
+
+	function usbTooltipText(device): string {
+		if (!device)
+			return "";
+		const lines = [];
+		const size = device.size ? " · " + device.size : "";
+		lines.push((device.label || "USB") + size);
+		const parts = device.partitions || [];
+		for (let i = 0; i < parts.length; i++) {
+			const p = parts[i];
+			if (p.mountpoint)
+				lines.push(p.mountpoint + (p.fstype ? " (" + p.fstype + ")" : ""));
+		}
+		if (!device.anyMounted)
+			lines.push("Not mounted");
+		lines.push(device.anyBusy ? "In use" : "Safe to remove");
+		lines.push("Right-click: eject");
+		return lines.join("\n");
 	}
 
 	function nixosTooltipText(): string {
@@ -330,6 +359,10 @@ ShellRoot {
 	}
 
 	function barTooltipText(kind: string, trayItem): string {
+		// trayItem is the generic hover payload: an SNI item for "tray", the
+		// device object for "usb".
+		if (kind === "usb")
+			return usbTooltipText(trayItem);
 		if (kind === "nixos")
 			return nixosTooltipText();
 		if (kind === "qsreload")
@@ -943,6 +976,35 @@ ShellRoot {
 	}
 
 	Process {
+		id: readUsbStatus
+		running: false
+		command: ["qs-usb-status"]
+
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const raw = this.text.trim();
+				try {
+					const data = JSON.parse(raw || "[]");
+					shellRoot.usbDevices = Array.isArray(data) ? data : [];
+				} catch (_e) {
+					// Keep the previous list rather than blanking the cluster on
+					// one malformed read.
+				}
+			}
+		}
+	}
+
+	// lsblk + fuser are cheap, and 5s keeps the "in use" state fresh enough to
+	// trust before pulling a drive.
+	Timer {
+		interval: 5000
+		running: true
+		repeat: true
+		triggeredOnStart: true
+		onTriggered: shellRoot.refreshUsbStatus()
+	}
+
+	Process {
 		id: readNixosStatus
 		running: false
 
@@ -1185,6 +1247,66 @@ ShellRoot {
 				}
 
 				// StatusNotifier tray: collapses when empty so desktops without tray apps stay clean.
+				// Removable USB disks: one pill per physical disk, right-click ejects.
+				Rectangle {
+					visible: shellRoot.usbDevices.length > 0
+					Layout.alignment: Qt.AlignVCenter
+					radius: 8
+					color: Theme.surface
+					implicitHeight: 24
+					implicitWidth: usbRow.implicitWidth + 12
+
+					Row {
+						id: usbRow
+						anchors.centerIn: parent
+						spacing: 2
+
+						Repeater {
+							model: shellRoot.usbDevices
+
+							delegate: StatusPill {
+								id: usbPill
+								required property var modelData
+
+								tipKind: "usb"
+								acceptedButtons: Qt.RightButton
+								// StatusPill arms the tip without a payload, so re-arm
+								// with this device attached.
+								onEntered: barWindow.armTip(usbPill, "usb", usbPill.modelData)
+								onClicked: mouse => {
+									if (mouse.button !== Qt.RightButton)
+										return;
+									barWindow.disarmTip();
+									usbEject.running = true;
+								}
+
+								// Per-delegate so ejecting two drives in quick succession
+								// does not collide (a shared Process runs one at a time).
+								Process {
+									id: usbEject
+									running: false
+									command: ["qs-usb-eject", usbPill.modelData.disk]
+									onExited: exitCode => {
+										// Refresh either way: on success the pill should
+										// vanish now, on failure the busy state may have
+										// changed under us.
+										shellRoot.refreshUsbStatus();
+									}
+								}
+
+								Text {
+									anchors.centerIn: parent
+									color: usbPill.modelData.anyBusy ? Theme.muted : Theme.text
+									font.pixelSize: 12
+									font.family: "IosevkaTermSlab NF"
+									// nf-md-eject
+									text: String.fromCodePoint(0xF0158)
+								}
+							}
+						}
+					}
+				}
+
 				Rectangle {
 					visible: SystemTray.items.values.length > 0
 					Layout.alignment: Qt.AlignVCenter
@@ -1645,7 +1767,10 @@ ShellRoot {
 						width: Math.min(360, implicitWidth)
 						text: {
 							const tray = barWindow.tipTray;
-							if (tray) {
+							// These reads exist only to make the binding depend on the
+							// SNI item's properties; they are meaningless for the "usb"
+							// payload, which is a plain object.
+							if (tray && barWindow.tipKind === "tray") {
 								void tray.title;
 								void tray.tooltipTitle;
 								void tray.tooltipDescription;
