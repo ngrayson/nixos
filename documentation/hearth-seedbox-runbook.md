@@ -8,10 +8,20 @@ This file is the reproduce-it-from-scratch runbook. It exists because almost
 nothing below is guessable from outside the slot.
 
 Provider: **Ultra.cc**, slot acquired 2026-08-30, configured 2026-08-31.
+
 Identifying values (slot username, server hostname, Syncthing device and
-folder IDs) are deliberately **not** in this public repo — they live in the
-Conveyor card `pull-ultra-cc-completes-into-hearth-with-syncthing`.
-Placeholders below: `<user>`, `<server>`.
+folder IDs) are deliberately **not** written in the clear here — this repo is
+public, and a runbook naming the slot URL beside its torrent stack is not a
+pairing worth publishing. They are encrypted in
+[`secrets/hearth-seedbox.yaml`](../secrets/hearth-seedbox.yaml):
+
+```bash
+sops -d secrets/hearth-seedbox.yaml
+```
+
+Placeholders below: `<user>`, `<server>`. Nothing consumes this file at
+activation time yet — it is a record. The Hearth Syncthing module will be its
+first `sops-nix` consumer.
 
 ## Ultra.cc Fair Usage — hard constraints
 
@@ -214,7 +224,8 @@ Two **unidirectional** folders, deliberately not one bidirectional one.
 | `hearth-library` | `/home/<user>/library` — **Send Only** | `/mnt/cold/share` — **Receive Only** | acquisitions down |
 | `hearth-upload` | `/home/<user>/hearth-upload` — **Receive Only** + File Versioning | `/mnt/cold/upload` — **Send Only** | existing COLD content up |
 
-Folder IDs must match on both sides; the real IDs are on the Conveyor card.
+Folder IDs must match on both sides; the real IDs are in
+`secrets/hearth-seedbox.yaml`.
 
 **No tailnet join and no VPN.** Ultra.cc offers no Tailscale app and Syncthing
 does not need one: device-ID auth over its own TLS, with hole-punching and

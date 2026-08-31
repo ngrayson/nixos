@@ -436,7 +436,8 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
   — Ultra.cc Fair Usage limits, the host-native/container split that dictates
   how the apps reach each other, the directory tree, and the verification
   commands. Identifying values (slot username, hostname, Syncthing device and
-  folder IDs) stay off this public repo and live on the Conveyor card.
+  folder IDs) stay out of the clear in this public repo; they are encrypted in
+  `secrets/hearth-seedbox.yaml` (`sops -d` to read).
 
 ## 5. Risk register (from the audit)
 
