@@ -394,10 +394,23 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
   one: device-ID auth over its own TLS, with hole-punching and relay fallback
   covering Hearth's double NAT. Do not install Ultra's WireGuard for this.
 - **Share the organized tree, not the torrent directory.** Sonarr/Radarr run
-  *on the seedbox* (they must reach the download client) and hardlink into a
-  `completed/` tree; only that tree is shared with Syncthing. Sharing the raw
-  torrent dir would send scene-named files to Hearth and double-count the
-  still-seeding copy against Ultra's disk quota.
+  *on the seedbox* and hardlink from `~/torrents/done` into `~/library`; only
+  `~/library` is shared with Syncthing. Sharing the raw torrent dir would send
+  scene-named files to Hearth and double-count the still-seeding copy against
+  Ultra's disk quota.
+- **Two unidirectional Syncthing folders, not one bidirectional** (as-built
+  2026-08-31): `hearth-library` (slot `~/library` Send Only → Hearth
+  `/mnt/cold/share` Receive Only) carries acquisitions down;
+  `hearth-upload` (Hearth `/mnt/cold/upload` Send Only → slot
+  `~/hearth-upload` Receive Only, with File Versioning) carries existing COLD
+  content up as a versioned offsite copy. A single Send & Receive folder would
+  round-trip deletions: Hearth's routing step moving a file out of `share/`
+  would delete it from the slot's `~/library`, and Sonarr/Radarr would mark the
+  episode missing and re-grab it in an unbounded loop.
+- **`/mnt/cold/share` is a landing zone, never the library.** Hearth must
+  hardlink out into `media/{movies,tv}`, never move — moving out of a Receive
+  Only folder leaves it permanently out of sync, and Syncthing's only offered
+  remedy re-downloads everything.
 - Because files then arrive already sorted into `movies/`/`tv/`, the
   tag-routing step above shrinks to a move rather than a classifier.
 - **Seedbox app set (chosen 2026-08-30):** Syncthing, qBittorrent (+ qui),
@@ -418,6 +431,12 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
   `hearth-extract-sidecars --one <file>` so new titles get sidecars
   without waiting for another library-wide pass.
 - The homepage/ingest UI from the original plan stays **last**, after H6-H7.
+- **Slot runbook:**
+  [`documentation/hearth-seedbox-runbook.md`](../../documentation/hearth-seedbox-runbook.md)
+  — Ultra.cc Fair Usage limits, the host-native/container split that dictates
+  how the apps reach each other, the directory tree, and the verification
+  commands. Identifying values (slot username, hostname, Syncthing device and
+  folder IDs) stay off this public repo and live on the Conveyor card.
 
 ## 5. Risk register (from the audit)
 
