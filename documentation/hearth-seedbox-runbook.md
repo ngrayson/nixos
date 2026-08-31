@@ -182,14 +182,18 @@ stays manual.
 ### Sonarr is installed as "Sonarr2"
 
 The first Sonarr install failed with a Docker name conflict —
-`sonarr-technowizard` already existed as a stopped orphan from an earlier
-attempt, and the slot has no Docker socket access to clear it. Installing the
+`sonarr-<user>` already existed as a stopped orphan from an earlier attempt,
+and the slot has no Docker socket access to clear it. Installing the
 **Sonarr2** app worked, because it uses a different container name.
 
 So the only Sonarr runs at `/sonarr2` and must be wired as such everywhere
 (Prowlarr, Bazarr). It is **not** a second instance in any meaningful sense.
-The `sonarr-technowizard` name stays burned until a support ticket clears it,
-which also means a genuine second instance is unavailable.
+
+**Decided 2026-08-31: no support ticket.** Clearing the orphan would need
+Ultra.cc staff, and Sonarr2 is a complete workaround. The accepted cost is
+that the `sonarr-<user>` container name stays burned, so a plain Sonarr
+cannot be installed and a genuine second instance is unavailable. Revisit
+only if a second instance is actually wanted.
 
 ## App configuration
 
@@ -254,10 +258,11 @@ routing job must run on a schedule, not once per file.
 
 ### Sync is not backup
 
-`hearth-upload` only becomes a real offsite copy with **File Versioning**
-enabled on the slot side (Trash Can, or Simple keeping 3-5 versions).
-Without it, a deletion or corruption on Hearth propagates up and destroys the
-remote copy. Watch `.stversions` for quota growth.
+Syncthing mirrors mistakes: without versioning, a deletion or corruption on
+Hearth propagates up and destroys the remote copy. **File Versioning is
+enabled on the slot side of `hearth-upload`** (2026-08-31), which is what
+makes it an offsite copy rather than a mirror. Do not turn it off. Watch
+`.stversions` for quota growth.
 
 ## Cross-seeding existing COLD content
 
@@ -318,8 +323,10 @@ the `*arr` adopted the existing folder as the series path. Fix in the series'
 seeding is unaffected.
 
 **Install fails with a Docker name conflict.** An orphaned container from a
-previous attempt. No socket access to clear it, so it is a support ticket —
-or install the numbered variant of the app, as was done for Sonarr2.
+previous attempt. There is no socket access to clear it, so the options are a
+support ticket or installing the app's numbered variant. The numbered variant
+is the faster path and is what was done for Sonarr2 — take it, and accept that
+the original container name stays unusable.
 
 ## Do not
 
