@@ -384,10 +384,32 @@ flag suspends auto-updates after a manual push deploy — at the cost of a binar
 cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ### H8 — Acquisition pipeline (seedbox-first)
-- **Provider (decision 19): Ultra.cc** — stand up the slot before this phase.
+- **Provider (decision 19): Ultra.cc** — **slot acquired 2026-08-30.** The
+  seedbox pack's blocker is cleared; pairing proceeds once device IDs exist.
 - Seedbox downloads; **Syncthing** pulls completed files to
   `/mnt/cold/share`; tag-based routing to `/mnt/cold/media/{movies,tv,music}`
   via a small systemd path unit or the future homepage API.
+- **The sync leg needs no tailnet join and no VPN (resolves open question 2).**
+  Ultra.cc's app catalogue offers no Tailscale, and Syncthing does not need
+  one: device-ID auth over its own TLS, with hole-punching and relay fallback
+  covering Hearth's double NAT. Do not install Ultra's WireGuard for this.
+- **Share the organized tree, not the torrent directory.** Sonarr/Radarr run
+  *on the seedbox* (they must reach the download client) and hardlink into a
+  `completed/` tree; only that tree is shared with Syncthing. Sharing the raw
+  torrent dir would send scene-named files to Hearth and double-count the
+  still-seeding copy against Ultra's disk quota.
+- Because files then arrive already sorted into `movies/`/`tv/`, the
+  tag-routing step above shrinks to a move rather than a classifier.
+- **Seedbox app set (chosen 2026-08-30):** Syncthing, qBittorrent (+ qui),
+  Prowlarr, Sonarr, Radarr, Bazarr. No usenet stack (no provider), no
+  Plex-ecosystem tools (Hearth serves Jellyfin), no second `*arr` instances,
+  and no serving apps — the library lives on COLD and only Hearth serves it.
+  Autobrr only if private-tracker race timing demands it; FlareSolverr/Byparr
+  only when a specific indexer asks for one.
+- **Bazarr writes real `.srt` sidecars upstream**, which sync over alongside
+  the media. That is the durable fix for the first-play caption delay, and it
+  demotes the `hearth-extract-sidecars` pass below to a fallback for titles
+  Bazarr finds no subtitles for.
 - VPN-piped local download as fallback only: reuse the repo's existing VPN
   stack (`common/vpn-vortix.nix` stunnel/FrootVPN — server-safe subset) or a
   dedicated namespace so torrent traffic cannot leak; upload hard-capped at 0.
@@ -434,9 +456,11 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
    `home.wizt.org`. Buy an **access point** only if 5 GHz coverage at the TV
    proves short. See
    [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
-2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
-   sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
-   decided).
+2. **Ultra.cc sync path:** ~~join the slot to the tailnet for Syncthing, or
+   sync over Ultra's own protocol/SSH?~~ — **resolved 2026-08-30: plain
+   Syncthing, no tailnet join and no WireGuard.** Ultra offers no Tailscale
+   app, and Syncthing's own TLS plus device-ID auth with relay fallback
+   already crosses the double NAT. See H8.
 3. **`tv.wizt.org` exposure:** tailnet-only (private, simplest) or public
    via Tailscale Funnel (Jellyfin auth is the only gate)? Pick when H6 lands.
 4. **Battery policy after headless (H4):** keep lid-close-on-battery =
