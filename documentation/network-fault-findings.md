@@ -12,7 +12,7 @@ covers the purchase question. This file is the evidence.
 | # | Fault | Evidence | Status |
 |---|---|---|---|
 | 1 | **TP-Link AX3000 (AncientGlade) wedges** — LAN/Wi-Fi bridge stops forwarding while WAN stays healthy | Gateway stopped answering ARP; entire `192.168.0.0/24` dark; two independent clients affected; only a power cycle recovered it | Recovered by power cycle. **Recurrence expected — root cause not fixed.** |
-| 2 | **Pi Zero W's `wlan0` disappears from the kernel** | Interface vanished from `/proc/net/wireless` at 00:09 and never returned across 473 consecutive samples (~7h54m), while the Pi itself kept running | Mitigation applied (power-save off). **Unverified — awaiting a clean night.** |
+| 2 | **Pi Zero W's `wlan0` disappears from the kernel** | Interface vanished from `/proc/net/wireless` at 00:09 and never returned across 473 consecutive samples (~7h54m), while the Pi itself kept running | Mitigation applied (power-save off). **Looking good — 244 clean samples so far, see "Run 2" below. Not yet past the 00:09 hour when it failed.** |
 
 ## Fault 1 — the AX3000 wedges
 
@@ -83,6 +83,39 @@ the journald note below.
 card that is ~5 years old and already served ~33 M Pi-hole queries. Diagnosis
 was judged worth the wear; revert `99-persistent.conf` once the faults are
 resolved.
+
+## Run 2 (2026-08-31, power-save disabled) — interim result
+
+Restarted 09:14 after disabling Wi-Fi power-save, with the AP freshly power
+cycled. Now instrumented from **two independent vantage points**, which run 1
+lacked — that is what distinguishes an AP-wide failure (both observers lose the
+gateway) from a Pi-only one (Pi dark, gateway still fine from Tawa).
+
+Interim, as of 13:30 (~4h28m in):
+
+| Metric | Run 1 (night) | Run 2 (interim) |
+|---|---|---|
+| Pi samples | 478 | 244 |
+| Gateway unreachable, from the Pi | **476** | **0** |
+| `wlan0` missing from the kernel | 473 samples | **0** |
+| `brcmfmac` driver errors in journal | (logs lost — volatile) | **0** |
+| Signal | −20 dBm then gone | steady −14 to −18 dBm |
+| RTT | 312 ms in the first sample | 6–12 ms |
+
+Tawa's independent observer corroborates: **167 samples, gateway up in every
+one, Pi reachable in every one**, and it never roamed off `AncientGlade`.
+
+**Read this cautiously.** Disabling power-save is the leading explanation for
+fault 2, and it is the only change made on the Pi. But:
+
+- Run 1's failure hit at **00:09**; run 2 has not yet crossed that hour. An
+  overnight pass is the real test.
+- **The AP power cycle is a confound.** Fault 1 may have been contributing to
+  fault 2 — a wedged AP could plausibly drive a reassociation storm that
+  crashes `brcmfmac`. A healthy AP alone might have been sufficient, with
+  power-save irrelevant.
+- Fault 1 was observed **once**. Its recurrence interval is unknown, so a quiet
+  day says little about whether the AX3000 is fixed.
 
 ## Equipment on hand
 
