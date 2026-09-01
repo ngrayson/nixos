@@ -98,7 +98,12 @@ in {
     # and a cage restart (deploys restart it) should cycle this too.
     after = ["cage-tty1.service"];
     bindsTo = ["cage-tty1.service"];
-    wantedBy = ["graphical.target"];
+    # BindsTo propagates a stop but never a start, so after cage-tty1 is
+    # restarted on its own -- which a deploy does, and which go3-deploy now
+    # does explicitly when a switch leaves the kiosk down -- this unit stayed
+    # dead until someone noticed. Being wanted by cage-tty1 as well as
+    # graphical.target means it comes back with the session it watches.
+    wantedBy = ["graphical.target" "cage-tty1.service"];
     serviceConfig = {
       # The panel is root-owned 0644, so nothing but root can dim it. A udev
       # rule was the obvious grant and was wrong: udev rules fire on device

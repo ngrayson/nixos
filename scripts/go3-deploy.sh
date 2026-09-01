@@ -140,7 +140,7 @@ run_deploy() {
       --use-remote-sudo); then
     ok "nixos-rebuild ${action} succeeded."
     if [[ "$action" == "switch" ]]; then
-      verify_kiosk || true
+      ensure_kiosk || true
     fi
     return 0
   fi
@@ -150,38 +150,79 @@ run_deploy() {
   # with the new generation live. That is precisely the case where the kiosk
   # needs checking, so check it here too rather than only on success.
   if [[ "$action" == "switch" ]]; then
-    verify_kiosk || true
+    ensure_kiosk || true
   fi
   return 1
 }
 
-# profiles/kiosk.nix now restarts cage-tty1 on a switch and chvt's to tty1 in
-# its ExecStartPre, so the kiosk comes back on its own. This confirms that it
-# actually did rather than printing a reminder nobody reads — and it is
-# deliberately bounded, so a kiosk that never returns reports a failure
-# instead of hanging here.
-verify_kiosk() {
-  local deadline=$((SECONDS + 90)) state="unchecked" procs=0
-  info "Confirming the kiosk came back (up to 90s)..."
+# Getting the kiosk back after a switch, whatever stopped it.
+#
+# profiles/kiosk.nix restarts cage-tty1 when the unit itself changes, but that
+# is only one of the ways a deploy takes the screen down. Observed 2026-09-01
+# on a switch that changed nothing at all: switch-to-configuration started
+# getty@tty1.service, which Conflicts with cage-tty1, so systemd stopped the
+# kiosk -- and because the cage unit was unchanged, nothing restarted it. The
+# wall sat blank behind a "succeeded" deploy.
+#
+# So this does not merely report: if the kiosk is not back by the deadline it
+# starts it, which is what the card asked for -- activation brings the kiosk
+# back on its own -- and it works regardless of what stopped it.
+kiosk_state() {
+  # `systemctl is-active` exits non-zero for anything but active, so its exit
+  # status cannot stand in for "the ssh failed"; take the word it prints.
+  local out
+  out="$(ssh_go3 systemctl is-active cage-tty1 2>/dev/null || true)"
+  [[ -n "$out" ]] || out="unreachable"
+  printf '%s' "$out"
+}
+
+kiosk_procs() {
+  # `pgrep -c` prints 0 *and* exits 1 when nothing matches, so read the
+  # number and judge on the number.
+  local out
+  out="$(ssh_go3 pgrep -c chromium 2>/dev/null || true)"
+  [[ "$out" =~ ^[0-9]+$ ]] || out=0
+  printf '%s' "$out"
+}
+
+# cage-tty1 reports active before Chromium has spawned, so a live unit is not
+# a live kiosk; both have to be true.
+kiosk_up() {
+  [[ "$(kiosk_state)" == "active" ]] && [[ "$(kiosk_procs)" -gt 0 ]]
+}
+
+await_kiosk() {
+  local deadline=$((SECONDS + $1))
   while ((SECONDS < deadline)); do
-    state="$(ssh_go3 systemctl is-active cage-tty1 2>/dev/null || echo unreachable)"
-    # `pgrep -c` prints 0 *and* exits 1 when nothing matches, so its exit
-    # status cannot stand in for "no output" -- an `|| echo '?'` fallback
-    # here printed both the 0 and the ?. Read the number and judge on it.
-    procs="$(ssh_go3 pgrep -c chromium 2>/dev/null || true)"
-    [[ "$procs" =~ ^[0-9]+$ ]] || procs=0
-    # cage-tty1 reports active before Chromium has spawned, so a live unit is
-    # not a live kiosk. Waiting for the browser too is the whole point: a
-    # deploy that leaves a blank screen behind a running unit is exactly the
-    # failure this function exists to catch.
-    if [[ "$state" == "active" && "$procs" -gt 0 ]]; then
-      ok "Kiosk is up: cage-tty1 active, $procs chromium processes."
+    if kiosk_up; then
       return 0
     fi
     sleep 5
   done
-  error "Kiosk did not come back on its own (cage-tty1: ${state}, chromium: ${procs})."
-  error "Revive it with: $(basename "$0") ssh -- sudo systemctl restart cage-tty1"
+  return 1
+}
+
+ensure_kiosk() {
+  info "Confirming the kiosk came back (up to 60s)..."
+  if await_kiosk 60; then
+    ok "Kiosk is up: cage-tty1 active, $(kiosk_procs) chromium processes."
+    return 0
+  fi
+
+  warn "Kiosk did not come back on its own (cage-tty1: $(kiosk_state)). Starting it."
+  # Starting cage-tty1 also stops getty@tty1, which Conflicts with it, so this
+  # takes tty1 back in one step.
+  if ! ssh_go3 sudo systemctl start cage-tty1; then
+    error "Could not start cage-tty1 over SSH. The wall screen is blank."
+    return 1
+  fi
+  if await_kiosk 60; then
+    ok "Kiosk recovered: cage-tty1 active, $(kiosk_procs) chromium processes."
+    return 0
+  fi
+
+  error "Kiosk still down after a restart (cage-tty1: $(kiosk_state), chromium: $(kiosk_procs))."
+  error "Check: $(basename "$0") ssh -- journalctl -u cage-tty1 -n 30"
   return 1
 }
 
