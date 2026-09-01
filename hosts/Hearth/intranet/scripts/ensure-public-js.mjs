@@ -58,3 +58,22 @@ writeFileSync(
   join(root, "public/intranet-config.js"),
   "window.hearthIntranet = " + JSON.stringify(cfg, null, 2) + ";\n",
 );
+
+// The Nix build generates themes.js into the served root (caddy.nix's
+// intranetRoot); `vite dev` serves public/ instead, so produce the same file
+// here from the same scheme data rather than keeping a second copy of the
+// palettes. Without nix-instantiate there is simply no themes.js: the app
+// hides the picker and style.css's :root keeps painting Ghost.
+const schemes = evalNix("../../../home/theme/schemes");
+if (schemes) {
+  const themes = Object.fromEntries(
+    Object.entries(schemes).map(([id, scheme]) => [
+      id,
+      { name: scheme.name, slug: scheme.slug, tokens: scheme.tokens },
+    ]),
+  );
+  writeFileSync(
+    join(root, "public/themes.js"),
+    "window.hearthThemes = " + JSON.stringify(themes, null, 2) + ";\n",
+  );
+}

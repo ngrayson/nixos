@@ -3,6 +3,12 @@ import Modal from "./components/Modal.jsx";
 import WidgetGrid from "./components/WidgetGrid.jsx";
 import { Fact, ICO, Icon } from "./lib/icons.jsx";
 import { readShaderPref, SHADER_OPTIONS, writeShaderPref } from "./lib/shaderPref.js";
+import {
+  applyTheme,
+  readThemePref,
+  themeOptions,
+  writeThemePref,
+} from "./lib/themePref.js";
 import { TimeFormatProvider, useTimeFormat } from "./lib/timeFormat.js";
 
 const Atmosphere = lazy(() => import("./visuals/Atmosphere.jsx"));
@@ -81,8 +87,11 @@ function AtmosphereGate({ shaderId }) {
   );
 }
 
-function SettingsModal({ shaderId, onShader, onClose }) {
+function SettingsModal({ shaderId, onShader, themeId, onTheme, onClose }) {
   const { pref, setFormat } = useTimeFormat();
+  // Empty under `vite dev`, where /themes.js is not generated — no point
+  // showing a picker with nothing in it.
+  const themes = themeOptions();
   return (
     <Modal icon={ICO.cog} title="Settings" onClose={onClose}>
       <div className="settings-row">
@@ -124,6 +133,27 @@ function SettingsModal({ shaderId, onShader, onClose }) {
           </select>
         </label>
       </div>
+      {themes.length > 0 ? (
+        <div className="settings-row">
+          <label className="shader-picker">
+            <span className="shader-picker-label">Theme</span>
+            <select
+              value={themeId}
+              onChange={(event) => {
+                const next = event.target.value;
+                writeThemePref(next);
+                onTheme(next);
+              }}
+            >
+              {themes.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
     </Modal>
   );
 }
@@ -190,8 +220,14 @@ function KioskStats() {
 
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
+  const [themeId, setThemeId] = useState(readThemePref);
   const [settingsOpen, setSettingsOpen] = useState(false);
   useBuildReload();
+  // Repaints the eight CSS custom properties style.css declares in :root —
+  // on mount for the stored preference, and again on every change.
+  useEffect(() => {
+    applyTheme(themeId);
+  }, [themeId]);
   const pressTimer = useRef(null);
   const pressOrigin = useRef(null);
   const longPressFired = useRef(false);
@@ -289,6 +325,8 @@ function Shell() {
         <SettingsModal
           shaderId={shaderId}
           onShader={setShaderId}
+          themeId={themeId}
+          onTheme={setThemeId}
           onClose={() => setSettingsOpen(false)}
         />
       ) : null}
