@@ -6,7 +6,18 @@
 # kiosk is a Wi-Fi DHCP client — so MagicDNS is the address. This is OpenSSH
 # to sshd:22 with a key (hosts/Go3/remote-access.nix), not Tailscale SSH;
 # nix-copy-closure needs the real sshd.
+#
+# PATH shim lives here (not only a zsh alias) so go3-deploy works in any
+# shell, matching how ssh-hearth.nix exposes hearth-deploy.
 {...}: {
+  home.file.".local/bin/go3-deploy" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      exec bash "$HOME/.config/nixos/scripts/go3-deploy.sh" "$@"
+    '';
+  };
+
   home.file.".ssh/config.d/go3" = {
     text = ''
       Host go3
