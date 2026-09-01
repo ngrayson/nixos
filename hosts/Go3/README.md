@@ -36,7 +36,35 @@ Built on Tawa, activated over SSH — the Hearth model. Never run
 
 ```bash
 os-rebuild build --host Go3     # on Tawa
+go3-deploy switch               # build, copy, activate
 ```
+
+### The kiosk comes back on its own
+
+A switch used to leave the wall screen blank. Upstream's `services.cage`
+module sets `restartIfChanged = false`, so activation tore `cage-tty1` down
+and never started it again — and `getty@tty1` grabs tty1 the moment cage
+stops, because the two units `Conflicts`. Nobody watches an appliance deploy,
+so it stayed dead until someone SSHed in.
+
+[`profiles/kiosk.nix`](../../profiles/kiosk.nix) fixes both halves:
+
+- `restartIfChanged = lib.mkForce true` — the kiosk flickers on every switch
+  and comes back, which beats a silent dead screen.
+- `ExecStartPre = "+chvt 1"` — logind grants DRM access on `/dev/dri/*` only
+  to seat0's **ActiveSession**, so cage exits about ten seconds after start
+  whenever another VT is active. That is why a bare `systemctl start
+  cage-tty1` from SSH was never enough and always needed a `sudo chvt 1`
+  beside it. Doing the `chvt` inside the unit makes boot, deploy restart and
+  manual start all active-VT-correct. **Do not remove it** — the ACL problem
+  comes straight back.
+
+`go3-deploy switch` now confirms the kiosk returned instead of printing a
+reminder, and it runs that check even when the rebuild exits non-zero: the
+switch that applied `--ssh=false` cut its own SSH session and exited 255 with
+activation already complete, which is exactly when the check matters.
+
+If it ever does stay down: `go3-deploy ssh -- sudo systemctl restart cage-tty1`.
 
 ## Installing NixOS on this hardware
 

@@ -56,6 +56,26 @@ in {
     program = "${lib.getExe pkgs.chromium} ${lib.concatStringsSep " " chromiumFlags}";
   };
 
+  # Upstream's cage module sets restartIfChanged = false, so a switch tore the
+  # kiosk down and left it down — the wall screen stayed blank until someone
+  # SSHed in. (getty@tty1 takes tty1 the moment cage stops, because cage-tty1
+  # Conflicts with it.) Nobody watches an appliance deploy, so a brief flicker
+  # on every switch is strictly better than a silent dead screen.
+  #
+  # chvt 1 is the other half, and the reason a bare `systemctl start
+  # cage-tty1` was never enough: logind grants DRM access on /dev/dri/* only
+  # to seat0's ActiveSession, so cage exits ~10s after start whenever another
+  # VT is active — exactly the state left behind once getty@tty1 has the
+  # console. As ExecStartPre it makes every path (boot, deploy restart, manual
+  # start) active-VT-correct, which is why no operator needs a separate
+  # `sudo chvt 1` any more. Do not drop it: without it the ACL problem comes
+  # straight back. The `+` prefix runs it as root — the unit body runs as
+  # `wiz`, who cannot switch VTs.
+  systemd.services.cage-tty1 = {
+    restartIfChanged = lib.mkForce true;
+    serviceConfig.ExecStartPre = "+${pkgs.kbd}/bin/chvt 1";
+  };
+
   users.users.wiz = {
     isNormalUser = true;
     description = "Nick G";

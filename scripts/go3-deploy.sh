@@ -140,15 +140,39 @@ run_deploy() {
       --use-remote-sudo); then
     ok "nixos-rebuild ${action} succeeded."
     if [[ "$action" == "switch" ]]; then
-      warn "cage-tty1 has restartIfChanged=false: a switch does NOT restart the"
-      warn "kiosk. Reboot, or from an SSH session run:"
-      warn "  sudo systemctl restart cage-tty1 && sudo chvt 1"
-      warn "The chvt matters — logind only grants DRM access to the active seat"
-      warn "session, so cage fails if a console login holds another VT."
+      verify_kiosk || true
     fi
     return 0
   fi
   error "nixos-rebuild ${action} failed. Full log: $LOG_FILE"
+  # Activation may still have completed: the switch that applied
+  # remote-access.nix's --ssh=false cut its own SSH session and exited 255
+  # with the new generation live. That is precisely the case where the kiosk
+  # needs checking, so check it here too rather than only on success.
+  if [[ "$action" == "switch" ]]; then
+    verify_kiosk || true
+  fi
+  return 1
+}
+
+# profiles/kiosk.nix now restarts cage-tty1 on a switch and chvt's to tty1 in
+# its ExecStartPre, so the kiosk comes back on its own. This confirms that it
+# actually did rather than printing a reminder nobody reads — and it is
+# deliberately bounded, so a kiosk that never returns reports a failure
+# instead of hanging here.
+verify_kiosk() {
+  local deadline=$((SECONDS + 90)) state="unchecked"
+  info "Confirming the kiosk came back (up to 90s)..."
+  while ((SECONDS < deadline)); do
+    state="$(ssh_go3 systemctl is-active cage-tty1 2>/dev/null || echo unreachable)"
+    if [[ "$state" == "active" ]]; then
+      ok "Kiosk is up: cage-tty1 active, $(ssh_go3 pgrep -c chromium 2>/dev/null || echo '?') chromium processes."
+      return 0
+    fi
+    sleep 5
+  done
+  error "Kiosk did not come back on its own (cage-tty1: ${state})."
+  error "Revive it with: $(basename "$0") ssh -- sudo systemctl restart cage-tty1"
   return 1
 }
 
