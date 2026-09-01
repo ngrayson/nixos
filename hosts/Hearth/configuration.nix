@@ -23,5 +23,6 @@
     ./intranet-maps-key.nix
     ./weather-alert.nix
     ./restic.nix
+    ./syncthing.nix
   ];
 }
