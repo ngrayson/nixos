@@ -11,13 +11,10 @@ the historical record of the flake migration (phases 0-5, complete).
 
 ## 1. Corrected context
 
-| Item | Original plan said | Actual |
-|------|--------------------|--------|
-| Machine | Surface Pro 4 | **Surface Laptop 3** (i5-1035G7 Ice Lake, 8 GB RAM, 238 GB NVMe) |
-| State | Greenfield | Already migrated to this flake as host `Hearth`; Jellyfin running and verified on LAN |
-| Storage tiers | 3 (NVMe + 500 GB SSD + 2 TB HDD) | **2 (NVMe + HDD)** — no 500 GB SSD tier |
-| Session | Assumed headless | Currently Hyprland desktop (from migration phase 2) — to be **converted to headless** (see H4) |
-| Jellyfin | This node only | Tawa also serves Jellyfin today — **Tawa's will be disabled** (H3) |
+The original canvas was written with wrong hardware, a three-tier storage
+plan, and a pre-migration view of the machine. That reconciliation table and
+the audit's risk register (every row resolved or mitigated) live in
+[`documentation/hearth-plan-history.md`](../../documentation/hearth-plan-history.md).
 
 Current live facts (2026-08-21, post-H2): hostname `Hearth`, sshd key-only,
 Jellyfin `Healthy`. **Wi-Fi is AncientGlade `192.168.0.133` during agent
@@ -266,45 +263,22 @@ desktop is currently the only recovery console.
 - Acceptance: one Jellyfin on the network; clients repointed.
 - **Captions lag on first play — COLD's USB2 link was why (fixed).**
   Embedded ASS/SRT tracks are extracted on demand with
-  `ffmpeg -i <file> -map <n> -c:s copy`, which demuxes the *whole* container;
-  video direct-plays immediately, so the picture runs uncaptioned until that
-  full-file read finishes. The wait is roughly `filesize / read speed`.
-  Measured 2026-08-25 AM at the old **40 MB/s** (USB2 link): 15s for a
-  ~700 MB episode, 35s for 1.4 GB, observed as bad as 152s with two
-  concurrent extractions. After the port/cable fix (H2) COLD cold-reads at
-  **197 MB/s**.
-  - ~~Fastest real win: move COLD off the USB2.1 hub~~ — **done 2026-08-25**,
-    see H2.
-  - **Residual delay, measured 2026-08-25 evening (post-USB fix).** Cold
-    extract of Tongari ep 02 (1.44 GB ASS): **7.4s**. Live Jellyfin first-play
-    of Gachiakuta 11 (1.45 GB, never cached): **8.0s**
-    (`SubtitleEncoder` 20:28:53→20:29:00). Cold extract of LOTR Fellowship
-    (5.80 GB, three `subrip` tracks in one ffmpeg): **31s**. Font dumps are
-    a separate, client-driven tail: 14 serial `-dump_attachment` calls on
-    Tongari took **3.8s** (~0.25s each). The 5s "good enough, do nothing"
-    bar is **not** met across the board.
-  - **Sidecar font question (measured).** Jellyfin 10.11 skips
-    `ExtractAllExtractableSubtitles` for external `.ass`/`.srt` (not `.mks`).
-    A manually placed `Title.eng.default.ass` next to Gachiakuta 12 was
-    picked up on item Refresh as `IsExternal` index 0 / default, and
-    `Stream.ass` returned in **107ms** with **no** `SubtitleEncoder` line.
-    Sidecars do **not** skip the font tail if the client then asks for
-    attachments: `GET /Videos/.../Attachments/{n}` still runs
-    `AttachmentExtractor` against the MKV (~0.76s per font). The size-
-    proportional wait is the extract; fonts stay iff the client fetches them.
-  - **Inventory (2026-08-25):** 1336 video files under
-    `media/{tv,movies}` (1.14 TB). 1278 have at least one subtitle track
-    (1952 tracks: 1598 ASS, 195 subrip, 144 PGS, 13 DVD, 2 mov_text);
-    7939 embedded font/other attachments. Three prototype sidecars were
-    left next to Gachiakuta 11/12 and Tongari 02. A full sequential pass
-    at 197 MB/s is **~1.6h** (all files) / **~1.5h** (files with subs).
-  - **Recommendation: no service; one-shot signed off and shipped.**
-    `hearth-extract-sidecars` (hosts/Hearth/extract-sidecars.nix) is the
-    manual pass — idempotent, text tracks only, no timer. New arrivals
-    call the same binary via H8 ingest (`--one`), not a timer.
+  `ffmpeg -i <file> -map <n> -c:s copy`, which demuxes the *whole* container,
+  so the picture runs uncaptioned for roughly `filesize / read speed`. The USB
+  fix (H2) took COLD from 40 MB/s to 197 MB/s, which shortened but did not
+  close the gap: ~8s on a 1.45 GB episode, 31s on a 5.80 GB movie.
+  - **Resolution: external sidecars, no service.** Jellyfin 10.11 picks up a
+    `{name}.{lang}.default.{ass|srt}` next to the video as `IsExternal` and
+    serves it in ~107ms with no `SubtitleEncoder` pass.
+    `hearth-extract-sidecars` (`hosts/Hearth/extract-sidecars.nix`) is the
+    idempotent manual pass — text tracks only, **no timer**. New arrivals call
+    the same binary from H8 ingest via `--one`. Bazarr on the seedbox writes
+    real `.srt` upstream (H8), which demotes this to a fallback.
   - Not a fix: `EnableSubtitleExtraction` only *permits* on-the-fly
     extraction; disabling it removes captions rather than speeding them up.
     Jellyfin 10.11 has no pre-extract-during-scan option.
+  - Measurements, the 1336-file subtitle inventory, and the font-attachment
+    tail: [`documentation/hearth-caption-latency.md`](../../documentation/hearth-caption-latency.md).
 
 ### H4 — Headless flip
 - New `profiles/media-server.nix`: base.nix + openssh + tailscale + jellyfin
@@ -388,24 +362,14 @@ Guardrails that answer "unsupervised switch on main" regardless of tool:
 5. Notifications (Discord webhook via H5 secret) on start/success/rollback.
 
 **Why not comin (2026-08-25).** `hearth-deploy` already satisfies all five
-guardrails; comin satisfies one (polling a dedicated branch). It has no path
-filtering, its `operation` is a static `switch`/`test`/`boot` per branch rather
-than conditional on what changed, and health-check plus rollback would have to
-be hand-written in `postDeploymentCommand`. Its only real gain is applying
-changes with Tawa asleep — but the filter works *because* the pin only advances
-through `hearth-deploy`, so promoting from a phone or the GitHub UI (the whole
-point) would bypass it and auto-apply shared-tree changes. Kernel bumps arrive
-via `flake.lock`, so guardrail 3 falls with guardrail 2. Comin is also absent
-from the pinned nixpkgs, so it needs a `flake.nix`/`flake.lock` input that the
-filter itself blocks, and it evaluates and builds on the target with no
-`--build-host`, which would run the intranet's `buildNpmPackage` on the media
-host and contradict guardrail 4. **Prerequisite for revisiting any puller:**
-enforce the path filter server-side on `deploy/hearth` (branch protection plus
-a required check running `refuse_shared_deploy_paths` logic). With that in
-place, `nixos-autodeploy` is the better candidate — `switchMode = "smart"`
-boots on kernel/initrd/module changes and switches otherwise, and its dirty
-flag suspends auto-updates after a manual push deploy — at the cost of a binary
-cache plus CI publishing a system path, which also restores build-on-Tawa.
+guardrails above; comin satisfies one (polling a dedicated branch). Its only
+real gain — applying changes with Tawa asleep — is exactly what breaks
+guardrail 2, because the path filter works *because* the pin only advances
+through `hearth-deploy`. **Prerequisite for revisiting any puller:** enforce
+the path filter server-side on `deploy/hearth` (branch protection plus a
+required check running `refuse_shared_deploy_paths` logic). With that in place
+`nixos-autodeploy` is the better candidate than comin. Full analysis:
+[`documentation/hearth-gitops-decision.md`](../../documentation/hearth-gitops-decision.md).
 
 ### H8 — Acquisition pipeline (seedbox-first)
 - **Provider (decision 19): Ultra.cc** — **slot acquired 2026-08-30.** The
@@ -465,22 +429,9 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ## 5. Risk register (from the audit)
 
-| Audit risk | Status |
-|------------|--------|
-| Wrong hardware (Pro 4 vs Laptop 3) | **Resolved** — this doc is the corrected baseline |
-| Role conflict (desktop vs headless) | **Resolved** — headless confirmed; H4 sequences the flip safely |
-| Three-tier storage doesn't exist | **Resolved** — two-tier confirmed; HDD on hand (H2) |
-| Media on NVMe | **Resolved** — H2 shipped; media is on `/mnt/cold` |
-| Two Jellyfin servers | **Resolved** — Tawa's will be disabled (H3) |
-| Docker creep | **Resolved** — NixOS modules only |
-| Unsupervised switch on main | **Resolved** — push-based `hearth-deploy` from the `deploy/hearth` pin, plus H7 guardrails. comin cancelled (decision 21): it would bypass the path filter |
-| On-box builds vs 8 GB RAM / small disk | **Mitigated** — space freed + headless RAM headroom; build-elsewhere preferred |
-| No secrets story | **Resolved** — sops-nix + Bitwarden Pro vault confirmed (H5) |
-| TV cannot run Tailscale | **Resolved** — TV + Hearth share GiGstreem (decision 13); wired LAN later |
-| Jellyfin state migration | **Resolved** — fresh start (decision 14) |
-| No remote SSH path | **Resolved** — H0 shipped; Tawa OpenSSH to GiGstreem `.38` proven 2026-08-22 |
-| HDD on USB | **Mitigated** — powered UASP hub on USB-C, `nofail` mount, USB-A kept free for rescue |
-| Battery-as-UPS vs suspend-on-battery | **Narrowed** — idle suspend ruled out (decision 17); only lid-close-on-battery policy left for H4 |
+Every row is resolved or mitigated; the table is kept as a closed audit
+artifact in
+[`documentation/hearth-plan-history.md`](../../documentation/hearth-plan-history.md).
 
 ## 6. Open questions
 
