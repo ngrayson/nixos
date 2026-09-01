@@ -7,7 +7,7 @@ files you touch.
 
 Canonical tree: `~/.config/nixos` (flake `github:ngrayson/nixos`). Hosts:
 **Theseus** (Framework laptop), **Tawa** (desktop), **Hearth** (Surface media
-host), **Gcp**.
+host), **Go3** (Surface Go 3 kiosk), **Gcp**.
 
 ## Agent workflow
 
