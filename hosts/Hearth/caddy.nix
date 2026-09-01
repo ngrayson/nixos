@@ -203,5 +203,38 @@ in {
   systemd.services.caddy = {
     after = ["tailscaled.service" "jellyfin.service"];
     wants = ["tailscaled.service"];
+
+    # Both vhosts above bind tailnetIPv4 explicitly, which is deliberate —
+    # home.wizt.org and tv.wizt.org are tailnet-only, and a wildcard bind would
+    # widen that. The cost is that Caddy cannot start until tailscale0 actually
+    # carries the address.
+    #
+    # `after = tailscaled.service` is not enough: tailscaled being *started* is
+    # not the same as the interface having an address, and on a cold boot Caddy
+    # wins that race and dies with
+    #   listening on 100.84.222.78:80: bind: cannot assign requested address
+    #
+    # Nothing retries it, either. The upstream module sets Restart=on-failure
+    # but also RestartPreventExitStatus=1, and Caddy exits 1 on a config-load
+    # failure — sensible for a bad Caddyfile, wrong for a transient bind race.
+    # Observed 2026-09-01: Hearth rebooted for the headless flip and the
+    # dashboard stayed down until the unit was started by hand 93s later. It
+    # had gone unnoticed for over eight days simply because the machine had not
+    # rebooted in that time.
+    #
+    # So wait for the address rather than retrying the failure. Bounded, and
+    # deliberately does not fail the unit on timeout: if the address never
+    # appears, let Caddy start and produce its own clear error rather than
+    # replacing it with a timeout nobody can interpret.
+    preStart = ''
+      for _ in $(seq 1 60); do
+        if ${pkgs.iproute2}/bin/ip -4 addr show tailscale0 2>/dev/null \
+          | grep -q "${tailnetIPv4}"; then
+          exit 0
+        fi
+        sleep 1
+      done
+      echo "caddy: ${tailnetIPv4} did not appear on tailscale0 within 60s; starting anyway" >&2
+    '';
   };
 }
