@@ -39,9 +39,10 @@
 
       max="$(cat "$maxfile")"
       blanked=0
-      # Captured fresh each time we blank, so a brightness someone changed
-      # while the panel was awake survives a blank/wake cycle.
-      on_level="$max"
+      # Seeded from whatever the panel is set to now, and re-captured on each
+      # blank, so a level someone chose survives a blank/wake cycle.
+      on_level="$(cat "$bright")"
+      [[ "$on_level" -gt 0 ]] || on_level="$max"
 
       blank() {
         local current
@@ -59,9 +60,12 @@
         blanked=0
       }
 
-      # Restore the panel on the way out: a stopped or crashed blanker must
-      # never be the reason a wall display stays dark.
-      trap 'wake || true' EXIT
+      # Restore on the way out, but only if we are the reason the panel is
+      # dark. A stopped or crashed blanker must never leave a wall display
+      # off -- and equally must not touch a brightness it never changed:
+      # restoring unconditionally made every deploy (which stops this unit)
+      # write on_level over the current level, jumping the panel to full.
+      trap 'if [[ "$blanked" -eq 1 ]]; then wake; fi' EXIT
 
       # libinput prints one line per input event -- key, touch, pointer -- from
       # the udev backend, independent of any compositor. `read -t` doing double
