@@ -161,17 +161,26 @@ run_deploy() {
 # deliberately bounded, so a kiosk that never returns reports a failure
 # instead of hanging here.
 verify_kiosk() {
-  local deadline=$((SECONDS + 90)) state="unchecked"
+  local deadline=$((SECONDS + 90)) state="unchecked" procs=0
   info "Confirming the kiosk came back (up to 90s)..."
   while ((SECONDS < deadline)); do
     state="$(ssh_go3 systemctl is-active cage-tty1 2>/dev/null || echo unreachable)"
-    if [[ "$state" == "active" ]]; then
-      ok "Kiosk is up: cage-tty1 active, $(ssh_go3 pgrep -c chromium 2>/dev/null || echo '?') chromium processes."
+    # `pgrep -c` prints 0 *and* exits 1 when nothing matches, so its exit
+    # status cannot stand in for "no output" -- an `|| echo '?'` fallback
+    # here printed both the 0 and the ?. Read the number and judge on it.
+    procs="$(ssh_go3 pgrep -c chromium 2>/dev/null || true)"
+    [[ "$procs" =~ ^[0-9]+$ ]] || procs=0
+    # cage-tty1 reports active before Chromium has spawned, so a live unit is
+    # not a live kiosk. Waiting for the browser too is the whole point: a
+    # deploy that leaves a blank screen behind a running unit is exactly the
+    # failure this function exists to catch.
+    if [[ "$state" == "active" && "$procs" -gt 0 ]]; then
+      ok "Kiosk is up: cage-tty1 active, $procs chromium processes."
       return 0
     fi
     sleep 5
   done
-  error "Kiosk did not come back on its own (cage-tty1: ${state})."
+  error "Kiosk did not come back on its own (cage-tty1: ${state}, chromium: ${procs})."
   error "Revive it with: $(basename "$0") ssh -- sudo systemctl restart cage-tty1"
   return 1
 }
