@@ -22,7 +22,16 @@
 
   go3-idle-blank = pkgs.writeShellApplication {
     name = "go3-idle-blank";
-    runtimeInputs = [pkgs.coreutils pkgs.libinput];
+    # gawk is load-bearing: dim() computes the dim level with awk, and without
+    # it here the service died with status=127 the first time it tried to dim —
+    # every three minutes, forever, so the panel never dimmed at all.
+    #
+    # It was missed because writeShellApplication *prepends* runtimeInputs to
+    # PATH rather than replacing it, so running the built script from a login
+    # shell finds the developer's own awk and the dim path looks fine. Only
+    # under systemd, with a restricted PATH, does it fail. Verify shell
+    # applications under their unit, not from a shell.
+    runtimeInputs = [pkgs.coreutils pkgs.gawk pkgs.libinput];
     text = ''
       set -euo pipefail
 
