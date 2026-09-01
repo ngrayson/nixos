@@ -13,6 +13,7 @@
     ./programs/zsh.nix
     ./programs/git.nix
     ./programs/ssh-hearth.nix
+    ./programs/ssh-go3.nix
     ./programs/hearth-tui.nix
     ./wayland/hyprland.nix
     ./services/dunst.nix
