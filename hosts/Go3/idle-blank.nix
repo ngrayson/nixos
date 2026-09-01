@@ -164,16 +164,23 @@ in {
 
   systemd.services.go3-idle-blank = {
     description = "Blank the Go3 kiosk panel after idle, wake on input";
-    # Tied to the session it dims: no point watching for input with no kiosk,
-    # and a cage restart (deploys restart it) should cycle this too.
+    # Deliberately independent of cage-tty1. Tying the two together looked
+    # right -- the blanker watches the kiosk's panel -- but it is not: this
+    # writes the kernel backlight, which the compositor does not own and which
+    # works whether or not cage is running.
+    #
+    # The coupling cost two deploy failures. BindsTo made a cage stop kill this
+    # unit; adding `wantedBy = cage-tty1.service` to bring it back put a
+    # symlink in cage-tty1.service.wants/, so editing THIS file changed
+    # cage-tty1's dependencies too -- switch-to-configuration then restarted
+    # cage (restartIfChanged), which SIGTERMed this unit mid-start and left
+    # the wall blank for a minute. A change to the blanker must not restart
+    # the kiosk.
+    #
+    # `after` is kept purely for boot ordering; Restart=always is what keeps
+    # this alive now, rather than another unit's lifecycle.
     after = ["cage-tty1.service"];
-    bindsTo = ["cage-tty1.service"];
-    # BindsTo propagates a stop but never a start, so after cage-tty1 is
-    # restarted on its own -- which a deploy does, and which go3-deploy now
-    # does explicitly when a switch leaves the kiosk down -- this unit stayed
-    # dead until someone noticed. Being wanted by cage-tty1 as well as
-    # graphical.target means it comes back with the session it watches.
-    wantedBy = ["graphical.target" "cage-tty1.service"];
+    wantedBy = ["graphical.target"];
     serviceConfig = {
       # The panel is root-owned 0644, so nothing but root can dim it. A udev
       # rule was the obvious grant and was wrong: udev rules fire on device
