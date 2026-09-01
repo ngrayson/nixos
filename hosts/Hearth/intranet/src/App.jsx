@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal.jsx";
 import WidgetGrid from "./components/WidgetGrid.jsx";
 import { ICO, Icon } from "./lib/icons.jsx";
@@ -6,6 +6,17 @@ import { readShaderPref, SHADER_OPTIONS, writeShaderPref } from "./lib/shaderPre
 import { TimeFormatProvider, useTimeFormat } from "./lib/timeFormat.js";
 
 const Atmosphere = lazy(() => import("./visuals/Atmosphere.jsx"));
+
+// Holding the Home nav item opens this in a new tab. Deliberately unhinted:
+// no tooltip, no icon change, no data attribute naming it, no CSS affordance
+// — the dashboard has to look untouched to anyone who is not holding the
+// button down. Home is `href="/"` and already `aria-current="page"`, so a
+// plain click is inert today and the gesture displaces nothing.
+const HELD_HOME_URL = "https://technowizard.myles.usbx.me/sonarr2/";
+// Long enough that a normal tap never reaches it, short enough that a
+// deliberate hold does not feel broken.
+const LONG_PRESS_MS = 600;
+const MOVE_TOLERANCE_PX = 10;
 
 function AtmosphereGate({ shaderId }) {
   const [mount, setMount] = useState(false);
@@ -74,12 +85,76 @@ function SettingsModal({ shaderId, onShader, onClose }) {
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const pressTimer = useRef(null);
+  const pressOrigin = useRef(null);
+  const longPressFired = useRef(false);
+
+  const cancelPress = useCallback(() => {
+    if (pressTimer.current !== null) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressOrigin.current = null;
+  }, []);
+
+  const startPress = useCallback((event) => {
+    // Primary button only; a right-click is not a long press.
+    if (event.button !== undefined && event.button !== 0) return;
+    longPressFired.current = false;
+    pressOrigin.current = { x: event.clientX, y: event.clientY };
+    pressTimer.current = setTimeout(() => {
+      pressTimer.current = null;
+      longPressFired.current = true;
+      window.open(HELD_HOME_URL, "_blank", "noopener,noreferrer");
+    }, LONG_PRESS_MS);
+  }, []);
+
+  const trackPress = useCallback(
+    (event) => {
+      const origin = pressOrigin.current;
+      if (!origin) return;
+      // A scroll or drag that happens to start on Home is not a held press.
+      if (
+        Math.abs(event.clientX - origin.x) > MOVE_TOLERANCE_PX ||
+        Math.abs(event.clientY - origin.y) > MOVE_TOLERANCE_PX
+      ) {
+        cancelPress();
+      }
+    },
+    [cancelPress],
+  );
+
+  // A pending timer must not outlive the component.
+  useEffect(() => cancelPress, [cancelPress]);
+
   return (
     <>
       <AtmosphereGate shaderId={shaderId} />
       <main>
         <nav className="site-nav" aria-label="Hearth">
-          <a href="/" className="site-nav-item" aria-current="page">
+          <a
+            href="/"
+            className="site-nav-item"
+            aria-current="page"
+            onPointerDown={startPress}
+            onPointerMove={trackPress}
+            onPointerUp={cancelPress}
+            onPointerLeave={cancelPress}
+            onPointerCancel={cancelPress}
+            onClick={(event) => {
+              // Swallow the click a completed hold leaves behind so the
+              // gesture never also navigates.
+              if (longPressFired.current) {
+                longPressFired.current = false;
+                event.preventDefault();
+              }
+            }}
+            onContextMenu={(event) => {
+              // On touch, a hold otherwise raises the context menu, which
+              // would both interrupt the gesture and hint that it exists.
+              event.preventDefault();
+            }}
+          >
             <Icon code={ICO.home} />
             Home
           </a>
