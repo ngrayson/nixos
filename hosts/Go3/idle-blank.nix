@@ -88,14 +88,6 @@
     '';
   };
 in {
-  # The panel is root-owned 0644 by default, so nothing but root can dim it.
-  # This is the same narrow grant programs.light and hardware.brillo make:
-  # group `video` gains write on backlight brightness and nothing else. `wiz`
-  # is already in `video` (profiles/kiosk.nix), so no sudo widening is needed.
-  services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="backlight", RUN+="${pkgs.coreutils}/bin/chgrp video /sys/class/backlight/%k/brightness", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys/class/backlight/%k/brightness"
-  '';
-
   systemd.services.go3-idle-blank = {
     description = "Blank the Go3 kiosk panel after idle, wake on input";
     # Tied to the session it dims: no point watching for input with no kiosk,
@@ -104,6 +96,21 @@ in {
     bindsTo = ["cage-tty1.service"];
     wantedBy = ["graphical.target"];
     serviceConfig = {
+      # The panel is root-owned 0644, so nothing but root can dim it. A udev
+      # rule was the obvious grant and was wrong: udev rules fire on device
+      # events, and the backlight is added at boot, so on a live switch the
+      # rule never ran and the service crash-looped on an unwritable file
+      # (observed 2026-09-01). Doing it here instead runs immediately before
+      # the service needs it, on every start, independent of udev timing.
+      #
+      # Still the same narrow grant programs.light makes -- group `video`
+      # gains write on backlight brightness and nothing else, and `wiz` is
+      # already in `video`. The `+` prefix runs these as root; the unit body
+      # runs as `wiz`, who cannot chgrp.
+      ExecStartPre = [
+        "+${pkgs.coreutils}/bin/chgrp video ${backlight}/brightness"
+        "+${pkgs.coreutils}/bin/chmod g+w ${backlight}/brightness"
+      ];
       ExecStart = "${go3-idle-blank}/bin/go3-idle-blank";
       User = "wiz";
       # Reading /dev/input/event* is group `input`; writing brightness is
