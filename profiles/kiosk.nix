@@ -24,6 +24,44 @@
     "--disable-session-crashed-bubble"
     "--disable-features=TranslateUI"
   ];
+  # wlroots draws a cursor whenever the seat has a pointer capability, and on
+  # the Go 3 the ELAN9038 panel and its stylus are the ONLY devices exposing
+  # mouseN handlers (verified on the box 2026-09-01) -- so the touchscreen
+  # itself is what convinces the seat a mouse exists, and the pointer parks
+  # wherever it was last drawn. There is no mouse to unplug.
+  #
+  # A fully transparent cursor theme is the safe fix: it leaves input
+  # classification alone, so touch keeps working. Quirking the panel out of
+  # ID_INPUT_MOUSE would risk taking touch with it, which is worse than a
+  # visible cursor. `unclutter` is X11 and does nothing here.
+  #
+  # The theme has to be built: only `hicolor` is installed on the box, so
+  # there is no existing transparent theme to point XCURSOR_THEME at.
+  transparentCursor =
+    pkgs.runCommand "transparent-cursor-theme" {
+      nativeBuildInputs = [pkgs.xorg.xcursorgen pkgs.imagemagick];
+    } ''
+      theme="$out/share/icons/transparent"
+      mkdir -p "$theme/cursors"
+
+      cat >"$theme/index.theme" <<EOF
+      [Icon Theme]
+      Name=transparent
+      Comment=Fully transparent cursors for touch-only kiosks
+      EOF
+
+      magick -size 24x24 xc:none cursor.png
+      # xcursorgen config: <size> <xhot> <yhot> <image>
+      echo "24 0 0 cursor.png" >config
+      xcursorgen config "$theme/cursors/left_ptr"
+
+      # wlroots asks for a handful of names depending on what is under the
+      # pointer; every one of them resolves to the same empty image.
+      for name in default pointer text xterm hand1 hand2 grab grabbing \
+                  top_left_arrow left_ptr_watch watch progress; do
+        ln -s left_ptr "$theme/cursors/$name"
+      done
+    '';
 in {
   imports = [
     ../common/base.nix
@@ -53,6 +91,12 @@ in {
   services.cage = {
     enable = true;
     user = "wiz";
+    environment = {
+      XCURSOR_THEME = "transparent";
+      XCURSOR_SIZE = "24";
+      # cage inherits no session dirs, so point Xcursor straight at the theme.
+      XCURSOR_PATH = "${transparentCursor}/share/icons";
+    };
     program = "${lib.getExe pkgs.chromium} ${lib.concatStringsSep " " chromiumFlags}";
   };
 
