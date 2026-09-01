@@ -53,6 +53,19 @@ adds only selection, claiming, cadence, and local-machine hygiene.
   resolution is the user committing or stashing, not a second checkout.
 - **Push early.** There is no pod WIP-autosync locally; committed-and-pushed is
   the only durable state. Push the branch (`-u origin`) as soon as it exists.
+- **File a card the moment you notice a bug — do not fix it inline.** A defect
+  spotted outside the card in hand (in shipped behaviour or in this repo's own
+  tooling) goes straight to `mcp__conveyor__create_task` with `status: "Open"`,
+  carrying the symptom, the evidence it is real (a log line, a command and its
+  output, a store path) and the suspected cause. Mentioning it only in a PR
+  body, a chat message or a summary loses it — that is exactly how a stale tag
+  link sat unactioned for five days after Conveyor's own checker flagged it.
+  Filing rather than fixing is also what keeps the current card's scope honest.
+  A bug you introduced yourself is exempt only while you fix it inside the same
+  card. When unsure whether something qualifies, file it: a cheap extra card
+  beats a lost defect. Check `mcp__conveyor__list_tags` before passing any
+  `tags` — an unknown name creates the card *and then* errors, so retrying
+  produces a duplicate.
 
 ## Iteration order
 
