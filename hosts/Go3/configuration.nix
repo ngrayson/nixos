@@ -13,5 +13,6 @@
     ./stats-server.nix
     ./battery-checkin.nix
     ./scheduled-reboot.nix
+    ./camera-wake.nix
   ];
 }
