@@ -13,6 +13,7 @@
     ./programs/albert.nix
     ./wayland/hyprland.nix
     ./services/dunst.nix
+    ./services/battery-notify.nix
     ./services/polkit-agent.nix
     ./services/nm-applet.nix
     ./services/hypridle.nix
