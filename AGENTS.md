@@ -40,6 +40,21 @@ host), **Go3** (Surface Go 3 kiosk), **Gcp**.
   switch` plus a check (`readlink /run/current-system` or `qs-nixos-status`).
   Hardware / kernel / disk / Hearth headless flip: the user runs
   `dry-activate` then `boot`, then reboots.
+- **Check the command before trusting its answer.** A wrong-but-plausible
+  result is worse than an error, and these three produce them silently:
+  - Never read `$?` through a pipe — a pipeline reports the **last** command's
+    status, so `deploy.sh build | tail` returns `tail`'s. Redirect to a file
+    and check, or use `${PIPESTATUS[0]}`.
+  - Guard a derived path before using it (`[ -d "$X" ] || exit 1`). An unset
+    variable expands to nothing, so `"$X/etc/..."` silently becomes `/etc/...`
+    and you inspect this machine instead of the one you meant.
+  - Ask the authoritative source, do not infer: `nix build --print-out-paths`,
+    not `ls -dt` globbing `/nix/store` (which happily returns a `.drv`);
+    `systemctl show -p <prop> --value`, not grepping log text.
+- **Print only derived properties of a secret, never its contents** — byte
+  count, line count, `grep -c`, a match/no-match boolean. "Show me the first
+  line to check the header" leaks the whole key when the file turns out to be
+  one line.
 - Do not `nix flake update` unless asked. Do not copy hardware UUIDs between
   hosts.
 

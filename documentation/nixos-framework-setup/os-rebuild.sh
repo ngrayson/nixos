@@ -54,7 +54,8 @@ Options:
   --format                Run the flake formatter before validation
   --yes                   Skip the rebuild confirmation
   --allow-host-mismatch   Permit activation for a host other than this machine
-  --commit                After a successful rebuild, commit dirty changes (default)
+  --commit                Commit dirty changes after a successful rebuild, even
+                          with no terminal to confirm on
   --no-commit             Do not commit after a successful rebuild
   -h, --help              Show this help
 
@@ -342,8 +343,8 @@ show_repository_diff() {
 
   heading "Build vs commit"
   printf "  - Docs/tooling-only edits do not change the running system.\n"
-  printf "  - After a successful rebuild, dirty changes are committed by default on %s.\n" "$(repo_branch)"
-  printf "  - Pass --no-commit to leave the working tree dirty.\n"
+  printf "  - After a successful rebuild, dirty changes are committed on %s once you confirm.\n" "$(repo_branch)"
+  printf "  - Pass --no-commit to leave the working tree dirty; --commit to commit without a terminal.\n"
 }
 
 show_guidance() {
@@ -653,7 +654,9 @@ main() {
         ALLOW_HOST_MISMATCH=1
         ;;
       --commit)
-        COMMIT=1
+        # 2, not 1: 1 is the default, so it could never express "the caller
+        # explicitly asked", which is what lets a non-interactive run commit.
+        COMMIT=2
         ;;
       --no-commit)
         COMMIT=0
@@ -849,7 +852,27 @@ main() {
       warn "Working tree is dirty after the rebuild; committing records what was just built."
       printf "  This stages every repository change, including unrelated files.\n"
       local do_commit=0
-      if [[ "$NO_PROMPT" == "1" ]]; then
+      local commit_explained=0
+      if ((COMMIT == 2)); then
+        do_commit=1
+      elif [[ ! -t 0 ]]; then
+        # Nobody can answer a prompt with no terminal attached, and `read`
+        # cannot tell EOF from a bare Enter — so the [Y/n] default used to be
+        # taken on behalf of a caller who never answered, committing the whole
+        # tree under a generic message. Observed three times in one session
+        # from an agent running builds, twice even with stdin redirected from
+        # /dev/null.
+        #
+        # Deliberately checked before --yes: that flag is documented as
+        # skipping the *rebuild* confirmation, and should not also silently
+        # answer the louder question printed just above. Interactive --yes is
+        # unchanged, because a terminal is present there.
+        #
+        # A dirty tree is always recoverable. An unwanted commit spanning
+        # unrelated work is the expensive direction, so decline.
+        info "No terminal to confirm on; leaving working tree dirty. Pass --commit to commit non-interactively."
+        commit_explained=1
+      elif [[ "$NO_PROMPT" == "1" ]]; then
         do_commit=1
       elif prompt_confirm "Commit all current repository changes?" "yes"; then
         do_commit=1
@@ -858,7 +881,7 @@ main() {
         git -C "$NIXOS_DIR" add -A
         git -C "$NIXOS_DIR" commit -m "NixOS $NIXOS_HOST $ACTION ($(repo_branch))"
         ok "Committed repository changes on $(repo_branch)"
-      else
+      elif ((commit_explained == 0)); then
         info "Skipped commit; pass --no-commit next time to silence this prompt."
       fi
     fi

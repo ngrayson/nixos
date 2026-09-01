@@ -18,7 +18,7 @@ export const ICO = {
   sunset: "e34d",
   moonrise: "e3c1",
   moonset: "e3c2",
-  aci: "e35d",
+  aqi: "e35d",
   disk: "f02ca",
   hdd: "f02ca",
   hddOff: "f104c",

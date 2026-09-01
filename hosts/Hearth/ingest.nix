@@ -7,7 +7,17 @@
 # (see syncthing.nix): moving a file out of one leaves it permanently
 # out-of-sync, and Syncthing's only offered remedy re-downloads the whole
 # folder. Nothing here writes to share/ at all.
-{pkgs, ...}: let
+{
+  lib,
+  pkgs,
+  ...
+}: let
+  # Gated on the file existing, the same way syncthing.nix gates on
+  # hearth-seedbox.yaml: Hearth must keep evaluating before Nick has minted the
+  # key, and until then ingest simply leaves discovery to Jellyfin's own scan.
+  jellyfinSecrets = ../../secrets/hearth-jellyfin.yaml;
+  haveJellyfinKey = builtins.pathExists jellyfinSecrets;
+
   hearth-ingest = pkgs.writeShellApplication {
     name = "hearth-ingest";
     runtimeInputs = [
@@ -157,6 +167,87 @@
         exit 0
       fi
 
+      # Tell Jellyfin about exactly the files that just landed, instead of
+      # leaving discovery to its periodic full "Scan All Libraries".
+      #
+      # COLD is ntfs-3g/FUSE, which does not deliver the inotify events
+      # Jellyfin's real-time monitor relies on, so without this a new episode
+      # only shows up on the next scheduled scan. POST /Library/Media/Updated
+      # is the endpoint built for this, and the same one the *arr ecosystem's
+      # own Jellyfin notifications use.
+      #
+      # One request per run carrying every new path, not one per file. Fails
+      # open in every direction: no key, Jellyfin down, bad response — the
+      # hardlinks and sidecars already succeeded, and the scheduled scan
+      # remains the safety net it always was.
+      python3 - "$RECORD_FILE" <<'PY'
+      import json, os, sys, urllib.error, urllib.request
+
+      record_file = sys.argv[1]
+      key_file = os.environ.get(
+          "HEARTH_JELLYFIN_KEY_FILE", "/run/secrets/hearth-jellyfin-api-key")
+      base = os.environ.get("HEARTH_JELLYFIN_URL", "http://127.0.0.1:8096").rstrip("/")
+
+
+      def log(msg):
+          print(f"hearth-ingest: {msg}", file=sys.stderr, flush=True)
+
+
+      def note(result, detail):
+          # Same TSV shape the shell's note() writes; the ledger step below
+          # reads this file straight after us.
+          with open(record_file, "a", encoding="utf-8") as fh:
+              fh.write(f"{result}\t{detail}\t\t\n")
+
+
+      with open(record_file, encoding="utf-8") as fh:
+          rows = [line.split("\t") for line in fh.read().splitlines() if line.strip()]
+
+      paths = [r[2] for r in rows if r and r[0] == "linked" and len(r) > 2 and r[2]]
+      if not paths:
+          sys.exit(0)
+
+      try:
+          with open(key_file, encoding="utf-8") as fh:
+              key = fh.read().strip()
+      except OSError:
+          log("no Jellyfin API key readable; leaving discovery to its scheduled scan")
+          sys.exit(0)
+      if not key:
+          log("Jellyfin API key file is empty; skipping notify")
+          sys.exit(0)
+
+      body = json.dumps(
+          {"Updates": [{"Path": p, "UpdateType": "Created"} for p in paths]}
+      ).encode("utf-8")
+      req = urllib.request.Request(
+          f"{base}/Library/Media/Updated",
+          data=body,
+          method="POST",
+          headers={
+              "Content-Type": "application/json",
+              # Header, never the query string: a token in a URL ends up in
+              # access logs.
+              "X-Emby-Token": key,
+              "User-Agent": "hearth-ingest",
+          },
+      )
+      try:
+          with urllib.request.urlopen(req, timeout=15) as resp:
+              resp.read()
+      except urllib.error.HTTPError as exc:
+          # Never log the key, and the URL carries none.
+          log(f"Jellyfin notify failed: HTTP {exc.code}")
+          note("notify-error", f"HTTP {exc.code}")
+          sys.exit(0)
+      except Exception as exc:
+          log(f"Jellyfin notify failed: {type(exc).__name__}")
+          note("notify-error", type(exc).__name__)
+          sys.exit(0)
+
+      log(f"told Jellyfin about {len(paths)} new file(s)")
+      PY
+
       # Ledger for the homepage Ingest widget. Rewritten every run, atomically,
       # carrying the previous run's recent entries forward.
       python3 - "$LEDGER" "$RECORD_FILE" <<'PY'
@@ -186,6 +277,10 @@
           elif result == "error":
               pending.append(entry)
               errors.append(f"link failed: {src} -> {dest}")
+          elif result == "notify-error":
+              # The files did land; only telling Jellyfin failed, so this is a
+              # visible warning rather than something pending action.
+              errors.append(f"jellyfin notify failed: {src}")
 
       previous = []
       try:
@@ -212,6 +307,18 @@
   };
 in {
   environment.systemPackages = [hearth-ingest];
+
+  # Read by hearth-ingest as the identity the unit already runs as. The key is
+  # a Jellyfin API key from Dashboard -> API Keys; it is never in git.
+  sops.secrets = lib.mkIf haveJellyfinKey {
+    hearth-jellyfin-api-key = {
+      sopsFile = jellyfinSecrets;
+      key = "api_key";
+      owner = "wiz";
+      group = "jellyfin";
+      mode = "0440";
+    };
+  };
 
   systemd.services.hearth-ingest = {
     description = "Hardlink new Syncthing arrivals into the Jellyfin library";

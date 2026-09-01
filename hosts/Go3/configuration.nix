@@ -11,5 +11,8 @@
     ./idle-blank.nix
     ./ambient-brightness.nix
     ./stats-server.nix
+    ./battery-checkin.nix
+    ./scheduled-reboot.nix
+    ./camera-wake.nix
   ];
 }
