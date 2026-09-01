@@ -104,6 +104,12 @@
           fail "Jellyfin is not active ($(systemctl is-active jellyfin 2>/dev/null || true))"
           failed=1
         fi
+        if systemctl is-active --quiet syncthing; then
+          ok "Syncthing is active"
+        else
+          fail "Syncthing is not active ($(systemctl is-active syncthing 2>/dev/null || true))"
+          failed=1
+        fi
         if curl -fsS --max-time 5 "$JELLYFIN_HEALTH" >/dev/null; then
           ok "Jellyfin health $JELLYFIN_HEALTH"
         else
@@ -115,10 +121,16 @@
 
       cmd_park() {
         need_root park
+        # Both services hold files open on COLD. Syncthing especially: it
+        # watches share/ and upload/ with fsWatcherEnabled, so a running
+        # instance shows up in the unexpected_holders check below and aborts
+        # the park. RequiresMountsFor only pulls it down once the mount unit
+        # actually stops, which is after that check -- too late.
         systemctl stop jellyfin
+        systemctl stop syncthing
         if findmnt "$COLD_MNT" >/dev/null 2>&1; then
           if ! unexpected_holders; then
-            fail "park aborted: those processes still have $COLD_MNT open. Close them and retry. Jellyfin is already stopped; the disk is still mounted."
+            fail "park aborted: those processes still have $COLD_MNT open. Close them and retry. Jellyfin and Syncthing are already stopped; the disk is still mounted."
             exit 1
           fi
           systemctl stop mnt-cold.mount
@@ -129,7 +141,7 @@
           waits=$((waits + 1))
         done
         if findmnt "$COLD_MNT" >/dev/null 2>&1; then
-          fail "park aborted: $COLD_MNT did not unmount after stopping mnt-cold.mount. Jellyfin is already stopped; the disk is still mounted."
+          fail "park aborted: $COLD_MNT did not unmount after stopping mnt-cold.mount. Jellyfin and Syncthing are already stopped; the disk is still mounted."
           exit 1
         fi
         if device_present; then
@@ -140,7 +152,7 @@
             fi
           }
         fi
-        printf 'COLD is safe to unplug. Leave the USB hub plugged in (fans). Replug the enclosure to remount and start Jellyfin.\n'
+        printf 'COLD is safe to unplug. Leave the USB hub plugged in (fans). Replug the enclosure, then run resume to remount and start Jellyfin and Syncthing.\n'
       }
 
       cmd_resume() {
@@ -152,6 +164,10 @@
         fi
         systemctl start mnt-cold.mount
         systemctl start jellyfin
+        # RequiresMountsFor stops a unit when its mount goes away but never
+        # starts it again when the mount returns, so this has to be explicit.
+        # After jellyfin, which has already proven the mount is usable.
+        systemctl start syncthing
         probe_status
       }
 

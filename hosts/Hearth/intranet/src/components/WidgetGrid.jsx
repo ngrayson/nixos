@@ -5,6 +5,7 @@ import Calendar from "../widgets/Calendar.jsx";
 import Buses from "../widgets/Buses.jsx";
 import Gallery from "../widgets/Gallery.jsx";
 import Health from "../widgets/Health.jsx";
+import Ingest from "../widgets/Ingest.jsx";
 import Clock from "../widgets/Clock.jsx";
 import Transit from "../widgets/Transit.jsx";
 import Weather from "../widgets/Weather.jsx";
@@ -21,12 +22,13 @@ const H = {
   map: 10,
   buses: 14,
   health: 8,
+  ingest: 8,
   gallery: 8,
   calendar: 10,
   clock: 2.6,
 };
 
-const HUG = new Set(["weather", "weatherCombo", "buses", "health", "calendar"]);
+const HUG = new Set(["weather", "weatherCombo", "buses", "health", "ingest", "calendar"]);
 
 function item(i, x, y, w, h) {
   return { i, x, y, w, h, static: true };
@@ -44,7 +46,7 @@ function pxToRows(px) {
 function columnIds(showMap, showGallery) {
   const left = ["clock", "weather", "weatherCombo"];
   const calendar = ["calendar"];
-  const status = ["health"];
+  const status = ["health", "ingest"];
   if (showGallery) status.push("gallery");
   const transit = [];
   if (showMap) transit.push("map");
@@ -219,6 +221,11 @@ export default function WidgetGrid() {
           <div key="health">
             <HugCard id="health" onHeight={onHugHeight}>
               <Health />
+            </HugCard>
+          </div>
+          <div key="ingest">
+            <HugCard id="ingest" onHeight={onHugHeight}>
+              <Ingest />
             </HugCard>
           </div>
           {showGallery ? (

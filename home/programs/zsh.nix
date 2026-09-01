@@ -5,6 +5,20 @@
   pkgs,
   ...
 }: {
+  # The oh-my-zsh `fzf` plugin below only needs the binary on PATH: its
+  # `fzf_setup_using_fzf` branch runs first and does `eval "$(fzf --zsh)"` for
+  # anything newer than 0.48. Nothing here installed it, so on hosts without a
+  # broad package set (Go3's kiosk profile) the plugin printed
+  # "Cannot find fzf installation directory" on every login. Workstations
+  # masked it by pulling fzf in through profiles/workstation.nix.
+  #
+  # enableZshIntegration is off because the oh-my-zsh plugin already does that
+  # exact eval — leaving it on sources the key bindings and completion twice.
+  programs.fzf = {
+    enable = true;
+    enableZshIntegration = false;
+  };
+
   programs.zsh = {
     enable = true;
     # Keep the pre-26.05 location while home.stateVersion remains 25.11.

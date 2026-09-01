@@ -24,5 +24,6 @@
     ./weather-alert.nix
     ./restic.nix
     ./syncthing.nix
+    ./ingest.nix
   ];
 }
