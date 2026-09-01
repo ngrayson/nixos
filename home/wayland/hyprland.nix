@@ -201,6 +201,9 @@ in {
     hs.hyprTrayFocus
     hs.hyprNixosStatus
     hs.hyprNixosTerm
+    hs.hyprUsbStatus
+    hs.hyprUsbEject
+    hs.hyprUsbOpen
     hs.hyprQuickshellReload
     hs.hyprQuickshellIpc
     hs.hyprDpmsSideOff

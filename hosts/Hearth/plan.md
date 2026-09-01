@@ -31,8 +31,14 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
 
 1. **Role: headless home server.** The Hyprland desktop from the migration is
    transitional and will be removed once remote access is proven.
-2. **Hardware on hand:** 4 TB Seagate IronWolf HDD (`COLD` at `/mnt/cold`), ethernet switch, spare TP-Link router,
-   Raspberry Pi Zero W (Pi-hole/DNS). Two-tier storage.
+2. **Hardware on hand:** 4 TB Seagate IronWolf HDD (`COLD` at `/mnt/cold`), ethernet switch,
+   Raspberry Pi Zero W (Pi-hole/DNS — not yet deployed). Two-tier storage.
+   **Corrected 2026-08-30:** there is no *spare* TP-Link router. The TP-Link
+   AX3000 is `AncientGlade`, active on the wall (WAN `172.16.141.4` → LAN
+   `192.168.0.0/24`), and it supports Address Reservation. The only spare
+   router is a GL.iNet GL-SFT1200 "Opal" (Wi-Fi 5, 3× gigabit ports,
+   OpenWrt-based). See
+   [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
 3. **Jellyfin consolidates on Hearth.** `hosts/Tawa/jellyfin.nix` will be
    removed from Tawa's imports (deliberate, coordinated change — not a parity
    violation).
@@ -68,6 +74,13 @@ Seagate IronWolf 4 TB NTFS `COLD` at `/mnt/cold` (`media/` + `share/`).
 13. **Network interim:** TV and Hearth both stay on **GiGstreem Wi-Fi, no
     static route**. The TP-Link/switch wired LAN is **deferred until a better
     router is acquired** (H1 re-scoped accordingly).
+    **Still current as of 2026-08-30, for a corrected reason.** The blocker is
+    not that no router can do DHCP reservations — the on-hand AX3000
+    (`AncientGlade`) can. It is that **the TV and phones drop on AncientGlade**
+    and have been moved to GiGstreem, where they are stable but outside the
+    intranet. Until those drops are diagnosed, moving clients onto the server
+    LAN trades working Wi-Fi for broken Wi-Fi. See
+    [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
 14. **Jellyfin migration:** **fresh start** on Hearth — no `/var/lib/jellyfin`
     state copy from Tawa; only media files transfer.
 
@@ -117,7 +130,8 @@ Internet ── GiGstreem ── Wi-Fi: LG TV (Jellyfin at 172.16.141.38 when He
                     └── AncientGlade (NAT) ── Hearth 192.168.0.133
                          (Cursor agent sessions until remote-dev works)
 
-Final (after better router acquired):
+Final (no purchase required as of 2026-08-30 — the on-hand AX3000 fills the
+"new router" slot below; see documentation/router-recommendations.md):
 Internet ── new router ── TP-Link router (NAT, dedicated server LAN)
                                │
                          ethernet switch
@@ -370,10 +384,45 @@ flag suspends auto-updates after a manual push deploy — at the cost of a binar
 cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ### H8 — Acquisition pipeline (seedbox-first)
-- **Provider (decision 19): Ultra.cc** — stand up the slot before this phase.
+- **Provider (decision 19): Ultra.cc** — **slot acquired 2026-08-30.** The
+  seedbox pack's blocker is cleared; pairing proceeds once device IDs exist.
 - Seedbox downloads; **Syncthing** pulls completed files to
   `/mnt/cold/share`; tag-based routing to `/mnt/cold/media/{movies,tv,music}`
   via a small systemd path unit or the future homepage API.
+- **The sync leg needs no tailnet join and no VPN (resolves open question 2).**
+  Ultra.cc's app catalogue offers no Tailscale, and Syncthing does not need
+  one: device-ID auth over its own TLS, with hole-punching and relay fallback
+  covering Hearth's double NAT. Do not install Ultra's WireGuard for this.
+- **Share the organized tree, not the torrent directory.** Sonarr/Radarr run
+  *on the seedbox* and hardlink from `~/torrents/done` into `~/library`; only
+  `~/library` is shared with Syncthing. Sharing the raw torrent dir would send
+  scene-named files to Hearth and double-count the still-seeding copy against
+  Ultra's disk quota.
+- **Two unidirectional Syncthing folders, not one bidirectional** (as-built
+  2026-08-31): `hearth-library` (slot `~/library` Send Only → Hearth
+  `/mnt/cold/share` Receive Only) carries acquisitions down;
+  `hearth-upload` (Hearth `/mnt/cold/upload` Send Only → slot
+  `~/hearth-upload` Receive Only, with File Versioning) carries existing COLD
+  content up as a versioned offsite copy. A single Send & Receive folder would
+  round-trip deletions: Hearth's routing step moving a file out of `share/`
+  would delete it from the slot's `~/library`, and Sonarr/Radarr would mark the
+  episode missing and re-grab it in an unbounded loop.
+- **`/mnt/cold/share` is a landing zone, never the library.** Hearth must
+  hardlink out into `media/{movies,tv}`, never move — moving out of a Receive
+  Only folder leaves it permanently out of sync, and Syncthing's only offered
+  remedy re-downloads everything.
+- Because files then arrive already sorted into `movies/`/`tv/`, the
+  tag-routing step above shrinks to a move rather than a classifier.
+- **Seedbox app set (chosen 2026-08-30):** Syncthing, qBittorrent (+ qui),
+  Prowlarr, Sonarr, Radarr, Bazarr. No usenet stack (no provider), no
+  Plex-ecosystem tools (Hearth serves Jellyfin), no second `*arr` instances,
+  and no serving apps — the library lives on COLD and only Hearth serves it.
+  Autobrr only if private-tracker race timing demands it; FlareSolverr/Byparr
+  only when a specific indexer asks for one.
+- **Bazarr writes real `.srt` sidecars upstream**, which sync over alongside
+  the media. That is the durable fix for the first-play caption delay, and it
+  demotes the `hearth-extract-sidecars` pass below to a fallback for titles
+  Bazarr finds no subtitles for.
 - VPN-piped local download as fallback only: reuse the repo's existing VPN
   stack (`common/vpn-vortix.nix` stunnel/FrootVPN — server-safe subset) or a
   dedicated namespace so torrent traffic cannot leak; upload hard-capped at 0.
@@ -382,6 +431,13 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
   `hearth-extract-sidecars --one <file>` so new titles get sidecars
   without waiting for another library-wide pass.
 - The homepage/ingest UI from the original plan stays **last**, after H6-H7.
+- **Slot runbook:**
+  [`documentation/hearth-seedbox-runbook.md`](../../documentation/hearth-seedbox-runbook.md)
+  — Ultra.cc Fair Usage limits, the host-native/container split that dictates
+  how the apps reach each other, the directory tree, and the verification
+  commands. Identifying values (slot username, hostname, Syncthing device and
+  folder IDs) stay out of the clear in this public repo; they are encrypted in
+  `secrets/hearth-seedbox.yaml` (`sops -d` to read).
 
 ## 5. Risk register (from the audit)
 
@@ -404,11 +460,27 @@ cache plus CI publishing a system path, which also restores build-on-Tawa.
 
 ## 6. Open questions
 
-1. **Better router:** which model / when — gates the final H1 wired topology.
-   (TBD.)
-2. **Ultra.cc sync path:** join the slot to the tailnet for Syncthing, or
-   sync over Ultra's own protocol/SSH? Pick when H8 lands (provider is
-   decided).
+1. **Better router:** ~~which model / when~~ — **diagnosed 2026-08-30; likely
+   no purchase.** The fault is that the TV and phones drop **mid-use** on
+   `AncientGlade`, which runs a **merged SSID with Smart Connect**. Smart
+   Connect steers clients between bands by deauthenticating them, and cheap TV
+   and phone radios often fail to re-associate. This explains why stationary
+   Tawa never drops on the same AP, why latency measured fine (5.7 ms — the
+   link is healthy *while associated*), and why a 2.4 GHz channel change did
+   nothing. TWT and OFDMA are already disabled, so Smart Connect is the one
+   known drop-causing feature left on. **Fix is free:** split the SSIDs, pin
+   the TV to 5 GHz, pin the 5 GHz channel, update firmware. If that holds, move
+   the TV and Hearth onto AncientGlade for a real DHCP reservation — which is
+   what the TV actually needs, since it only wants Jellyfin at an address that
+   never changes (a TV remote makes retyping painful) and does **not** need
+   `home.wizt.org`. Buy an **access point** only if 5 GHz coverage at the TV
+   proves short. See
+   [`documentation/router-recommendations.md`](../../documentation/router-recommendations.md).
+2. **Ultra.cc sync path:** ~~join the slot to the tailnet for Syncthing, or
+   sync over Ultra's own protocol/SSH?~~ — **resolved 2026-08-30: plain
+   Syncthing, no tailnet join and no WireGuard.** Ultra offers no Tailscale
+   app, and Syncthing's own TLS plus device-ID auth with relay fallback
+   already crosses the double NAT. See H8.
 3. **`tv.wizt.org` exposure:** tailnet-only (private, simplest) or public
    via Tailscale Funnel (Jellyfin auth is the only gate)? Pick when H6 lands.
 4. **Battery policy after headless (H4):** keep lid-close-on-battery =

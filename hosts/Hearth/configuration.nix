@@ -17,10 +17,12 @@
     ./intranet-runtime.nix
     ./intranet-status.nix
     ./intranet-transit.nix
+    ./intranet-aqi.nix
     ./intranet-gallery.nix
     ./intranet-calendar.nix
     ./intranet-maps-key.nix
     ./weather-alert.nix
     ./restic.nix
+    ./syncthing.nix
   ];
 }

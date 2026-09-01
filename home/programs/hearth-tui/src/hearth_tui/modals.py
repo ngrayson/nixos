@@ -12,14 +12,45 @@ from textual.widgets import Button, RichLog, Static
 from hearth_tui import ssh
 from hearth_tui.disk_action import DiskAction, confirm_message, render_rows
 
+# Shared dialog-box look for every modal, mirroring widgets.WIDGET_BORDER_CSS
+# for panels — width/max-width stay per-modal since content sizes differ.
+DIALOG_CSS = """
+border: round $primary;
+background: $surface;
+padding: 1 2;
+height: auto;
+"""
+
 
 class ConfirmModal(ModalScreen[bool]):
     """Yes/No confirmation dialog. Dismisses with True (yes) or False (no/cancel)."""
+
+    DEFAULT_CSS = f"""
+    ConfirmModal {{
+        align: center middle;
+    }}
+    ConfirmModal #confirm-dialog {{
+        {DIALOG_CSS}
+        width: 60%;
+        max-width: 70;
+    }}
+    ConfirmModal #confirm-message {{
+        margin-bottom: 1;
+    }}
+    ConfirmModal #confirm-choices {{
+        height: auto;
+    }}
+    ConfirmModal Button {{
+        margin-right: 2;
+    }}
+    """
 
     BINDINGS = [
         Binding("y", "confirm", "Yes"),
         Binding("n", "cancel", "No"),
         Binding("escape", "cancel", "Cancel", show=False),
+        Binding("left", "app.focus_previous", show=False),
+        Binding("right", "app.focus_next", show=False),
     ]
 
     def __init__(self, message: str) -> None:
@@ -29,8 +60,9 @@ class ConfirmModal(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-dialog"):
             yield Static(self._message, id="confirm-message")
-            yield Button("Yes", id="confirm-yes", variant="error")
-            yield Button("No", id="confirm-no", variant="primary")
+            with Horizontal(id="confirm-choices"):
+                yield Button("Yes", id="confirm-yes", variant="error")
+                yield Button("No", id="confirm-no", variant="primary")
 
     def on_mount(self) -> None:
         # Without focus a Button ignores enter/space, which left the mouse as
@@ -57,33 +89,30 @@ class DiskActionModal(ModalScreen[None]):
     stopped with the disk still mounted.
     """
 
-    DEFAULT_CSS = """
-    DiskActionModal {
+    DEFAULT_CSS = f"""
+    DiskActionModal {{
         align: center middle;
-    }
-    DiskActionModal #disk-dialog {
-        border: round $primary;
-        background: $surface;
-        padding: 1 2;
+    }}
+    DiskActionModal #disk-dialog {{
+        {DIALOG_CSS}
         width: 70%;
         max-width: 90;
-        height: auto;
         max-height: 80%;
-    }
-    DiskActionModal #disk-message {
+    }}
+    DiskActionModal #disk-message {{
         margin-bottom: 1;
-    }
-    DiskActionModal #disk-log {
+    }}
+    DiskActionModal #disk-log {{
         height: auto;
         max-height: 16;
         margin-bottom: 1;
-    }
-    DiskActionModal Horizontal {
+    }}
+    DiskActionModal Horizontal {{
         height: auto;
-    }
-    DiskActionModal Button {
+    }}
+    DiskActionModal Button {{
         margin-right: 2;
-    }
+    }}
     """
 
     BINDINGS = [
@@ -91,6 +120,8 @@ class DiskActionModal(ModalScreen[None]):
         Binding("enter", "confirm", "Yes", show=False),
         Binding("n", "cancel", "No"),
         Binding("escape", "cancel", "Close", show=False),
+        Binding("left", "app.focus_previous", show=False),
+        Binding("right", "app.focus_next", show=False),
     ]
 
     def __init__(self, action: DiskAction, rows: list[tuple[bool, str]]) -> None:

@@ -615,6 +615,235 @@ in rec {
     print_status "$rebuild" "$updates" "$behind"
   '';
 
+  # Removable-USB inventory for the bar, as a JSON array (one object per whole
+  # physical disk). Python rather than jq string-building: the payload nests
+  # per-partition busy state, and lsblk already speaks JSON.
+  hyprUsbStatus = pkgs.writeShellScriptBin "qs-usb-status" ''
+    set -eu
+    exec "${lib.getExe pkgs.python3}" - <<'PY'
+    import json, subprocess
+
+    LSBLK = "${lib.getExe' pkgs.util-linux "lsblk"}"
+    FUSER = "${lib.getExe' pkgs.psmisc "fuser"}"
+    PS = "${lib.getExe' pkgs.procps "ps"}"
+
+    # Drivers that ARE the mount show up as holders of their own mountpoint.
+    # Same exclusion hosts/Hearth/disk.nix makes before declaring COLD busy.
+    MOUNT_DRIVERS = {"ntfs-3g", "mount.ntfs", "mount.ntfs-3g", "exfat-fuse", "mount.exfat"}
+
+
+    def truthy(v):
+        # lsblk emits real booleans on new util-linux and "0"/"1" on older ones.
+        return v is True or v == "1" or v == 1
+
+
+    def mountpoints(node):
+        mps = node.get("mountpoints")
+        if isinstance(mps, list):
+            return [m for m in mps if m]
+        one = node.get("mountpoint")
+        return [one] if one else []
+
+
+    def busy(mountpoint):
+        """True if something other than the mount driver holds the mountpoint."""
+        try:
+            out = subprocess.run(
+                [FUSER, "-m", mountpoint],
+                capture_output=True, text=True, timeout=10,
+            ).stdout
+        except Exception:
+            return False
+        for pid in out.split():
+            if not pid.isdigit():
+                continue
+            try:
+                comm = subprocess.run(
+                    [PS, "-o", "comm=", "-p", pid],
+                    capture_output=True, text=True, timeout=5,
+                ).stdout.strip()
+            except Exception:
+                comm = ""
+            if comm and comm not in MOUNT_DRIVERS:
+                return True
+        return False
+
+
+    try:
+        raw = subprocess.run(
+            [LSBLK, "-J", "-o", "NAME,PATH,LABEL,SIZE,MOUNTPOINT,MOUNTPOINTS,RM,HOTPLUG,TRAN,TYPE,FSTYPE"],
+            capture_output=True, text=True, timeout=15, check=True,
+        ).stdout
+        tree = json.loads(raw).get("blockdevices") or []
+    except Exception:
+        print("[]")
+        raise SystemExit(0)
+
+    out = []
+    for disk in tree:
+        if disk.get("type") != "disk":
+            continue
+        # The safety boundary: only removable/hotplug USB disks are ever
+        # reported, so an internal disk can never grow an eject pill.
+        if disk.get("tran") != "usb":
+            continue
+        if not (truthy(disk.get("rm")) or truthy(disk.get("hotplug"))):
+            continue
+
+        parts = []
+        for child in (disk.get("children") or []) or [disk]:
+            fstype = child.get("fstype")
+            mps = mountpoints(child)
+            # Skip extended-partition containers and other unformatted slices.
+            if not fstype and not mps:
+                continue
+            for mp in mps or [None]:
+                parts.append({
+                    "device": child.get("path") or ("/dev/" + (child.get("name") or "")),
+                    "label": child.get("label") or "",
+                    "mountpoint": mp,
+                    "fstype": fstype,
+                    "busy": busy(mp) if mp else False,
+                })
+
+        # Nothing mountable on this disk: no pill (a card reader with no card
+        # inserted still enumerates as a USB disk).
+        if not parts:
+            continue
+
+        # Most USB sticks carry no disk-level label, so fall back to the first
+        # partition that has one — "boot" reads as a name, "vfat" does not.
+        part_label = next((p["label"] for p in parts if p["label"]), "")
+
+        out.append({
+            "disk": disk.get("path") or ("/dev/" + (disk.get("name") or "")),
+            "label": disk.get("label") or part_label or "USB",
+            "size": disk.get("size") or "",
+            "partitions": parts,
+            "anyMounted": any(p["mountpoint"] for p in parts),
+            "anyBusy": any(p["busy"] for p in parts),
+        })
+
+    print(json.dumps(out))
+    PY
+  '';
+
+  # Safe eject for one whole USB disk: unmount every mounted partition, then
+  # power the disk off. Fail-closed — a disk that would not fully unmount is
+  # never powered off (same stance as hosts/Hearth/disk.nix's park abort).
+  # Open one USB disk in Dolphin, mounting it first if nothing on it is
+  # mounted yet. A pill is shown for plugged-in-but-unmounted disks too, so
+  # left-click has to handle that case or it looks broken.
+  hyprUsbOpen = pkgs.writeShellScriptBin "qs-usb-open" ''
+    set -eu
+    disk="''${1:-}"
+    [ -n "$disk" ] || {
+      printf 'usage: qs-usb-open /dev/sdX\n' >&2
+      exit 2
+    }
+
+    LSBLK="${lib.getExe' pkgs.util-linux "lsblk"}"
+    UDISKS="${lib.getExe' pkgs.udisks "udisksctl"}"
+    DOLPHIN="${lib.getExe pkgs.kdePackages.dolphin}"
+
+    # No removable/USB guard here, unlike qs-usb-eject: opening a folder is
+    # not destructive. The block-device check just makes a typo fail loudly.
+    [ -b "$disk" ] || {
+      printf 'qs-usb-open: %s is not a block device\n' "$disk" >&2
+      exit 1
+    }
+
+    first_mountpoint() {
+      "$LSBLK" -nrpo MOUNTPOINT "$disk" | while read -r mnt; do
+        [ -n "''${mnt:-}" ] || continue
+        printf '%s\n' "$mnt"
+        break
+      done
+    }
+
+    mnt="$(first_mountpoint)"
+
+    if [ -z "''${mnt:-}" ]; then
+      # Nothing mounted — mount the first partition that has a filesystem.
+      part="$("$LSBLK" -nrpo NAME,FSTYPE "$disk" | while read -r dev fstype; do
+        [ -n "''${fstype:-}" ] || continue
+        printf '%s\n' "$dev"
+        break
+      done)"
+      if [ -z "''${part:-}" ]; then
+        printf 'qs-usb-open: %s has no mountable filesystem\n' "$disk" >&2
+        exit 1
+      fi
+      "$UDISKS" mount -b "$part" >/dev/null || {
+        printf 'qs-usb-open: could not mount %s\n' "$part" >&2
+        exit 1
+      }
+      # Re-query rather than parsing udisksctl's "Mounted X at Y" line — the
+      # message format is not a stable interface.
+      mnt="$(first_mountpoint)"
+    fi
+
+    if [ -z "''${mnt:-}" ]; then
+      printf 'qs-usb-open: %s is still not mounted; not opening a file manager\n' "$disk" >&2
+      exit 1
+    fi
+
+    exec "$DOLPHIN" "$mnt"
+  '';
+
+  hyprUsbEject = pkgs.writeShellScriptBin "qs-usb-eject" ''
+    set -eu
+    disk="''${1:-}"
+    [ -n "$disk" ] || {
+      printf 'usage: qs-usb-eject /dev/sdX\n' >&2
+      exit 2
+    }
+
+    LSBLK="${lib.getExe' pkgs.util-linux "lsblk"}"
+    UDISKS="${lib.getExe' pkgs.udisks "udisksctl"}"
+
+    [ -b "$disk" ] || {
+      printf 'qs-usb-eject: %s is not a block device\n' "$disk" >&2
+      exit 1
+    }
+
+    # Re-check removability here rather than trusting the caller. qs-usb-status
+    # is the boundary for what gets a pill, but this script can also be run by
+    # hand, and powering off an internal disk must not be one keystroke away.
+    tran="$("$LSBLK" -ndo TRAN "$disk" 2>/dev/null || true)"
+    rm_flag="$("$LSBLK" -ndo RM "$disk" 2>/dev/null || true)"
+    hot_flag="$("$LSBLK" -ndo HOTPLUG "$disk" 2>/dev/null || true)"
+    if [ "$tran" != "usb" ] || { [ "$rm_flag" != "1" ] && [ "$hot_flag" != "1" ]; }; then
+      printf 'qs-usb-eject: refusing %s (tran=%s rm=%s hotplug=%s) — not a removable USB disk\n' \
+        "$disk" "$tran" "$rm_flag" "$hot_flag" >&2
+      exit 1
+    fi
+
+    # Unmount every mounted partition first. A partition that will not unmount
+    # aborts the whole eject, so we never power off a disk with live writeback.
+    "$LSBLK" -nrpo NAME,MOUNTPOINT "$disk" | while read -r dev mnt; do
+      [ -n "''${mnt:-}" ] || continue
+      "$UDISKS" unmount -b "$dev" >/dev/null || {
+        printf 'qs-usb-eject: could not unmount %s (%s) — leaving %s powered on\n' \
+          "$dev" "$mnt" "$disk" >&2
+        exit 1
+      }
+    done
+
+    # The subshell above cannot fail the script through the pipe, so re-check
+    # that nothing is still mounted before cutting power.
+    still="$("$LSBLK" -nrpo MOUNTPOINT "$disk" | tr -d '[:space:]' || true)"
+    if [ -n "$still" ]; then
+      printf 'qs-usb-eject: %s still has a mounted partition — not powering off\n' "$disk" >&2
+      exit 1
+    fi
+
+    "$UDISKS" power-off -b "$disk" >/dev/null || {
+      printf 'qs-usb-eject: %s unmounted but power-off failed. Do not unplug yet.\n' "$disk" >&2
+      exit 1
+    }
+  '';
+
   # Interactive Kitty that stays open after os-rebuild / flake update finish.
   hyprNixosTerm = pkgs.writeShellScriptBin "qs-nixos-term" ''
     set -eu
