@@ -69,14 +69,31 @@
       Content-Security-Policy "default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://127.0.0.1:18090 https://api.open-meteo.com https://air-quality-api.open-meteo.com https://maps.googleapis.com https://maps.gstatic.com https://www.google.com; worker-src 'self' blob:; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   '';
+  intranetLanJs = pkgs.writeText "lan.js" ''
+    window.hearthLan = "${lan.hosts.Hearth}";
+  '';
+  intranetCfgJs = pkgs.writeText "intranet-config.js" ''
+    window.hearthIntranet = ${builtins.toJSON intranetPublic};
+  '';
+  # Identifies the content Caddy is serving, so a long-lived tab can notice a
+  # new deploy and reload itself — the kiosk loads this page once and never
+  # navigates away, so nothing else would ever tell it.
+  #
+  # Covers the generated config and lan files as well as the built app: adding
+  # a weather location changes what the running page holds in memory just as
+  # much as a code change does, and the app derivation alone would miss it.
+  #
+  # Not a timestamp — a rebuild producing identical content leaves this
+  # unchanged, so clients never reload for nothing. Hashed rather than served
+  # as the store path itself, so a world-readable file does not publish
+  # /nix/store paths.
+  intranetBuildId = builtins.hashString "sha256" (
+    toString intranetApp + toString intranetLanJs + toString intranetCfgJs
+  );
   intranetRoot =
     pkgs.runCommand "hearth-intranet" {
-      lanJs = pkgs.writeText "lan.js" ''
-        window.hearthLan = "${lan.hosts.Hearth}";
-      '';
-      cfgJs = pkgs.writeText "intranet-config.js" ''
-        window.hearthIntranet = ${builtins.toJSON intranetPublic};
-      '';
+      lanJs = intranetLanJs;
+      cfgJs = intranetCfgJs;
       nerdFont = "${pkgs.nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFont-Regular.ttf";
       faviconSvg = ./intranet/favicon.svg;
       nativeBuildInputs = [pkgs.resvg pkgs.imagemagick];
@@ -91,6 +108,9 @@
       resvg "$faviconSvg" "$out/favicon-32.png" -w 32 -h 32
       resvg "$faviconSvg" "$out/apple-touch-icon.png" -w 180 -h 180
       magick "$out/favicon-32.png" "$out/favicon.ico"
+      # Polled by the dashboard; served by the same catch-all file_server as
+      # everything else in here, so it needs no Caddy route of its own.
+      echo "${intranetBuildId}" > "$out/build-id.txt"
     '';
 in {
   sops.secrets.acme-cloudflare-env = {

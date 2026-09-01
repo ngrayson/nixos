@@ -18,6 +18,52 @@ const HELD_HOME_URL = "https://technowizard.myles.usbx.me/sonarr2/";
 const LONG_PRESS_MS = 600;
 const MOVE_TOLERANCE_PX = 10;
 
+// The kiosk loads this page once in cage + Chromium and never navigates away,
+// so a hearth-deploy that ships new dashboard code never reaches it — the tab
+// keeps running the old JS in memory indefinitely. build-id.txt changes only
+// when the served content actually changes, so poll it and reload on a
+// mismatch. Generic on purpose: any long-lived viewer benefits, and nothing
+// here knows Go3 exists.
+const BUILD_POLL_MS = 120000;
+
+function useBuildReload() {
+  useEffect(() => {
+    let cancelled = false;
+    // The id captured at load. Held in the effect rather than in state: a
+    // change to it must trigger a reload, never a re-render.
+    let loaded = null;
+
+    function poll() {
+      // no-store so an intermediate cache cannot hide a new build.
+      fetch("/build-id.txt", { cache: "no-store" })
+        .then((res) => {
+          if (!res.ok) throw new Error(`build-id ${res.status}`);
+          return res.text();
+        })
+        .then((text) => {
+          const id = text.trim();
+          if (cancelled || !id) return;
+          if (loaded === null) {
+            loaded = id;
+            return;
+          }
+          if (id !== loaded) window.location.reload();
+        })
+        // Fail quiet. A network hiccup, or Caddy restarting mid-deploy, must
+        // never reload the page or surface an error for a background poll —
+        // only an actual mismatch reloads.
+        .catch(() => {});
+    }
+
+    poll();
+    const timer = setInterval(poll, BUILD_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+}
+
 function AtmosphereGate({ shaderId }) {
   const [mount, setMount] = useState(false);
   useEffect(() => {
@@ -145,6 +191,7 @@ function KioskStats() {
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useBuildReload();
   const pressTimer = useRef(null);
   const pressOrigin = useRef(null);
   const longPressFired = useRef(false);
