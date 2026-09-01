@@ -10,7 +10,12 @@
   pkgs,
   ...
 }: let
-  kioskUrl = "https://home.wizt.org";
+  # The query flag tells the dashboard it is being viewed on this kiosk, which
+  # is the only way the page can know: home.wizt.org is served to phones and
+  # laptops too, and nothing else distinguishes the viewer. App.jsx reads it to
+  # drop the TV Jellyfin link, which is useless on a wall panel that runs no
+  # Jellyfin client. Other viewers load the bare URL and are unaffected.
+  kioskUrl = "https://home.wizt.org/?hideJellyfin=1";
   chromiumFlags = [
     "--kiosk"
     "--app=${kioskUrl}"
