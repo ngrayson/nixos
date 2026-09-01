@@ -11,6 +11,9 @@ secrets/*.plaintext.yaml
 
 # Hearth intranet: local widget settings (build reads these; not the examples)
 /hosts/Hearth/intranet/config/*/config.nix
+# Generated from home/theme/schemes for `npm run dev`; the Nix build
+# generates its own copy into the served root.
+/hosts/Hearth/intranet/public/themes.js
 
 # Python bytecode caches (e.g. home/programs/hearth-tui/)
 __pycache__/

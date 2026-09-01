@@ -7,11 +7,7 @@
 }: let
   themeLib = import ./lib.nix {inherit lib;};
   hosts = import ./hosts.nix;
-  schemes = {
-    izar = import ./schemes/izar.nix;
-    lilac-ash = import ./schemes/lilac-ash.nix;
-    ghost = import ./schemes/ghost.nix;
-  };
+  schemes = import ./schemes;
   hostName =
     if nixosConfig == null
     then "Theseus"

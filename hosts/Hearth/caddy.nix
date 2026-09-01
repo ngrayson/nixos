@@ -75,6 +75,19 @@
   intranetCfgJs = pkgs.writeText "intranet-config.js" ''
     window.hearthIntranet = ${builtins.toJSON intranetPublic};
   '';
+  # The dashboard's palette is picked in Settings from the same named schemes
+  # the desktops use, so the hex values are generated from home/theme/schemes
+  # rather than copied into the app. style.css's :root block still carries
+  # Ghost's tokens as the pre-hydration fallback; everything after mount comes
+  # from here, so editing a scheme reaches the page instead of drifting from
+  # it. A scheme added to home/theme/schemes/default.nix shows up in the
+  # picker with no JS change.
+  intranetThemesJs = pkgs.writeText "themes.js" ''
+    window.hearthThemes = ${
+      builtins.toJSON (lib.mapAttrs (_: scheme: {inherit (scheme) name slug tokens;})
+        (import ../../home/theme/schemes))
+    };
+  '';
   # Identifies the content Caddy is serving, so a long-lived tab can notice a
   # new deploy and reload itself — the kiosk loads this page once and never
   # navigates away, so nothing else would ever tell it.
@@ -88,12 +101,16 @@
   # as the store path itself, so a world-readable file does not publish
   # /nix/store paths.
   intranetBuildId = builtins.hashString "sha256" (
-    toString intranetApp + toString intranetLanJs + toString intranetCfgJs
+    toString intranetApp
+    + toString intranetLanJs
+    + toString intranetCfgJs
+    + toString intranetThemesJs
   );
   intranetRoot =
     pkgs.runCommand "hearth-intranet" {
       lanJs = intranetLanJs;
       cfgJs = intranetCfgJs;
+      themesJs = intranetThemesJs;
       nerdFont = "${pkgs.nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFont-Regular.ttf";
       faviconSvg = ./intranet/favicon.svg;
       nativeBuildInputs = [pkgs.resvg pkgs.imagemagick];
@@ -103,6 +120,7 @@
       chmod -R u+w "$out"
       cp "$lanJs" "$out/lan.js"
       cp "$cfgJs" "$out/intranet-config.js"
+      cp "$themesJs" "$out/themes.js"
       cp "$nerdFont" "$out/SymbolsNerdFont.ttf"
       cp "$faviconSvg" "$out/favicon.svg"
       resvg "$faviconSvg" "$out/favicon-32.png" -w 32 -h 32
