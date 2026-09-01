@@ -12,7 +12,7 @@ covers the purchase question. This file is the evidence.
 | # | Fault | Evidence | Status |
 |---|---|---|---|
 | 1 | **TP-Link AX3000 (AncientGlade) wedges** — LAN/Wi-Fi bridge stops forwarding while WAN stays healthy | Gateway stopped answering ARP; entire `192.168.0.0/24` dark; two independent clients affected; only a power cycle recovered it | Recovered by power cycle. **Recurrence expected — root cause not fixed.** |
-| 2 | **Pi Zero W's `wlan0` disappears from the kernel** | Interface vanished from `/proc/net/wireless` at 00:09 and never returned across 473 consecutive samples (~7h54m), while the Pi itself kept running | Mitigation applied (power-save off). **Looking good — 244 clean samples so far, see "Run 2" below. Not yet past the 00:09 hour when it failed.** |
+| 2 | **Pi Zero W's `wlan0` disappears from the kernel** | Interface vanished from `/proc/net/wireless` at 00:09 and never returned across 473 consecutive samples (~7h54m), while the Pi itself kept running | **RESOLVED (2026-09-01)** by disabling Wi-Fi power-save. 15h32m continuous uptime spanning the 00:09 failure hour, zero driver errors. See "Run 2" below. |
 
 ## Fault 1 — the AX3000 wedges
 
@@ -84,38 +84,55 @@ card that is ~5 years old and already served ~33 M Pi-hole queries. Diagnosis
 was judged worth the wear; revert `99-persistent.conf` once the faults are
 resolved.
 
-## Run 2 (2026-08-31, power-save disabled) — interim result
+## Run 2 (2026-08-31 → 09-01, power-save disabled) — fault 2 resolved
 
 Restarted 09:14 after disabling Wi-Fi power-save, with the AP freshly power
-cycled. Now instrumented from **two independent vantage points**, which run 1
+cycled. Instrumented from **two independent vantage points**, which run 1
 lacked — that is what distinguishes an AP-wide failure (both observers lose the
 gateway) from a Pi-only one (Pi dark, gateway still fine from Tawa).
 
-Interim, as of 13:30 (~4h28m in):
+**Result: the Pi has held `wlan0` for 15h32m continuously, spanning the 00:09
+hour at which run 1 failed.** Verified 2026-09-01 09:32; booted 2026-08-31
+17:59:40.
 
-| Metric | Run 1 (night) | Run 2 (interim) |
+| Metric | Run 1 (night) | Run 2 |
 |---|---|---|
-| Pi samples | 478 | 244 |
-| Gateway unreachable, from the Pi | **476** | **0** |
+| Continuous uptime across 00:09 | interface dead from 00:09 | **15h 32m, unbroken** |
+| Gateway unreachable, from the Pi | **476 / 478** | **0** |
 | `wlan0` missing from the kernel | 473 samples | **0** |
-| `brcmfmac` driver errors in journal | (logs lost — volatile) | **0** |
-| Signal | −20 dBm then gone | steady −14 to −18 dBm |
+| `brcmfmac` errors in journal | (logs lost — volatile) | **0** of 74 wifi log lines |
+| Signal | −20 dBm then gone | steady −13 to −18 dBm |
 | RTT | 312 ms in the first sample | 6–12 ms |
 
-Tawa's independent observer corroborates: **167 samples, gateway up in every
-one, Pi reachable in every one**, and it never roamed off `AncientGlade`.
+**Tawa's independent observer, 543 samples over 10h (10:25 → 20:25):**
 
-**Read this cautiously.** Disabling power-save is the leading explanation for
-fault 2, and it is the only change made on the Pi. But:
+- Gateway reachable in **543 / 543** — **fault 1 did not recur**
+- Never roamed off `AncientGlade` (run 1 saw it silently fail over to
+  GiGstreem twice, producing false "the Pi is gone" readings)
+- Pi unreachable in **5** samples, all **Pi-only with the gateway still up** —
+  never an AP-wide outage
 
-- Run 1's failure hit at **00:09**; run 2 has not yet crossed that hour. An
-  overnight pass is the real test.
-- **The AP power cycle is a confound.** Fault 1 may have been contributing to
-  fault 2 — a wedged AP could plausibly drive a reassociation storm that
-  crashes `brcmfmac`. A healthy AP alone might have been sufficient, with
-  power-save irrelevant.
-- Fault 1 was observed **once**. Its recurrence interval is unknown, so a quiet
-  day says little about whether the AX3000 is fixed.
+Those 5 samples cluster into exactly two groups, 17:01–17:02 and 17:58–18:01,
+and the Pi's own boot history shows boots ending at **17:01** and **17:57**.
+They were operator reboots (working on the console display), not faults. Each
+recovered in 2–3 minutes unattended.
+
+### What is and is not established
+
+**Fault 2 is resolved in practice.** Disabling power-save is the leading
+explanation: it was the only change made on the Pi, and the symptom went from
+total failure to an unbroken 15-hour run through the exact failure hour.
+
+Two honest caveats remain:
+
+- **The AP power cycle is a confound.** It landed at the same time. A wedged AP
+  could plausibly drive a reassociation storm that crashes `brcmfmac`, in which
+  case a healthy AP alone was sufficient and power-save was irrelevant. The two
+  changes cannot be separated retrospectively.
+- **Fault 1 is unproven, not disproven.** The AX3000 wedged exactly **once**
+  under observation, so its recurrence interval is unknown. Ten quiet hours
+  says little about a fault that might surface weekly. Do not read run 2 as
+  evidence the AX3000 is healthy.
 
 ## Equipment on hand
 
@@ -130,26 +147,37 @@ fault 2, and it is the only change made on the Pi. But:
 
 ## Next steps
 
-1. **Tonight's run tests the power-save fix in isolation.** Monitor restarted
-   09:14 with power-save disabled and nothing else changed. Early samples:
-   −16 dBm, gateway up, 6.3 ms — against 312 ms in night 1's first sample.
-2. **Do not swap the router at the same time.** Power-save was already changed;
-   changing the AP too would confound the result. If the Pi survives the night,
-   fault 2 is fixed. If it dies again, fault 2 is not power-save.
-3. **Then try the Opal** — as a diagnostic it is free and isolates the
-   variable. Best run in **AP/bridge mode off the switch with its own SSID**,
-   with only the Pi joined: that avoids a third NAT layer and leaves
-   `AncientGlade` undisturbed for the household's 2.4 GHz smart-home devices,
-   which are provisioned against that SSID.
-4. **Neither fault is resolved enough to put household DNS on this pair.** The
-   LAN-DNS card should stay gated until the Pi holds a link for a full night
-   *and* the AP stops wedging.
+1. ~~Test the power-save fix in isolation.~~ **Done — fault 2 resolved.** Keep
+   `/etc/NetworkManager/conf.d/99-wifi-powersave-off.conf` in place; it is what
+   survives netplan regeneration.
+2. **Fault 1 is the remaining blocker.** It needs *time*, not a test: the AX3000
+   wedged once and its recurrence interval is unknown. Leave both monitors (or
+   at least the Tawa-side one) running periodically and note any repeat. A
+   second wedge establishes a pattern and settles the replace-or-keep question.
+3. **The Opal is no longer needed as a diagnostic** for fault 2, since
+   power-save explains it. It stays useful only if fault 1 recurs and you want
+   to prove the AX3000 is at fault before spending. If so, run it in **AP/bridge
+   mode off the switch with its own SSID**, only the Pi joined — that avoids a
+   third NAT layer and leaves `AncientGlade` undisturbed for the household's
+   2.4 GHz smart-home devices, which are provisioned against that SSID.
+4. **The LAN-DNS card is still gated, but on fault 1 alone now.** The Pi has
+   proven it holds a link. Whether the *AP* is dependable enough to carry the
+   household's only resolver is the open question. A resolver behind an AP that
+   wedges takes all name resolution down with it.
+5. **Consider reverting persistent journald** once fault 1 is settled — it
+   trades SD-card wear for diagnosability on an already-old card. Keep it while
+   fault 1 is still unexplained; that is exactly the evidence it exists to
+   capture.
 
 ## Open questions
 
 - Is fault 1 load-related, thermal, or uptime-related? Unknown — it wedged once
   under observation. Worth noting how long the AP had been up.
-- Does the Opal hold a link where the AX3000 does not? Untested.
-- Would a Pi Zero **2** W (aarch64, different radio) avoid fault 2 entirely?
-  ~$15, and unlike the Zero W it is a platform nixpkgs supports — though the
-  standing decision is that this Pi stays out of the flake regardless.
+- Does the Opal hold a link where the AX3000 does not? Untested, and only worth
+  testing if fault 1 recurs.
+- ~~Would a Pi Zero **2** W avoid fault 2 entirely?~~ Moot — fault 2 is fixed on
+  the existing hardware. No purchase needed. (The standing decision that this Pi
+  stays out of the NixOS flake holds regardless of board.)
+- Was power-save genuinely the fix, or was a healthy AP sufficient on its own?
+  Unresolvable retrospectively — both changed together. Only matters if fault 1
+  recurs *and* the Pi's interface dies with it.
