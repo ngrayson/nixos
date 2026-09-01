@@ -139,6 +139,10 @@ in {
           root * /run/hearth-intranet
           file_server
         }
+        handle /ingest.json {
+          root * /run/hearth-intranet
+          file_server
+        }
         handle /transit.json {
           root * /run/hearth-intranet
           file_server

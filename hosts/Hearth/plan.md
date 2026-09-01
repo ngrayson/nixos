@@ -163,8 +163,13 @@ any puller:** enforce the path filter server-side on `deploy/hearth`.
 
 ### H8 — Acquisition pipeline (seedbox-first)
 Ultra.cc slot acquired 2026-08-30. Syncthing pulls into `/mnt/cold/share` over
-two unidirectional folders; ingest hardlinks into `media/{movies,tv,music}` then
-runs `hearth-extract-sidecars --one <file>`. Sonarr/Radarr and Bazarr run on the
+two unidirectional folders. `hearth-ingest` (`ingest.nix`) is the routing step:
+a five-minute timer that **mirrors the relative path verbatim** —
+`share/<lib>/…` to `media/<lib>/…` — by hardlink, runs
+`hearth-extract-sidecars --one` per new video, and writes the ledger
+`/run/hearth-intranet/ingest.json` that the homepage Ingest widget reads. Only
+`movies`, `tv` and `music` route; anything else stays in `share/` and is
+logged. Sonarr/Radarr and Bazarr run on the
 slot, so files arrive sorted and with real `.srt` sidecars. The ingest UI stays
 **last**.
 
