@@ -28,6 +28,22 @@
     "--no-first-run"
     "--disable-session-crashed-bubble"
     "--disable-features=TranslateUI"
+    # The dashboard's animated WebGL background (Atmosphere in App.jsx) is
+    # mounted only when the viewer does NOT ask for reduced motion, so this
+    # switches it off here without touching shared dashboard code or any other
+    # viewer.
+    #
+    # It is the single largest source of heat on this machine. Measured
+    # 2026-09-01 over 24 samples: Chromium's gpu-process held a 112% mean
+    # (more than a full core, continuously) and the package hit 85°C. Crucially
+    # that load did not move when the panel went dim and then off — the
+    # backlight is a kernel-level thing the browser cannot see, so it kept
+    # compositing every frame into a display nobody was looking at.
+    #
+    # A wall dashboard is read at a glance from across a room. An animated
+    # background earns nothing there, and this is a fanless tablet mounted
+    # flat against a wall with nowhere to dump the heat.
+    "--force-prefers-reduced-motion"
   ];
   # wlroots draws a cursor whenever the seat has a pointer capability, and on
   # the Go 3 the ELAN9038 panel and its stylus are the ONLY devices exposing
