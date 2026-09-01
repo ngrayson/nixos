@@ -1,5 +1,5 @@
 {
-  description = "NixOS configurations for Tawa, Theseus, Hearth, and cloud hosts";
+  description = "NixOS configurations for Tawa, Theseus, Hearth, Go3, and cloud hosts";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -68,6 +68,11 @@
         ./hosts/Hearth/configuration.nix
       ];
 
+      Go3 = mkHost [
+        nixos-hardware.nixosModules.microsoft-surface-common
+        ./hosts/Go3/configuration.nix
+      ];
+
       Gcp = mkHost [
         ./hosts/Gcp/configuration.nix
       ];
@@ -93,6 +98,7 @@
       tawa-hostname = checkHost "Tawa" "Tawa";
       theseus-hostname = checkHost "Theseus" "Theseus";
       hearth-hostname = checkHost "Hearth" "Hearth";
+      go3-hostname = checkHost "Go3" "Go3";
       gcp-hostname = checkHost "Gcp" "Gcp";
     };
   };

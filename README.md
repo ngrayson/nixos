@@ -1,6 +1,6 @@
 # WizOs
 
-NixOS flake for four named hosts. Canonical tree: `~/.config/nixos` (`github:ngrayson/nixos`).
+NixOS flake for five named hosts. Canonical tree: `~/.config/nixos` (`github:ngrayson/nixos`).
 
 **`main` is stable. `dev` is unstable.** Daily work and agent PRs live on `dev`. Lane rules: [BRANCHING.md](./BRANCHING.md).
 
@@ -9,9 +9,10 @@ NixOS flake for four named hosts. Canonical tree: `~/.config/nixos` (`github:ngr
 | **Tawa** | Desktop, Hearth builder | `os-rebuild switch` **on Tawa** |
 | **Theseus** | Framework laptop | `os-rebuild switch` **on Theseus** |
 | **Hearth** | Surface Laptop 3 media host | `hearth-deploy` **from Tawa** (or Theseus) |
+| **Go3** | Surface Go 3 wall kiosk | built on Tawa, activated over SSH (Hearth model) |
 | **Gcp** | Minimal GCE image | `scripts/gcp/` (build / upload / create) |
 
-Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Gcp}`.
+Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Go3,Gcp}`.
 
 ## Start here
 
@@ -24,4 +25,4 @@ Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Gcp}`.
 
 `legacy/surface-standalone` is listed in BRANCHING.md as the pre-flake Surface rollback. It is **not** on `origin` today — do not invent the branch.
 
-`nix flake check` evaluates all four hostnames (not full toplevel — too heavy for 8 GB codespaces). Conveyor codespaces still need a **valid machine type in WizOs Project Settings** (launch already failed HTTP 400); they must never `nixos-rebuild`.
+`nix flake check` evaluates all five hostnames (not full toplevel — too heavy for 8 GB codespaces). Conveyor codespaces still need a **valid machine type in WizOs Project Settings** (launch already failed HTTP 400); they must never `nixos-rebuild`.

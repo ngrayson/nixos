@@ -20,6 +20,7 @@ Host **shapes differ**. Do not copy the Tawa/Theseus import list onto Hearth or 
 |------|-----------------------------|---------------|
 | **Tawa**, **Theseus** | `../../profiles/workstation.nix`, `./hardware-configuration.nix`, `./host.nix` | Required (`nixos-generate-config` for that machine) |
 | **Hearth** | `../../profiles/media-desktop.nix`, `./hardware-configuration.nix`, `./host.nix`, plus host modules (Jellyfin, remote-access) | Required |
+| **Go3** | `../../profiles/kiosk.nix`, `./hardware-configuration.nix`, `./host.nix`, `./remote-access.nix` | Required |
 | **Gcp** | `../../profiles/server.nix`, GCE image module, `./host.nix` | **None** — see [`scripts/gcp/`](./scripts/gcp/) |
 
 Under **`hosts/<hostname>/`** for **this** machine:
