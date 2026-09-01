@@ -291,6 +291,71 @@ section {
   color: inherit;
 }
 
+/* A fact that opens a modal. Reads as text, not chrome — the weather card is
+   dense and a second pill-shaped button beside the forecast one crowds it. */
+.fact-btn {
+  border: 0;
+  border-bottom: 1px dotted color-mix(in srgb, currentColor 50%, transparent);
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fact-btn:hover,
+.fact-btn:focus-visible {
+  border-bottom-color: currentColor;
+  color: var(--strong);
+}
+
+.aqi-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aqi-rows li {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid color-mix(in srgb, var(--chrome) 80%, transparent);
+}
+
+.aqi-rows li:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.aqi-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.aqi-param {
+  min-width: 4.5rem;
+  color: var(--strong);
+}
+
+.aqi-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.aqi-category {
+  opacity: 0.75;
+  font-size: 0.85rem;
+}
+
+/* Which station, and how far — or that the figure is modelled rather than
+   measured. A modelled number must never look like a measured one. */
+.aqi-source {
+  display: block;
+  opacity: 0.6;
+  font-size: 0.8rem;
+}
+
 .tone-cold {
   color: #6eb6ff;
 }
