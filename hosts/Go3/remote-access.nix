@@ -5,7 +5,11 @@
 # trusted-users + passwordless wheel sudo let Tawa build and activate this
 # host over SSH the same way hearth-deploy does (nix-copy-closure as wiz,
 # then --use-remote-sudo). Keep it host-local so Tawa/Theseus keep prompting.
-{lib, ...}: {
+{
+  lib,
+  pkgs,
+  ...
+}: {
   imports = [../../common/tailscale.nix];
 
   # Two overrides of common/tailscale.nix, both host-specific.
@@ -50,4 +54,15 @@
 
   nix.settings.trusted-users = ["@wheel"];
   security.sudo.wheelNeedsPassword = false;
+
+  # Kitty's terminfo entry is not in the standard ncurses database, and Kitty
+  # forwards TERM=xterm-kitty over plain ssh. Without this, every zsh
+  # line-editor redraw here ran blind — the shell echoed duplicated,
+  # interleaved characters and printed "can't find terminal definition for
+  # xterm-kitty" on login. `kitty +kitten ssh` would copy the entry on
+  # connect, but home/programs/ssh-go3.nix deliberately uses plain OpenSSH so
+  # nix-copy-closure works, so the entry is installed on the host instead.
+  # This is the terminfo-only output — it does not pull the kitty GUI into a
+  # kiosk closure.
+  environment.systemPackages = [pkgs.kitty.terminfo];
 }
