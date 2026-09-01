@@ -66,6 +66,23 @@ adds only selection, claiming, cadence, and local-machine hygiene.
   beats a lost defect. Check `mcp__conveyor__list_tags` before passing any
   `tags` — an unknown name creates the card *and then* errors, so retrying
   produces a duplicate.
+- **Falsify a cause before the card asserts one.** Report the symptom and the
+  evidence freely; a *mechanism* has to be checked against the source first. If
+  you cannot point at the line that produces the behaviour, say the cause is
+  unknown. A confident-but-speculative "where to look" section is worse than
+  none — it sends the next reader after something that may not exist, and a
+  card filed against working code costs more than the bug it imagined. This is
+  not hypothetical: `hearth-deploy build exits 0 when the build fails` was
+  filed, planned, and cancelled as invalid — the observed `0` came from reading
+  `$?` through a `| tail`, and two minutes of reading `run_build` would have
+  killed it.
+- **`create_task` silently drops parameters it does not define.** Pass
+  `status: "Open"` explicitly — it defaults to `Planning`, and a card left
+  there is invisible to the Open queue. The tag parameter is `tags`, not
+  `tagNames`. There is no `storyPointValue` on `create_task` (it exists on
+  `update_task`); points are auto-filled once the card moves beyond Planning.
+  Nothing errors when you get these wrong, so verify the card afterwards with
+  `mcp__conveyor__get_task` rather than assuming the call did what you asked.
 
 ## Iteration order
 
