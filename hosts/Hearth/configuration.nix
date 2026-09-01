@@ -23,6 +23,7 @@
     ./intranet-maps-key.nix
     ./weather-alert.nix
     ./battery-alert.nix
+    ./go3-battery-alert.nix
     ./restic.nix
     ./syncthing.nix
     ./ingest.nix
