@@ -82,6 +82,13 @@ function SettingsModal({ shaderId, onShader, onClose }) {
   );
 }
 
+// Go3's kiosk URL carries ?hideJellyfin=1 (profiles/kiosk.nix). Read once at
+// module scope: the query string cannot change without a reload, so there is
+// nothing to re-evaluate and no reason to make it state.
+const hideJellyfin =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("hideJellyfin") === "1";
+
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -167,10 +174,12 @@ function Shell() {
             >
               <Icon code={ICO.cog} />
             </button>
-            <a id="tv-jellyfin" className="site-nav-item site-nav-cta" href="https://tv.wizt.org">
-              <Icon code={ICO.tv} />
-              TV Jellyfin
-            </a>
+            {hideJellyfin ? null : (
+              <a id="tv-jellyfin" className="site-nav-item site-nav-cta" href="https://tv.wizt.org">
+                <Icon code={ICO.tv} />
+                TV Jellyfin
+              </a>
+            )}
           </span>
         </nav>
         <WidgetGrid />
