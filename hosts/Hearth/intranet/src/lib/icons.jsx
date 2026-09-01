@@ -33,6 +33,7 @@ export const ICO = {
   server: "f048b",
   map: "f034d",
   cog: "f013",
+  wifi: "f05a9",
   cpu: "f0ee0",
   memory: "f035b",
   // Distinct from `thermometer` above, which is the weather glyph — keeping them

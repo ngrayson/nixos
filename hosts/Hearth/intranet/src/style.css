@@ -1046,3 +1046,15 @@ section h3 {
   opacity: 0.8;
   font-size: 0.8rem;
 }
+
+/* Go3 kiosk only: its own system stats, inline in the nav bar. */
+.site-nav-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-left: auto;
+  margin-right: 0.9rem;
+  opacity: 0.75;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}

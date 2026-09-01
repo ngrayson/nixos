@@ -66,7 +66,7 @@
       Permissions-Policy "camera=(), microphone=(), geolocation=()"
       Strict-Transport-Security "max-age=31536000; includeSubDomains"
       X-Robots-Tag "noindex, nofollow"
-      Content-Security-Policy "default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.open-meteo.com https://air-quality-api.open-meteo.com https://maps.googleapis.com https://maps.gstatic.com https://www.google.com; worker-src 'self' blob:; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+      Content-Security-Policy "default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://127.0.0.1:18090 https://api.open-meteo.com https://air-quality-api.open-meteo.com https://maps.googleapis.com https://maps.gstatic.com https://www.google.com; worker-src 'self' blob:; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   '';
   intranetRoot =
