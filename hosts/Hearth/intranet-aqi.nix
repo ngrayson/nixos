@@ -75,6 +75,21 @@
       # recent row per station per parameter rather than assuming this hour is in.
       WINDOW_HOURS = 4
       EARTH_MILES = 3958.7613
+      # Where no station is in range, fall back to Open-Meteo's modelled US AQI
+      # — per pollutant, not per location, so a location keeps whatever it does
+      # measure. Crystal Mountain's only nearby monitors are seasonal ozone-only
+      # sites, so it gets measured ozone and modelled PM2.5 rather than either a
+      # dash or an ozone-only headline that hides smoke entirely.
+      #
+      # Only these two: they are what drives the US AQI in practice, and
+      # modelling the other four would fill the widget's modal with rows nobody
+      # acts on. Open-Meteo needs no key and is already in the page's CSP, but
+      # the poll stays server-side like AirNow's so the payload has one shape.
+      OPEN_METEO = "https://air-quality-api.open-meteo.com/v1/air-quality"
+      FALLBACK_PARAMS = {
+          "PM2.5": ("us_aqi_pm2_5", "UG/M3"),
+          "OZONE": ("us_aqi_ozone", "PPB"),
+      }
       # AirNow's Category is an integer on this endpoint (it is an object on the
       # reporting-area endpoint). 7 is "Unavailable", which we treat as no name.
       CATEGORY_NAMES = {
@@ -103,6 +118,18 @@
       def blank(index):
           return {"index": index, "aqi": None, "category": None, "ok": False,
                   "pollutants": []}
+
+
+      def category_for(aqi):
+          """EPA band for an AQI value, for sources that do not name one."""
+          if aqi is None:
+              return None
+          for ceiling, name in ((50, "Good"), (100, "Moderate"),
+                                (150, "Unhealthy for Sensitive Groups"),
+                                (200, "Unhealthy"), (300, "Very Unhealthy")):
+              if aqi <= ceiling:
+                  return name
+          return "Hazardous"
 
 
       def miles_between(lat1, lon1, lat2, lon2):
@@ -236,7 +263,59 @@
               and not isinstance(value, bool) and value >= 0 else None,
               "unit": row.get("Unit"),
               "observedAt": row.get("UTC"),
+              # A measured figure and a modelled one must not look alike in the
+              # UI, so every row says which it is.
+              "source": "airnow",
           }
+
+
+      def fallback_entries(loc, missing):
+          """Modelled AQI for the pollutants no station in range reports."""
+          point = coords(loc)
+          if point is None or not missing:
+              return []
+          lat, lon = point
+          fields = [FALLBACK_PARAMS[p][0] for p in missing]
+          url = OPEN_METEO + "?" + urllib.parse.urlencode({
+              "latitude": lat,
+              "longitude": lon,
+              "current": ",".join(fields),
+              "timezone": "UTC",
+          })
+          try:
+              req = urllib.request.Request(
+                  url, headers={"User-Agent": "hearth-intranet-aqi"})
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  data = json.load(resp)
+          except Exception as exc:
+              # Fail open: the location simply has no figure for that pollutant.
+              log(f"open-meteo: {type(exc).__name__}")
+              return []
+
+          current = data.get("current") if isinstance(data, dict) else None
+          if not isinstance(current, dict):
+              return []
+          out = []
+          for param in missing:
+              field, unit = FALLBACK_PARAMS[param]
+              aqi = current.get(field)
+              if isinstance(aqi, bool) or not isinstance(aqi, (int, float)):
+                  continue
+              if aqi < 0:
+                  continue
+              out.append({
+                  "parameter": param,
+                  "aqi": int(aqi),
+                  "category": category_for(int(aqi)),
+                  "station": None,
+                  "agency": None,
+                  "distanceMiles": None,
+                  "concentration": None,
+                  "unit": unit,
+                  "observedAt": current.get("time"),
+                  "source": "open-meteo",
+              })
+          return out
 
 
       def resolve(index, loc, rows):
@@ -262,12 +341,27 @@
               if seen is None or d < seen[0]:
                   nearest[param] = (d, row)
 
-          if not nearest:
-              log(f"location {index}: no station within {max_miles:g} mi")
+          pollutants = [pollutant_entry(row, d) for d, row in nearest.values()]
+
+          measured = {p["parameter"] for p in pollutants}
+          missing = [p for p in FALLBACK_PARAMS if p not in measured]
+          if missing:
+              log(f"location {index}: no station in range for "
+                  f"{', '.join(missing)}; modelling those")
+              pollutants.extend(fallback_entries(loc, missing))
+
+          if not pollutants:
+              log(f"location {index}: no station within {max_miles:g} mi, "
+                  "and no model data")
               return blank(index)
 
-          pollutants = [pollutant_entry(row, d) for d, row in nearest.values()]
-          pollutants.sort(key=lambda p: (-p["aqi"], p["distanceMiles"]))
+          # Worst first; at equal AQI prefer a measured reading over a modelled
+          # one, then the closer station.
+          pollutants.sort(key=lambda p: (
+              -p["aqi"],
+              0 if p["source"] == "airnow" else 1,
+              p["distanceMiles"] if p["distanceMiles"] is not None else 0,
+          ))
           # The headline is the worst pollutant, and the category shown is that
           # same dominant pollutant's — this is how AirNow's own site reports it.
           top = pollutants[0]
@@ -279,13 +373,14 @@
               "pollutant": top["parameter"],
               "station": top["station"],
               "distanceMiles": top["distanceMiles"],
+              "source": top["source"],
               "pollutants": pollutants,
           }
 
 
       # No key configured yet: write a well-formed empty payload rather than
       # erroring, so a Hearth build without the key still serves the dashboard
-      # (the widget renders "ACI —"). Mirrors intranet-calendar.nix's early exit.
+      # (the widget renders "AQI —"). Mirrors intranet-calendar.nix's early exit.
       if not key:
           log("airnowApiKey unset; writing empty payload")
           write({"generatedAt": int(time.time()), "pollSeconds": poll, "locations": []})
@@ -314,8 +409,9 @@
       results = [resolve(i, loc, rows) for i, loc in enumerate(locations)]
       for r in results:
           if r["ok"]:
-              log(f"location {r['index']}: {r['pollutant']} {r['aqi']} "
-                  f"from {r['station']} at {r['distanceMiles']} mi")
+              where = (f"{r['station']} at {r['distanceMiles']} mi"
+                       if r["source"] == "airnow" else "modelled")
+              log(f"location {r['index']}: {r['pollutant']} {r['aqi']} ({where})")
       log(f"{sum(1 for r in results if r['ok'])}/{len(results)} locations ok")
 
       write({

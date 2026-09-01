@@ -136,10 +136,10 @@ function loadPlace(loc, unit) {
     "&wind_speed_unit=" +
     wind +
     "&timezone=auto";
-  // ACI is not fetched here: it comes from /aqi.json, which hearth-intranet-aqi
+  // AQI is not fetched here: it comes from /aqi.json, which hearth-intranet-aqi
   // writes server-side from AirNow's monitoring stations (the API key must not
-  // reach the browser). Open-Meteo's us_aqi was a modeled value that disagreed
-  // with AirNow.gov and most weather apps.
+  // reach the browser). Where no station is in range for a pollutant, that
+  // poller fills it from Open-Meteo's model and labels the row as modelled.
   return fetchJson(forecast).then((forecastJson) => ({
     loc,
     forecast: forecastJson,
@@ -154,8 +154,98 @@ const AQI_REFRESH_MS = 600000;
 // positions do not line up.
 function aqiAt(payload, index) {
   const rows = (payload && payload.locations) || [];
-  const row = rows.find((r) => r && r.index === index);
+  return rows.find((r) => r && r.index === index) || null;
+}
+
+function aqiValue(row) {
   return row && row.aqi != null ? row.aqi : null;
+}
+
+// AirNow's parameter names as they arrive in the payload.
+const POLLUTANT_LABEL = {
+  "PM2.5": "PM2.5",
+  PM10: "PM10",
+  OZONE: "Ozone",
+  NO2: "NO₂",
+  SO2: "SO₂",
+  CO: "CO",
+};
+
+// Where a figure came from is worth showing: the bug this modal was built after
+// — every location displaying a station 20 miles away in Kent — was invisible
+// precisely because nothing on screen said which station was being read.
+function sourceText(p) {
+  if (p.source === "open-meteo") return "Modelled — no station in range";
+  if (!p.station) return "Measured";
+  const miles = p.distanceMiles == null ? null : `${p.distanceMiles} mi`;
+  return miles ? `${p.station} · ${miles}` : p.station;
+}
+
+function AqiModal({ name, row, onClose }) {
+  const pollutants = (row && row.pollutants) || [];
+  return (
+    <Modal
+      icon={ICO.aqi}
+      title={`${name} · Air quality`}
+      label={`${name} air quality by pollutant`}
+      onClose={onClose}
+    >
+      {pollutants.length ? (
+        <ul className="aqi-rows">
+          {pollutants.map((p) => (
+            <li key={p.parameter}>
+              <span className="aqi-row-head">
+                <span className="aqi-param">
+                  {POLLUTANT_LABEL[p.parameter] || p.parameter}
+                </span>
+                <span className={`aqi-value ${aqiTone(p.aqi)}`}>{p.aqi}</span>
+                <span className="aqi-category">{p.category || ""}</span>
+              </span>
+              <span className="aqi-source">{sourceText(p)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="aqi-source">No air-quality data for this location.</p>
+      )}
+      <p className="facts">
+        <a
+          className="forecast-btn"
+          href="https://www.airnow.gov/"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <Icon code={ICO.aqi} />
+          AirNow
+        </a>
+      </p>
+    </Modal>
+  );
+}
+
+// The figure is a button only when there is something to open. With no row at
+// all — aqi.json missing, or no monitor and no model — it stays a plain fact.
+function AqiFact({ name, row }) {
+  const [open, setOpen] = useState(false);
+  const value = aqiValue(row);
+  const text = `AQI ${value == null ? "—" : value}`;
+  if (!row || !(row.pollutants || []).length) {
+    return <Fact code={ICO.aqi} text={text} tone={aqiTone(value)} />;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className={`fact fact-btn ${aqiTone(value)}`}
+        onClick={() => setOpen(true)}
+        aria-label={`Air quality detail for ${name}`}
+      >
+        <Icon code={ICO.aqi} />
+        {text}
+      </button>
+      {open ? <AqiModal name={name} row={row} onClose={() => setOpen(false)} /> : null}
+    </>
+  );
 }
 
 function ForecastStrip({ daily, unit }) {
@@ -200,7 +290,12 @@ function ForecastModal({ place, unit, aqi, onClose }) {
       onClose={onClose}
     >
       <p className="facts">
-        <Fact code={ICO.aci} text={`ACI ${aqi == null ? "—" : aqi}`} tone={aqiTone(aqi)} />
+        {/* Plain fact, not the button: this is already inside a modal. */}
+        <Fact
+          code={ICO.aqi}
+          text={`AQI ${aqiValue(aqi) == null ? "—" : aqiValue(aqi)}`}
+          tone={aqiTone(aqiValue(aqi))}
+        />
       </p>
       <ul className="forecast-days">
         {times.map((iso, i) => {
@@ -268,7 +363,7 @@ function Place({ place, unit, detail, showName, aqi }) {
         />
         <Fact code={weatherIcon(cur.weather_code)} text={weatherLabel(cur.weather_code)} />
         <Fact code={ICO.wind} text={String(Math.round(cur.wind_speed_10m))} />
-        <Fact code={ICO.aci} text={`ACI ${aqi == null ? "—" : aqi}`} tone={aqiTone(aqi)} />
+        <AqiFact name={name} row={aqi} />
       </p>
       {detail === "long" ? (
         <>
@@ -298,7 +393,7 @@ export default function Weather({ variant = "combo" }) {
   const weather = widget("weather");
   const locations = weather.locations || [];
   // Carry each location's index in the configured list through the filtering
-  // below, so the ACI lookup can find its row in aqi.json.
+  // below, so the AQI lookup can find its row in aqi.json.
   const valid = locations
     .map((loc, index) => ({ loc, index }))
     .filter(({ loc }) => loc && loc.latitude != null && loc.longitude != null);
@@ -327,7 +422,7 @@ export default function Weather({ variant = "combo" }) {
     };
   }, []);
 
-  // ACI polls independently of the forecast: a missing or failed aqi.json
+  // AQI polls independently of the forecast: a missing or failed aqi.json
   // leaves the reading as "—" rather than taking the whole card down.
   useEffect(() => {
     if (!picked.length) return undefined;
