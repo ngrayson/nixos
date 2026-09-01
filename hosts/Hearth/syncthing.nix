@@ -190,6 +190,18 @@ in {
     after = ["mnt-cold.mount"];
     wants = ["mnt-cold.mount"];
     unitConfig.RequiresMountsFor = ["/mnt/cold"];
+
+    # The upstream module only creates dataDir for its own `syncthing` user
+    # (users.users is guarded by `cfg.user == defaultUser`, with createHome).
+    # This host runs the daemon as wiz instead, so nothing creates
+    # /var/lib/syncthing and the daemon dies on every start with
+    # "mkdir /var/lib/syncthing: permission denied" until it hits the restart
+    # limit, taking syncthing-init and syncthing-seedbox-pair down with it.
+    # StateDirectory makes systemd create it owned by User/Group.
+    serviceConfig = {
+      StateDirectory = "syncthing";
+      StateDirectoryMode = "0700";
+    };
   };
 
   systemd.services.syncthing-seedbox-pair = lib.mkIf haveSeedbox {
