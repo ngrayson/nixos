@@ -211,6 +211,30 @@ desktop is currently the only recovery console.
 - Dirs: `/mnt/cold/media/{movies,tv,music}` (Jellyfin) and `/mnt/cold/share`.
   Leave `Anime/`, `Downloads/`, … at the volume root. There is no `Music`
   there; the audio archive lives at `media/music`.
+- **COLD does not support `chmod`, and anything writing to it must be told so.**
+  The volume is mounted `uid=0 gid=989 umask=0002` (`hosts/Hearth/host.nix`),
+  so ownership and permission bits come from the *mount options* — every file
+  is `root:jellyfin` regardless of who wrote it, and `chmod(2)` returns
+  `EPERM`. Do not `chown`/`chmod` anything on COLD, and do not add a service
+  that tries to. This has cost real time twice: Syncthing's default
+  permission-syncing made every pull into `/mnt/cold/share` die with
+  `handling dir (setting permissions): chmod ...: operation not permitted`,
+  aborting the whole folder cycle with exponential backoff while the files sat
+  as `.syncthing.*.tmp` and were never renamed into place — with the folder
+  still reporting `idle`, which reads like a slow peer rather than an error.
+  The fix is `ignorePerms` on both folders (`hosts/Hearth/syncthing.nix`).
+  Group membership is how processes get write access: `wiz` is in `jellyfin`
+  (`hosts/Hearth/jellyfin.nix`), which is what makes `umask=0002` writable.
+- **Hardlinks do work on COLD** — verified 2026-08-31: `ln` across directories
+  gives link count 2 and a shared inode, and removing the source leaves the
+  target intact at count 1. This is what lets H8 ingest hardlink out of
+  `share/` into `media/` for free instead of copying, and it is why moving is
+  never necessary. Both paths must be on `/mnt/cold`; a link across
+  filesystems fails.
+- Neither of the two constraints above is visible to `hearth-deploy build`.
+  Filesystem semantics on COLD can only be validated by activating and
+  watching the service, so treat any change touching permissions, ownership,
+  or linking on that volume as needing a real switch before it is called done.
 - ntfs-3g mounts COLD case-sensitively, so `music` and `Music` are two
   different directories. The archive shipped as `Music` and was renamed to
   lowercase to match the tmpfiles rule. Do not "fix" the case back: a mismatch
