@@ -8,10 +8,22 @@
 {lib, ...}: {
   imports = [../../common/tailscale.nix];
 
-  # Same override as Hearth: MagicDNS as the only resolv.conf nameserver hung
-  # public lookups (nix cache) on this LAN. Inbound tailnet SSH does not need
-  # accept-dns.
-  services.tailscale.extraSetFlags = lib.mkForce ["--ssh" "--accept-dns=false"];
+  # Two overrides of common/tailscale.nix, both host-specific.
+  #
+  # --accept-dns=false, same as Hearth: MagicDNS as the only resolv.conf
+  # nameserver hung public lookups (nix cache) on this LAN.
+  #
+  # --ssh=false: Go3 is a headless wall kiosk deployed only by go3-deploy from
+  # Tawa. Tailscale SSH intercepts port 22 on the tailnet ahead of sshd, and
+  # this tailnet's ACL puts that behind a browser check, which BatchMode cannot
+  # answer — so every deploy stalled until someone clicked a link. The LAN path
+  # to sshd is not an escape hatch here the way it is for hearth-deploy (port 22
+  # on the LAN address times out). Turning the interception off lands tailnet
+  # SSH on the key-only sshd below, which already trusts the Tawa builder key.
+  # The negation must be explicit: tailscaled-set.service runs `tailscale set`
+  # with these flags, and simply omitting --ssh would leave it enabled from the
+  # previously applied state.
+  services.tailscale.extraSetFlags = lib.mkForce ["--ssh=false" "--accept-dns=false"];
   networking.nameservers = ["1.1.1.1" "8.8.8.8"];
 
   users.users.wiz.openssh.authorizedKeys.keys = [
