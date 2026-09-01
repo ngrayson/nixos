@@ -1,9 +1,6 @@
 # Oneshot + timer: write /run/hearth-intranet/status.json for home.wizt.org.
 # Probe facts match scripts/hearth-healthcheck.sh (COLD UUID default).
-{
-  pkgs,
-  ...
-}: let
+{pkgs, ...}: let
   coldUuid = "22C21140C2111A1D";
   writer = pkgs.writeShellApplication {
     name = "hearth-intranet-status";

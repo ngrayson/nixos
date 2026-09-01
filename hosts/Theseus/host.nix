@@ -31,5 +31,4 @@
       -e '/^\[Element Int Mic Boost\]/,/^\[/{s/^volume = merge$/volume = zero/}' \
       "$out"
   '';
-
 }
