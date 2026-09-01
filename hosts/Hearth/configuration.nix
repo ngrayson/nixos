@@ -22,6 +22,7 @@
     ./intranet-calendar.nix
     ./intranet-maps-key.nix
     ./weather-alert.nix
+    ./battery-alert.nix
     ./restic.nix
     ./syncthing.nix
     ./ingest.nix
