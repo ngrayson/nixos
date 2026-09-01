@@ -95,6 +95,14 @@
 
       # Folders. Receive Only for acquisitions down, Send Only for the offsite
       # copy up. File Versioning for hearth-upload lives on the slot side.
+      #
+      # ignorePerms is mandatory, not a preference: both paths are on COLD,
+      # which is NTFS via ntfs-3g mounted uid=0 gid=989 umask=0002. Permission
+      # bits come from the mount options and chmod(2) is not supported, so with
+      # the default (sync permissions) every pull dies with
+      #   handling dir (setting permissions): chmod ...: operation not permitted
+      # and Syncthing aborts the WHOLE folder cycle and backs off — files land
+      # as .syncthing.*.tmp and are never renamed into place.
       put_folder() {
         folder_id="$1"; label="$2"; path="$3"; type="$4"
         folder_json=$(jq -n \
@@ -106,7 +114,8 @@
             type: $type,
             devices: [{deviceID: $dev}],
             fsWatcherEnabled: true,
-            rescanIntervalS: 3600
+            rescanIntervalS: 3600,
+            ignorePerms: true
           }')
         if api "$gui/rest/config/folders/$folder_id" >/dev/null 2>&1; then
           api -X PUT --data "$folder_json" "$gui/rest/config/folders/$folder_id" >/dev/null
