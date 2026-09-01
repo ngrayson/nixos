@@ -33,12 +33,11 @@ let
 
   collisions = builtins.filter (ip: builtins.length byIp.${ip} > 1) (builtins.attrNames byIp);
 
-  describe = ip:
-    "${ip} used by ${
-      builtins.concatStringsSep " and " (
-        map (x: "${x.kind}:${x.n}") byIp.${ip}
-      )
-    }";
+  describe = ip: "${ip} used by ${
+    builtins.concatStringsSep " and " (
+      map (x: "${x.kind}:${x.n}") byIp.${ip}
+    )
+  }";
 in
   if collisions != []
   then throw "LAN address collision in common/lan.nix: ${builtins.concatStringsSep "; " (map describe collisions)}"

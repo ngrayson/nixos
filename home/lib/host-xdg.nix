@@ -64,17 +64,16 @@
       then p
       else null;
 
-  fastfetchConfig =
-    pkgs.runCommand "fastfetch-config.jsonc" {} (
-      if fastfetchHardwareExtra == null
-      then ''
-        sed '/@hardware-extra@/d' ${../../fastfetch/config.jsonc} > $out
-      ''
-      else ''
-        sed -e '/@hardware-extra@/{' -e 'r ${fastfetchHardwareExtra}' -e 'd' -e '}' \
-          ${../../fastfetch/config.jsonc} > $out
-      ''
-    );
+  fastfetchConfig = pkgs.runCommand "fastfetch-config.jsonc" {} (
+    if fastfetchHardwareExtra == null
+    then ''
+      sed '/@hardware-extra@/d' ${../../fastfetch/config.jsonc} > $out
+    ''
+    else ''
+      sed -e '/@hardware-extra@/{' -e 'r ${fastfetchHardwareExtra}' -e 'd' -e '}' \
+        ${../../fastfetch/config.jsonc} > $out
+    ''
+  );
 in {
   inherit fastfetchConfig fastfetchHardwareExtra hyprMonitorsConf hyprMonitorsXdg kvantumConfigFiles;
 }

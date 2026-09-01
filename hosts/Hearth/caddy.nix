@@ -203,15 +203,15 @@ in {
           file_server
         }
         ${
-    if (intranetCfg.gallery.galleryDir or "") != ""
-    then ''
-      handle_path /gallery/* {
-        root * ${intranetCfg.gallery.galleryDir}
-        file_server
-      }
-    ''
-    else ""
-  }
+          if (intranetCfg.gallery.galleryDir or "") != ""
+          then ''
+            handle_path /gallery/* {
+              root * ${intranetCfg.gallery.galleryDir}
+              file_server
+            }
+          ''
+          else ""
+        }
         root * ${intranetRoot}
         file_server
       '';

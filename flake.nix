@@ -100,6 +100,27 @@
       hearth-hostname = checkHost "Hearth" "Hearth";
       go3-hostname = checkHost "Go3" "Go3";
       gcp-hostname = checkHost "Gcp" "Gcp";
+
+      # Nothing else in `checks` looks at style, so formatting drift survives
+      # review and then taxes the next card that touches the file: on
+      # 2026-09-01 `caddy.nix` and eleven other tracked files had fallen out of
+      # alejandra, and reformatting the one block a card needed dragged an
+      # unrelated hunk in with it. Unlike the hostname checks above this one
+      # only parses the tree rather than evaluating a host closure, so the 8 GB
+      # codespace constraint noted there does not apply.
+      #
+      # Scoped to `inputs.self`, which is git-tracked files only — the
+      # gitignored per-widget `hosts/Hearth/intranet/config/*/config.nix` files
+      # are deliberately outside it. `nix flake check --no-build` never builds
+      # and so never runs this; `nix fmt -- --check .` gives the same answer
+      # without a build.
+      formatting =
+        pkgs.runCommand "check-formatting" {
+          nativeBuildInputs = [pkgs.alejandra];
+        } ''
+          alejandra --check ${inputs.self}
+          touch "$out"
+        '';
     };
   };
 }

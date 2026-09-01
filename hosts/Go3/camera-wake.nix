@@ -362,6 +362,5 @@ in {
 
   # Hand idle-blank the merged stream. Its own default stays plain libinput, so
   # the module is still standalone if this one is ever removed.
-  systemd.services.go3-idle-blank.environment.GO3_EVENT_CMD =
-    "${go3-idle-events}/bin/go3-idle-events";
+  systemd.services.go3-idle-blank.environment.GO3_EVENT_CMD = "${go3-idle-events}/bin/go3-idle-events";
 }
