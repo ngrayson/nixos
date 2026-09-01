@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal.jsx";
 import WidgetGrid from "./components/WidgetGrid.jsx";
-import { ICO, Icon } from "./lib/icons.jsx";
+import { Fact, ICO, Icon } from "./lib/icons.jsx";
 import { readShaderPref, SHADER_OPTIONS, writeShaderPref } from "./lib/shaderPref.js";
 import { TimeFormatProvider, useTimeFormat } from "./lib/timeFormat.js";
 
@@ -82,6 +82,66 @@ function SettingsModal({ shaderId, onShader, onClose }) {
   );
 }
 
+// Go3's kiosk URL carries ?hideJellyfin=1 (profiles/kiosk.nix). Read once at
+// module scope: the query string cannot change without a reload, so there is
+// nothing to re-evaluate and no reason to make it state.
+const params =
+  typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
+const hideJellyfin = params?.get("hideJellyfin") === "1";
+// Go3's kiosk URL sets this too. Independent of hideJellyfin: both ride the
+// same URL and neither implies the other.
+const showSystemStats = params?.get("showSystemStats") === "1";
+
+// Go3 serves its own CPU/RAM/battery/Wi-Fi/temperature on loopback, because a
+// web page has no API for OS-level stats and this page comes from Hearth.
+// Same machine, different origin -- hence the CSP entry in caddy.nix.
+const STATS_URL = "http://127.0.0.1:18090/stats.json";
+const STATS_POLL_MS = 5000;
+
+function KioskStats() {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    function poll() {
+      fetch(STATS_URL)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error("stats"))))
+        .then((data) => {
+          if (!cancelled) setStats(data);
+        })
+        // Anything at all -- service down, wrong host, CSP -- hides the row.
+        // A Go3-only extra must never be able to break the shared dashboard.
+        .catch(() => {
+          if (!cancelled) setStats(null);
+        });
+    }
+    poll();
+    const id = setInterval(poll, STATS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (!stats) return null;
+
+  const charging = stats.battery_status === "Charging";
+  return (
+    <span className="site-nav-stats">
+      {stats.cpu_pct != null ? <Fact code={ICO.cpu} text={`${stats.cpu_pct}%`} /> : null}
+      {stats.mem_pct != null ? <Fact code={ICO.memory} text={`${stats.mem_pct}%`} /> : null}
+      {stats.battery_pct != null ? (
+        <Fact
+          code={charging ? ICO.battery : ICO.batteryOff}
+          text={`${stats.battery_pct}%`}
+        />
+      ) : null}
+      {stats.wifi_signal != null ? <Fact code={ICO.wifi} text={`${stats.wifi_signal}%`} /> : null}
+      {stats.cpu_temp_c != null ? <Fact code={ICO.temp} text={`${stats.cpu_temp_c}°C`} /> : null}
+    </span>
+  );
+}
+
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -158,6 +218,7 @@ function Shell() {
             <Icon code={ICO.home} />
             Home
           </a>
+          {showSystemStats ? <KioskStats /> : null}
           <span className="site-nav-ctas">
             <button
               type="button"
@@ -167,10 +228,12 @@ function Shell() {
             >
               <Icon code={ICO.cog} />
             </button>
-            <a id="tv-jellyfin" className="site-nav-item site-nav-cta" href="https://tv.wizt.org">
-              <Icon code={ICO.tv} />
-              TV Jellyfin
-            </a>
+            {hideJellyfin ? null : (
+              <a id="tv-jellyfin" className="site-nav-item site-nav-cta" href="https://tv.wizt.org">
+                <Icon code={ICO.tv} />
+                TV Jellyfin
+              </a>
+            )}
           </span>
         </nav>
         <WidgetGrid />

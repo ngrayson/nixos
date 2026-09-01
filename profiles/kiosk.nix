@@ -10,7 +10,12 @@
   pkgs,
   ...
 }: let
-  kioskUrl = "https://home.wizt.org";
+  # The query flag tells the dashboard it is being viewed on this kiosk, which
+  # is the only way the page can know: home.wizt.org is served to phones and
+  # laptops too, and nothing else distinguishes the viewer. App.jsx reads it to
+  # drop the TV Jellyfin link, which is useless on a wall panel that runs no
+  # Jellyfin client. Other viewers load the bare URL and are unaffected.
+  kioskUrl = "https://home.wizt.org/?hideJellyfin=1&showSystemStats=1";
   chromiumFlags = [
     "--kiosk"
     "--app=${kioskUrl}"
@@ -84,6 +89,24 @@ in {
 
   security.polkit.enable = true;
   security.rtkit.enable = true;
+
+  # tty1 belongs to the kiosk, so nothing else may be started on it.
+  #
+  # cage-tty1 declares Conflicts=getty@tty1.service, and systemd-getty-generator
+  # creates a getty.target want for getty@tty1 at runtime -- which is why
+  # /etc/systemd/system/getty.target.wants/ looks empty while `systemctl show
+  # getty.target -p Wants` lists it. switch-to-configuration therefore sees a
+  # wanted unit that is not running and starts it on every activation, systemd
+  # stops cage because the two conflict, and if that lands while cage's
+  # ExecStartPre is still running the unit records `Failed with result
+  # 'signal'`. Every deploy exited 4 over a kiosk that was actually fine.
+  #
+  # Masking the unit means the generator's want can never start anything, so
+  # the conflict never fires. A recovery console is deliberately preserved:
+  # logind still spawns autovt@ttyN on demand, so Ctrl+Alt+F2 through F6 give a
+  # login prompt. Only tty1 is off limits, and a getty there was invisible
+  # anyway behind cage's output.
+  systemd.services."getty@tty1".enable = false;
 
   # cage runs exactly one Wayland client, fullscreen, on tty1 as `wiz`. That
   # is the entire session: no display manager, no compositor config, no bar,

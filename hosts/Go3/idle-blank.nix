@@ -14,6 +14,11 @@
 # the rule below.
 {pkgs, ...}: let
   backlight = "/sys/class/backlight/intel_backlight";
+  # Shared with the ambient-light service: we publish `state`, it
+  # publishes `level`. A directory rather than two files directly in /run
+  # because an atomic write renames *into* the directory, so the directory
+  # itself has to be writable -- the same trap that bit the Hearth ledger.
+  stateDir = "/run/go3-display";
 
   go3-idle-blank = pkgs.writeShellApplication {
     name = "go3-idle-blank";
@@ -22,88 +27,160 @@
       set -euo pipefail
 
       # Overridable so the logic can be exercised against a scratch directory
-      # off-box; the unit sets neither and gets the real panel.
+      # off-box; the unit sets none of these and gets the real panel.
       BACKLIGHT="''${GO3_BACKLIGHT:-${backlight}}"
-      IDLE_SECONDS="''${GO3_IDLE_SECONDS:-600}"
-      # Event source too, so the blank/wake state machine can be driven by a
-      # scripted stream in a test rather than by touching a physical panel.
+      DIM_SECONDS="''${GO3_DIM_SECONDS:-180}"
+      # Measured from last input, not from entering dim -- so off lands 7
+      # minutes after the dim, not 10 minutes after it.
+      OFF_SECONDS="''${GO3_OFF_SECONDS:-''${GO3_IDLE_SECONDS:-600}}"
+      DIM_FRACTION="''${GO3_DIM_FRACTION:-0.2}"
+      STATE_DIR="''${GO3_STATE_DIR:-${stateDir}}"
+      # Event source too, so the state machine can be driven by a scripted
+      # stream in a test rather than by touching a physical panel.
       read -r -a EVENT_CMD <<<"''${GO3_EVENT_CMD:-libinput debug-events}"
 
       bright="$BACKLIGHT/brightness"
       maxfile="$BACKLIGHT/max_brightness"
+      state_file="$STATE_DIR/state"
+      level_file="$STATE_DIR/level"
 
       if [[ ! -w "$bright" ]]; then
-        echo "go3-idle-blank: $bright is not writable; is the udev rule applied?" >&2
+        echo "go3-idle-blank: $bright is not writable; is the ExecStartPre grant applied?" >&2
         exit 1
       fi
 
       max="$(cat "$maxfile")"
-      blanked=0
-      # Seeded from whatever the panel is set to now, and re-captured on each
-      # blank, so a level someone chose survives a blank/wake cycle.
+      # awake | dim | off
+      stage=awake
+      # Seeded from whatever the panel is set to now, and re-captured whenever
+      # we leave awake, so a level someone chose survives a cycle.
       on_level="$(cat "$bright")"
       [[ "$on_level" -gt 0 ]] || on_level="$max"
 
-      blank() {
+      # Atomic, because the ambient-light service polls this while we write it.
+      # Renaming into the directory is why the directory itself must be
+      # writable by us, not just the file.
+      publish_stage() {
+        stage="$1"
+        printf '%s\n' "$stage" >"$state_file.tmp" 2>/dev/null || return 0
+        mv -f "$state_file.tmp" "$state_file" 2>/dev/null || true
+      }
+
+      # The awake level the ambient-light service wants, if it is running.
+      # Falls back to our own captured level, so this script is fully
+      # functional standalone whether or not that service ever exists.
+      target_level() {
+        local want
+        if [[ -r "$level_file" ]]; then
+          want="$(cat "$level_file" 2>/dev/null || true)"
+          if [[ "$want" =~ ^[0-9]+$ ]] && [[ "$want" -gt 0 ]] && [[ "$want" -le "$max" ]]; then
+            printf '%s' "$want"
+            return 0
+          fi
+        fi
+        [[ "$on_level" -gt 0 ]] || on_level="$max"
+        printf '%s' "$on_level"
+      }
+
+      # Recapture before leaving awake, so a manually-set brightness is what we
+      # dim from and come back to.
+      capture_on_level() {
         local current
         current="$(cat "$bright")"
-        if [[ "$current" -gt 0 ]]; then
-          on_level="$current"
-        fi
+        [[ "$current" -gt 0 ]] && on_level="$current"
+      }
+
+      dim() {
+        capture_on_level
+        local level
+        # Floored, and never 0 -- 0 is the separate "off" stage, and a dim
+        # panel has to stay visibly lit.
+        level="$(awk -v o="$on_level" -v f="$DIM_FRACTION" 'BEGIN { v = int(o * f); if (v < 1) v = 1; print v }')"
+        echo "$level" >"$bright"
+        publish_stage dim
+      }
+
+      off() {
+        [[ "$stage" == "awake" ]] && capture_on_level
         echo 0 >"$bright"
-        blanked=1
+        publish_stage off
       }
 
       wake() {
-        [[ "$on_level" -gt 0 ]] || on_level="$max"
-        echo "$on_level" >"$bright"
-        blanked=0
+        target_level >"$bright"
+        publish_stage awake
       }
 
-      # Restore on the way out, but only if we are the reason the panel is
-      # dark. A stopped or crashed blanker must never leave a wall display
-      # off -- and equally must not touch a brightness it never changed:
-      # restoring unconditionally made every deploy (which stops this unit)
-      # write on_level over the current level, jumping the panel to full.
-      trap 'if [[ "$blanked" -eq 1 ]]; then wake; fi' EXIT
+      # Restore on the way out from dim or off, but never when already awake.
+      # A stopped or crashed unit must not leave a wall display dark or dim --
+      # and equally must not stomp a brightness it never changed, which is what
+      # made every deploy jump the panel to full.
+      trap 'if [[ "$stage" != "awake" ]]; then wake; fi' EXIT
+
+      publish_stage awake
 
       # libinput prints one line per input event -- key, touch, pointer -- from
       # the udev backend, independent of any compositor. `read -t` doing double
       # duty as the idle timer is the whole design: a line means input, a
-      # timeout means idle.
+      # timeout means the stage has expired.
       while true; do
-        if read -r -t "$IDLE_SECONDS" _line; then
-          if [[ "$blanked" -eq 1 ]]; then
-            wake
-          fi
+        case "$stage" in
+          awake) wait_for="$DIM_SECONDS" ;;
+          dim)   wait_for="$((OFF_SECONDS - DIM_SECONDS))" ;;
+          # Nothing left to time out into; block until input.
+          *)     wait_for=0 ;;
+        esac
+
+        if [[ "$wait_for" -gt 0 ]]; then
+          read -r -t "$wait_for" _line && rc=0 || rc=$?
         else
-          # read(1) returns >128 on timeout and non-zero at EOF; only a real
-          # timeout should blank, EOF means libinput died and the loop ends.
-          status=$?
-          if [[ "$status" -le 128 ]]; then
-            echo "go3-idle-blank: input stream closed" >&2
-            exit 1
-          fi
-          if [[ "$blanked" -eq 0 ]]; then
-            blank
-          fi
+          read -r _line && rc=0 || rc=$?
         fi
+
+        if [[ "$rc" -eq 0 ]]; then
+          # Input at any stage goes straight back to full, never via dim.
+          [[ "$stage" != "awake" ]] && wake
+          continue
+        fi
+        # read(1) returns >128 on timeout and non-zero at EOF; only a real
+        # timeout advances a stage, EOF means libinput died and the loop ends.
+        if [[ "$rc" -le 128 ]]; then
+          echo "go3-idle-blank: input stream closed" >&2
+          exit 1
+        fi
+        case "$stage" in
+          awake) dim ;;
+          dim)   off ;;
+        esac
       done < <("''${EVENT_CMD[@]}")
     '';
   };
 in {
+  # Persistent across restarts of either service, so the ambient-light
+  # service can keep writing `level` while this one is being restarted.
+  systemd.tmpfiles.rules = [
+    "d ${stateDir} 0775 wiz video -"
+  ];
+
   systemd.services.go3-idle-blank = {
     description = "Blank the Go3 kiosk panel after idle, wake on input";
-    # Tied to the session it dims: no point watching for input with no kiosk,
-    # and a cage restart (deploys restart it) should cycle this too.
+    # Deliberately independent of cage-tty1. Tying the two together looked
+    # right -- the blanker watches the kiosk's panel -- but it is not: this
+    # writes the kernel backlight, which the compositor does not own and which
+    # works whether or not cage is running.
+    #
+    # The coupling cost two deploy failures. BindsTo made a cage stop kill this
+    # unit; adding `wantedBy = cage-tty1.service` to bring it back put a
+    # symlink in cage-tty1.service.wants/, so editing THIS file changed
+    # cage-tty1's dependencies too -- switch-to-configuration then restarted
+    # cage (restartIfChanged), which SIGTERMed this unit mid-start and left
+    # the wall blank for a minute. A change to the blanker must not restart
+    # the kiosk.
+    #
+    # `after` is kept purely for boot ordering; Restart=always is what keeps
+    # this alive now, rather than another unit's lifecycle.
     after = ["cage-tty1.service"];
-    bindsTo = ["cage-tty1.service"];
-    # BindsTo propagates a stop but never a start, so after cage-tty1 is
-    # restarted on its own -- which a deploy does, and which go3-deploy now
-    # does explicitly when a switch leaves the kiosk down -- this unit stayed
-    # dead until someone noticed. Being wanted by cage-tty1 as well as
-    # graphical.target means it comes back with the session it watches.
-    wantedBy = ["graphical.target" "cage-tty1.service"];
+    wantedBy = ["graphical.target"];
     serviceConfig = {
       # The panel is root-owned 0644, so nothing but root can dim it. A udev
       # rule was the obvious grant and was wrong: udev rules fire on device
