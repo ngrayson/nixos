@@ -10,5 +10,6 @@
     ./remote-access.nix
     ./idle-blank.nix
     ./ambient-brightness.nix
+    ./stats-server.nix
   ];
 }
