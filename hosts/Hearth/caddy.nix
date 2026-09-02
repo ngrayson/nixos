@@ -151,19 +151,30 @@ in {
   # --delete so a file dropped from the build does not linger; --chmod because
   # store trees are read-only and rsync could not write into its own
   # destination on the next run.
+  #
+  # --checksum is load-bearing, not caution. Nix normalises every store file's
+  # mtime to 1, so rsync's default size+mtime quick check sees no difference in
+  # any file whose length happens to be unchanged and skips it. build-id.txt is
+  # always exactly 65 bytes, so it was silently never updated — the one file the
+  # kiosk polls to decide whether to reload. Observed 2026-09-02: a fast-path
+  # deploy replaced the hashed asset bundles but left build-id.txt reading the
+  # previous deploy's hash.
   systemd.services.hearth-intranet-sync = {
     description = "Sync the declared home.wizt.org build into ${intranetServeDir}";
     wantedBy = ["multi-user.target"];
     # A fresh boot must not let Caddy serve an empty directory.
     before = ["caddy.service"];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
+    # Deliberately no RemainAfterExit. A switch is only authoritative if it
+    # re-syncs every time, and unit diffing alone does not do that: a fast-path
+    # deploy of an uncommitted tweak leaves the declared build — and therefore
+    # this unit's text — unchanged, so a subsequent switch would see nothing to
+    # restart and the divergence would survive it. Left inactive after each run,
+    # the unit is instead started on every activation.
+    serviceConfig.Type = "oneshot";
     path = [pkgs.rsync];
     script = ''
       mkdir -p ${intranetServeDir}
-      rsync -a --delete --chmod=D755,F644 ${intranetRoot}/ ${intranetServeDir}/
+      rsync -a --checksum --delete --chmod=D755,F644 ${intranetRoot}/ ${intranetServeDir}/
     '';
   };
 
