@@ -11,6 +11,13 @@ Item {
 	required property LockContext context
 	property bool preview: false
 	property bool showUi: true
+	// Split out of showUi deliberately. showUi is "draw the chrome", primary is
+	// "take the keys". The real lock now draws a prompt on every output, but
+	// only one surface may forceActiveFocus() — under ext-session-lock the
+	// compositor routes input, and surfaces fighting over focus is the failure
+	// mode that split buys us out of. LockContext is shared, so the non-primary
+	// prompts still mirror the typed text and the failure shake.
+	property bool primary: true
 
 	readonly property color voidColor: Theme.bg
 	readonly property color depthColor: Theme.depth
@@ -302,7 +309,7 @@ Item {
 					font.pixelSize: 15
 					enabled: !root.context.unlockInProgress
 					inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
-					focus: root.showUi
+					focus: root.primary
 
 					Text {
 						anchors.fill: parent
@@ -533,13 +540,16 @@ Item {
 		}
 	}
 
+	// The chrome work (avatar retry, fade poke, caps query) is per-surface and
+	// stays gated on showUi. Only the focus grab is gated on primary.
 	onShowUiChanged: {
 		if (showUi) {
 			root.faceTry = 0;
 			root.pokeUi();
 			capsQuery.running = false;
 			capsQuery.running = true;
-			passwordBox.forceActiveFocus();
+			if (root.primary)
+				passwordBox.forceActiveFocus();
 		}
 	}
 
@@ -547,7 +557,8 @@ Item {
 		if (showUi) {
 			root.pokeUi();
 			capsQuery.running = true;
-			passwordBox.forceActiveFocus();
+			if (root.primary)
+				passwordBox.forceActiveFocus();
 		}
 	}
 }
