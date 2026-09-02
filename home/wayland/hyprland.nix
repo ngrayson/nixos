@@ -192,6 +192,27 @@ in {
       + ''
         # Non-consuming: Escape still reaches apps; closes pavucontrol when that window is focused.
         bindn = , escape, exec, ${lib.getExe hs.pavuEscapeClose}
+
+        # Palm rejection (Theseus) makes it impossible to hold SUPER while
+        # dragging with the pen, so the $mod+drag gestures in `bindm` above are
+        # unreachable there. This submap exposes the same two dispatchers with
+        # nothing held: SUPER+A toggles in, Escape or SUPER+A again toggles out.
+        # `resizewindow` picks the nearest edge from the click point, so the
+        # whole window is the target -- there is no border strip to hit.
+        #
+        # This lives in extraConfig rather than `settings` because a submap is
+        # positional: every bind after `submap = NAME` belongs to that submap
+        # until `submap = reset`, and the attrset generator gives no ordering
+        # guarantee. Keep this block last, and keep the trailing `submap =
+        # reset` -- without it, anything appended later would silently land
+        # inside the submap instead of the global keymap.
+        bind = $mod, A, submap, resize-move
+        submap = resize-move
+        bindm = , mouse:272, movewindow
+        bindm = , mouse:273, resizewindow
+        bind = , escape, submap, reset
+        bind = $mod, A, submap, reset
+        submap = reset
       '';
   };
 
