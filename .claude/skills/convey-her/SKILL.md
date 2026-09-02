@@ -1,6 +1,6 @@
 ---
 name: convey-her
-description: Nick's preset over conveyor-local-loop for the WizOs repo — same serial local card loop, but with three amendments: a loop-opened PR is merged to dev in the iteration that finds it green (at most one may stay open, and only with a named blocker), a card touching hosts/Hearth or hosts/Go3 is verified by actually running hearth-deploy switch / go3-deploy switch rather than a build, and the loop ends its turn at card boundaries so the user has a window to /compact. Use when the user says "/convey-her". For the unmodified loop use conveyor-local-loop; for exactly one card, conveyor-local-task.
+description: Nick's preset over conveyor-local-loop for the WizOs repo — same serial local card loop, but with three amendments: a loop-opened PR is merged to dev in the iteration that finds it green (only one may stay open awaiting the loop's own work, and every open PR needs a named blocker; PRs parked on the user do not count), a card touching hosts/Hearth or hosts/Go3 is verified by actually running hearth-deploy switch / go3-deploy switch rather than a build, and the loop ends its turn at card boundaries so the user has a window to /compact. Use when the user says "/convey-her". For the unmodified loop use conveyor-local-loop; for exactly one card, conveyor-local-task.
 ---
 
 # Convey-Her
@@ -25,8 +25,16 @@ The base skill's Execute-and-finish step 6 says to confirm CI started and let
 "later iterations babysit". **That is overridden here.** It is the mechanism
 by which PRs accumulate — every iteration defers the merge to the next one.
 
-- **WIP=1 applies to pull requests, not just cards.** At most one
-  loop-opened PR may be open at the end of an iteration.
+- **At most one loop-opened PR may be open awaiting the loop's own work.**
+  Red CI, unanswered review comments, an unfinished branch — resolve it
+  before claiming anything new.
+- **A PR parked on the user does not count against that limit.**
+  `os-rebuild switch` is always theirs to run (`AGENTS.md` forbids sudo-ing
+  to activate), and some cards additionally need hardware they must touch or
+  a password they must type. In this repo that is a normal way for a card to
+  end, not accumulation. Keep claiming while those wait — but keep naming
+  them in the count every iteration, so "waiting on you" can never quietly
+  become "forgotten".
 - **Green means merge now, in the same iteration that finds it green.** Wait
   for checks with a bounded loop that reports on both outcomes, then merge.
   In this repo the wait is short: there are no workflows under
@@ -36,13 +44,16 @@ by which PRs accumulate — every iteration defers the merge to the next one.
   open when an iteration starts, resolve it — merge it, fix its CI, or park
   it — *before* claiming anything new.
 - **An open PR needs a named blocker**, recorded in the card chat. Exactly
-  three qualify: red CI, an unresolved review comment, or a verification only
-  the user can perform (they must type a password, look at a screen, or
-  approve a risky live action). "A later iteration will get to it" is not a
-  blocker; it is the bug.
+  three qualify, and they split along the limit above: red CI and an
+  unresolved review comment are the loop's to clear, so they count against
+  it; a verification only the user can perform (they must run a switch, type
+  a password, look at a screen, or approve a risky live action) does not.
+  "A later iteration will get to it" is not a blocker at all; it is the bug.
 - **Say the number out loud.** Every iteration summary states how many
   loop-opened PRs are open and, for each, which of those three reasons keeps
-  it open. A count that only grows is the signal to stop claiming and drain.
+  it open. A count that only grows is the signal to stop claiming and drain;
+  a count that is all "waiting on you" is a prompt to ask whether they want
+  to clear one now.
 
 Unchanged from the base skill: never merge someone else's PR, and a pack's
 finale PR into `dev` is still the user's call.
