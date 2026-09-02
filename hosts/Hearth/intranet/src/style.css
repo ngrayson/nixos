@@ -1075,7 +1075,22 @@ section h3 {
 }
 
 .poll-fill {
-  transition: transform 0.25s linear, opacity 0.3s ease;
+  /* Deliberately no transform transition.
+   *
+   * Buses.jsx ticks `now` every 250ms and this bar's transition was also
+   * 0.25s, so a new target landed exactly as the previous tween finished: the
+   * layer animated continuously, 24/7, and never idled. Measured on the live
+   * dashboard with the animated background already off, scoping
+   * `transition: none` to this one element took the browser from 95.8% of a
+   * core to 16% — about 80 points, more than anything else on the page.
+   *
+   * It bought little visually either. Over a 60s poll a 250ms tick moves the
+   * bar 1/240th of its width — around 1.4px on this card — so the tween was
+   * smoothing a step that is barely visible to begin with. The opacity
+   * transition stays: it runs only when the bar switches to its off state,
+   * not continuously.
+   */
+  transition: opacity 0.3s ease;
 }
 
 .poll-fill.is-awaiting {
