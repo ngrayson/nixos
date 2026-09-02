@@ -46,6 +46,10 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     vec2 suv = uv-.5; suv.x /= iResolution.y/iResolution.x;
     float time = iTime;
     vec3 drawing = animation(suv,time);
-    drawing = vec3(pow(drawing,vec3(2.5,1.8,1.)));
+    // The exponent vector is what made this pass blue: a high exponent crushes a
+    // channel, a low one keeps it. Deriving it from the accent generalises that
+    // — the accent's strongest channel gets 1.0, its weakest 2.5 — and lands
+    // back on roughly the original (2.5, 1.8, 1.0) for a blue accent.
+    drawing = vec3(pow(drawing, mix(vec3(2.5), vec3(1.0), themeTint(uAccent, 1.0))));
 	fragColor = vec4(drawing,1.);
 }

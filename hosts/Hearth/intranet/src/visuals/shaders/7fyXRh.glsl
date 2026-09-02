@@ -46,7 +46,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ) {
     float preNoise = terrain(3.0*prePix+iTime,scales,1.0);
     vec2 pix = (5.0*prePix)-vec2(preNoise,0.7*preNoise);
 
-    vec3 col = (0.5+(pow(terrain(pix+vec2(-0.09*iTime,0.3*iTime),scales,0.5),2.0)))*vec3(0.0,0.5,0.9);
+    // Was a fixed *vec3(0.0, 0.5, 0.9) — the one place this shader picks a hue.
+    vec3 col = (0.5+(pow(terrain(pix+vec2(-0.09*iTime,0.3*iTime),scales,0.5),2.0)))*themeTint(uAccent, 0.9);
 
     fragColor = vec4(col,1.0);
 }

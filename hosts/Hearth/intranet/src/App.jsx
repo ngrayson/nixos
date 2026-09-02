@@ -70,7 +70,7 @@ function useBuildReload() {
   }, []);
 }
 
-function AtmosphereGate({ shaderId }) {
+function AtmosphereGate({ shaderId, themeId }) {
   const [mount, setMount] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -82,7 +82,7 @@ function AtmosphereGate({ shaderId }) {
   if (!mount) return null;
   return (
     <Suspense fallback={null}>
-      <Atmosphere shaderId={shaderId} />
+      <Atmosphere shaderId={shaderId} themeId={themeId} />
     </Suspense>
   );
 }
@@ -272,7 +272,7 @@ function Shell() {
 
   return (
     <>
-      <AtmosphereGate shaderId={shaderId} />
+      <AtmosphereGate shaderId={shaderId} themeId={themeId} />
       <main>
         <nav className="site-nav" aria-label="Hearth">
           <a
