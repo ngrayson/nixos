@@ -206,12 +206,20 @@ in {
         # guarantee. Keep this block last, and keep the trailing `submap =
         # reset` -- without it, anything appended later would silently land
         # inside the submap instead of the global keymap.
-        bind = $mod, A, submap, resize-move
+        #
+        # The key is lowercase `a` on purpose. Registered as `A` it never
+        # fires: `hyprctl binds` showed `modmask=64 key=A` -- SUPER with no
+        # SHIFT (SHIFT is 1) -- while pressing Super+a emits keysym `a`, so
+        # nothing matched. Every other unshifted bind in this file is lowercase
+        # too (`modmask=8 key=h`); uppercase appears only alongside SHIFT
+        # (`modmask=9 key=Q`). Shipped uppercase once and it silently did
+        # nothing while `hyprctl binds` happily listed it.
+        bind = $mod, a, submap, resize-move
         submap = resize-move
         bindm = , mouse:272, movewindow
         bindm = , mouse:273, resizewindow
         bind = , escape, submap, reset
-        bind = $mod, A, submap, reset
+        bind = $mod, a, submap, reset
         submap = reset
       '';
   };
