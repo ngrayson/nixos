@@ -181,70 +181,14 @@ function sourceText(p) {
   return miles ? `${p.station} · ${miles}` : p.station;
 }
 
-function AqiModal({ name, row, onClose }) {
-  const pollutants = (row && row.pollutants) || [];
-  return (
-    <Modal
-      icon={ICO.aqi}
-      title={`${name} · Air quality`}
-      label={`${name} air quality by pollutant`}
-      onClose={onClose}
-    >
-      {pollutants.length ? (
-        <ul className="aqi-rows">
-          {pollutants.map((p) => (
-            <li key={p.parameter}>
-              <span className="aqi-row-head">
-                <span className="aqi-param">
-                  {POLLUTANT_LABEL[p.parameter] || p.parameter}
-                </span>
-                <span className={`aqi-value ${aqiTone(p.aqi)}`}>{p.aqi}</span>
-                <span className="aqi-category">{p.category || ""}</span>
-              </span>
-              <span className="aqi-source">{sourceText(p)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="aqi-source">No air-quality data for this location.</p>
-      )}
-      <p className="facts">
-        <a
-          className="forecast-btn"
-          href="https://www.airnow.gov/"
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          <Icon code={ICO.aqi} />
-          AirNow
-        </a>
-      </p>
-    </Modal>
-  );
-}
-
-// The figure is a button only when there is something to open. With no row at
-// all — aqi.json missing, or no monitor and no model — it stays a plain fact.
-function AqiFact({ name, row }) {
-  const [open, setOpen] = useState(false);
+// Air quality no longer has a modal of its own. It used to, and the whole card
+// being clickable would have put two modals behind the same tap — so rather
+// than guarding the nested button with stopPropagation, the pollutant detail
+// moved into the forecast modal and this went back to being a plain fact.
+function AqiFact({ row }) {
   const value = aqiValue(row);
-  const text = `AQI ${value == null ? "—" : value}`;
-  if (!row || !(row.pollutants || []).length) {
-    return <Fact code={ICO.aqi} text={text} tone={aqiTone(value)} />;
-  }
   return (
-    <>
-      <button
-        type="button"
-        className={`fact fact-btn ${aqiTone(value)}`}
-        onClick={() => setOpen(true)}
-        aria-label={`Air quality detail for ${name}`}
-      >
-        <Icon code={ICO.aqi} />
-        {text}
-      </button>
-      {open ? <AqiModal name={name} row={row} onClose={() => setOpen(false)} /> : null}
-    </>
+    <Fact code={ICO.aqi} text={`AQI ${value == null ? "—" : value}`} tone={aqiTone(value)} />
   );
 }
 
@@ -282,6 +226,7 @@ function ForecastModal({ place, unit, aqi, onClose }) {
   const daily = (place.forecast && place.forecast.daily) || {};
   const times = daily.time || [];
   const name = place.loc.name || "Location";
+  const pollutants = (aqi && aqi.pollutants) || [];
   return (
     <Modal
       icon={ICO.weather}
@@ -290,12 +235,44 @@ function ForecastModal({ place, unit, aqi, onClose }) {
       onClose={onClose}
     >
       <p className="facts">
-        {/* Plain fact, not the button: this is already inside a modal. */}
         <Fact
           code={ICO.aqi}
           text={`AQI ${aqiValue(aqi) == null ? "—" : aqiValue(aqi)}`}
           tone={aqiTone(aqiValue(aqi))}
         />
+      </p>
+      {/* Was its own modal, reached from a nested button on the card. Where a
+          figure came from is the point of showing it at all — the bug this was
+          built after, every location reporting a station 20 miles away in Kent,
+          was invisible precisely because nothing said which station was read. */}
+      {pollutants.length ? (
+        <ul className="aqi-rows">
+          {pollutants.map((p) => (
+            <li key={p.parameter}>
+              <span className="aqi-row-head">
+                <span className="aqi-param">
+                  {POLLUTANT_LABEL[p.parameter] || p.parameter}
+                </span>
+                <span className={`aqi-value ${aqiTone(p.aqi)}`}>{p.aqi}</span>
+                <span className="aqi-category">{p.category || ""}</span>
+              </span>
+              <span className="aqi-source">{sourceText(p)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="aqi-source">No air-quality data for this location.</p>
+      )}
+      <p className="facts">
+        <a
+          className="forecast-btn"
+          href="https://www.airnow.gov/"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <Icon code={ICO.aqi} />
+          AirNow
+        </a>
       </p>
       <ul className="forecast-days">
         {times.map((iso, i) => {
@@ -342,19 +319,28 @@ function Place({ place, unit, detail, showName, aqi }) {
   const [open, setOpen] = useState(false);
   const name = place.loc.name || "Location";
   return (
-    <article className={detail === "short" ? "weather-place is-short" : "weather-place"}>
-      <h3>
-        {showName ? name : null}
-        <button
-          type="button"
-          className="forecast-btn"
-          onClick={() => setOpen(true)}
-          aria-label={`Open ${FORECAST_DAYS}-day forecast for ${name}`}
-        >
-          <Icon code={ICO.calendar} />
-          {FORECAST_DAYS}-day
-        </button>
-      </h3>
+    // The whole card is the target rather than a small button in the header:
+    // this is read at a distance on a wall-mounted touchscreen. Not an actual
+    // <button> element — the card contains links and facts, and a button may
+    // not nest interactive content.
+    <article
+      className={detail === "short" ? "weather-place is-short" : "weather-place"}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${FORECAST_DAYS}-day forecast for ${name}`}
+      onClick={() => setOpen(true)}
+      onKeyDown={(event) => {
+        // A real button gets this for free; an element merely playing one has
+        // to answer Enter and Space itself.
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setOpen(true);
+        }
+      }}
+    >
+      {/* In the focus variant the widget heading already names the place, so
+          showName is false and there is no header left to render. */}
+      {showName ? <h3>{name}</h3> : null}
       <p className="facts">
         <Fact
           code={ICO.thermometer}
@@ -363,7 +349,7 @@ function Place({ place, unit, detail, showName, aqi }) {
         />
         <Fact code={weatherIcon(cur.weather_code)} text={weatherLabel(cur.weather_code)} />
         <Fact code={ICO.wind} text={String(Math.round(cur.wind_speed_10m))} />
-        <AqiFact name={name} row={aqi} />
+        <AqiFact row={aqi} />
       </p>
       {detail === "long" ? (
         <>

@@ -456,6 +456,15 @@ section h3 {
   margin-top: 0.55rem;
   padding-top: 0.45rem;
   border-top: 1px solid color-mix(in srgb, var(--chrome) 80%, transparent);
+  /* The card opens the forecast modal, so it has to read as interactive; it
+   * is also keyboard-focusable now, which needs a visible focus ring. */
+  cursor: pointer;
+}
+
+.weather-place:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) - 0.3rem);
 }
 
 /* Two short places share a line, but fall back to one when the card is too
