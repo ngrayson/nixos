@@ -536,16 +536,29 @@ section h3 {
   font-size: 0.8rem;
 }
 
+/* Read at a distance on a wall display, so the strip is deliberately much
+ * larger than the card body around it. Three separate rules rather than one
+ * bump to `.forecast-strip li`: the icon, the day label and the temperatures
+ * scale by different factors (3x, 2x, 2x), so they can no longer all inherit a
+ * single base size. Safe to target `.forecast-strip` bare — ForecastStrip is
+ * only ever mounted with detail === "long", i.e. the focus widget; the combo
+ * widget never renders one. */
 .forecast-day {
   color: var(--strong);
-  font-size: 0.72rem;
+  font-size: 1.44rem;
   letter-spacing: 0.02em;
 }
 
 .forecast-temps {
   display: inline-flex;
   gap: 0.3rem;
+  font-size: 1.6rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* .nf sets no size of its own, so the icon was inheriting the li's 0.8rem. */
+.forecast-strip .nf {
+  font-size: 2.4rem;
 }
 
 .forecast-low {
