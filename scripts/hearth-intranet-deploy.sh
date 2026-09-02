@@ -130,12 +130,18 @@ main() {
   # same passwordless sudo hearth-deploy already relies on for activation.
   # --chmod matches hearth-intranet-sync.service so the two deploy paths leave
   # identical permissions behind.
+  #
+  # --checksum is required, not defensive: Nix pins every store file's mtime to
+  # 1, so rsync's default size+mtime quick check skips any file whose length did
+  # not change. build-id.txt is always 65 bytes, and it is exactly the file the
+  # kiosk polls to decide whether to reload — without --checksum a fast-path
+  # deploy ships new assets under a stale build-id and no client ever reloads.
   info "rsync -> ${TARGET}:${SERVE_DIR}"
   ssh "$TARGET" sudo mkdir -p "$SERVE_DIR" || {
     error "Could not create ${SERVE_DIR} on ${TARGET}."
     return 1
   }
-  rsync -a --delete --chmod=D755,F644 --rsync-path="sudo rsync" \
+  rsync -a --checksum --delete --chmod=D755,F644 --rsync-path="sudo rsync" \
     "$out/" "${TARGET}:${SERVE_DIR}/" || {
     error "rsync failed."
     return 1
