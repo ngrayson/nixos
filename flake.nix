@@ -132,8 +132,17 @@
       # Scoped to `inputs.self`, which is git-tracked files only — the
       # gitignored per-widget `hosts/Hearth/intranet/config/*/config.nix` files
       # are deliberately outside it. `nix flake check --no-build` never builds
-      # and so never runs this; `nix fmt -- --check .` gives the same answer
-      # without a build.
+      # and so never runs this, so to get the same answer without a build,
+      # mirror that scope explicitly:
+      #
+      #   git ls-files -z '*.nix' | xargs -0 nix run nixpkgs#alejandra -- --check
+      #
+      # Do NOT reach for `nix fmt -- --check .` here. It hands alejandra a
+      # working-directory path, and alejandra has no notion of .gitignore, so it
+      # walks the per-widget config files this check cannot see. Observed
+      # 2026-09-02: it reported two of them as needing formatting while this
+      # check itself exited 0. They are hand-edited operator config that nothing
+      # keeps alejandra-clean, so the two commands agree only by luck.
       formatting =
         pkgs.runCommand "check-formatting" {
           nativeBuildInputs = [pkgs.alejandra];
