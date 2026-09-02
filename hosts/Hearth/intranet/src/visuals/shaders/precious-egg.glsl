@@ -1,4 +1,7 @@
-#define col1 vec3(1.,.8,.7)
+// Was a fixed warm cream, vec3(1., .8, .7). Every lit element in this shader
+// is this one color scaled, so the theme's brightest token is the right
+// substitute — accent would lose the near-white core the design rests on.
+#define col1 themeTint(uStrong, 1.0)
 
 float circle (vec2 uv, float r, float t){
     float c = 0.;

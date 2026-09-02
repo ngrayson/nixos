@@ -71,3 +71,38 @@ export function applyTheme(id) {
     if (value) root.setProperty(cssVar, `#${value}`);
   }
 }
+
+// Reading a CSS custom property is the fallback path only. Under `vite dev`
+// there is no /themes.js, so themes() is empty and style.css's :root — seeded
+// with Ghost — is the only palette that exists.
+function cssVar(name, fallback) {
+  if (typeof document === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+// The three tokens the animated background needs, as `#rrggbb`.
+//
+// Deliberately sourced from the theme map rather than from the CSS variables
+// applyTheme() writes: Atmosphere is a child of the component that calls
+// applyTheme, and child effects run before parent effects, so a CSS-var read on
+// a theme change would see the OLD palette for one commit. Reading the tokens
+// directly has no such ordering hazard.
+export function themeVisualColors(id) {
+  const tokens = themes()[id]?.tokens;
+  const pick = (token, fallback) =>
+    tokens && tokens[token] ? `#${tokens[token]}` : cssVar(CSS_VARS[token], fallback);
+  return {
+    void: pick("void", "#122221"),
+    accent: pick("accent", "#2fc7be"),
+    strong: pick("strong", "#c5fbfc"),
+  };
+}
+
+// `#rrggbb` to three sRGB floats in 0..1. Used for shader uniforms, which need
+// numbers rather than a CSS string.
+export function hexToRgb01(hex) {
+  const n = Number.parseInt(String(hex).replace("#", ""), 16);
+  if (!Number.isFinite(n)) return [0, 0, 0];
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}

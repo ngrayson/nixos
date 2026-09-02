@@ -18,6 +18,7 @@ import srcLtx from "./shaders/ltXczj.glsl?raw";
 import srcPixelGalaxy from "./shaders/pixel-galaxy.glsl?raw";
 import srcPreciousEgg from "./shaders/precious-egg.glsl?raw";
 import srcStarfieldGleam from "./shaders/starfield-gleam.glsl?raw";
+import { hexToRgb01 } from "../lib/themePref.js";
 import { SHADERTOY_VERTEX, wrapShadertoyFragment } from "./shaders/wrap.js";
 
 function makeMaterial(source, channelCount = 0) {
@@ -25,6 +26,11 @@ function makeMaterial(source, channelCount = 0) {
     iResolution: { value: new Vector3(1, 1, 1) },
     iTime: { value: 0 },
     iMouse: { value: new Vector4(0, 0, 0, 0) },
+    // Declared for every shader by wrap.js, so every material carries them even
+    // where the source ignores one — an unused uniform costs nothing.
+    uVoid: { value: new Vector3(0, 0, 0) },
+    uAccent: { value: new Vector3(1, 1, 1) },
+    uStrong: { value: new Vector3(1, 1, 1) },
   };
   if (channelCount >= 1) uniforms.iChannel0 = { value: null };
   if (channelCount >= 2) uniforms.iChannel1 = { value: null };
@@ -38,15 +44,27 @@ function makeMaterial(source, channelCount = 0) {
   });
 }
 
+// Written as raw sRGB floats rather than through THREE.Color on purpose. These
+// are hand-ported Shadertoy sources: they write outColor directly, with none of
+// three's colorspace chunks in the fragment shader, so whatever goes in comes
+// out unconverted. THREE.Color would convert to the linear-sRGB working space
+// on the way in and every themed palette would render washed out.
+function syncTheme(material, colors) {
+  material.uniforms.uVoid.value.fromArray(hexToRgb01(colors.void));
+  material.uniforms.uAccent.value.fromArray(hexToRgb01(colors.accent));
+  material.uniforms.uStrong.value.fromArray(hexToRgb01(colors.strong));
+}
+
 function syncCommon(material, gl, time) {
   const canvas = gl.domElement;
   material.uniforms.iResolution.value.set(canvas.width, canvas.height, 1);
   material.uniforms.iTime.value = time;
 }
 
-function SinglePass({ source }) {
+function SinglePass({ source, colors }) {
   const material = useMemo(() => makeMaterial(source, 0), [source]);
   useEffect(() => () => material.dispose(), [material]);
+  useEffect(() => syncTheme(material, colors), [material, colors]);
   useFrame(({ clock, gl }) => {
     syncCommon(material, gl, clock.elapsedTime);
   });
@@ -67,7 +85,7 @@ function makeTarget(width, height) {
   return target;
 }
 
-function Ldc3z4Pass() {
+function Ldc3z4Pass({ colors }) {
   const { gl } = useThree();
   const mats = useMemo(
     () => ({
@@ -86,6 +104,14 @@ function Ldc3z4Pass() {
   );
   const targets = useRef(null);
   const ping = useRef(0);
+
+  // All three passes, not just the image: buffer A is where this effect's hue
+  // is decided, and the image pass only adds the vignette on top.
+  useEffect(() => {
+    syncTheme(mats.a, colors);
+    syncTheme(mats.b, colors);
+    syncTheme(mats.image, colors);
+  }, [mats, colors]);
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -148,12 +174,12 @@ function Ldc3z4Pass() {
   );
 }
 
-export default function ShadertoyLayer({ shaderId }) {
-  if (shaderId === "7fyXRh") return <SinglePass source={src7fy} />;
-  if (shaderId === "ltXczj") return <SinglePass source={srcLtx} />;
-  if (shaderId === "ldc3z4") return <Ldc3z4Pass />;
-  if (shaderId === "pixel-galaxy") return <SinglePass source={srcPixelGalaxy} />;
-  if (shaderId === "precious-egg") return <SinglePass source={srcPreciousEgg} />;
-  if (shaderId === "starfield-gleam") return <SinglePass source={srcStarfieldGleam} />;
+export default function ShadertoyLayer({ shaderId, colors }) {
+  if (shaderId === "7fyXRh") return <SinglePass source={src7fy} colors={colors} />;
+  if (shaderId === "ltXczj") return <SinglePass source={srcLtx} colors={colors} />;
+  if (shaderId === "ldc3z4") return <Ldc3z4Pass colors={colors} />;
+  if (shaderId === "pixel-galaxy") return <SinglePass source={srcPixelGalaxy} colors={colors} />;
+  if (shaderId === "precious-egg") return <SinglePass source={srcPreciousEgg} colors={colors} />;
+  if (shaderId === "starfield-gleam") return <SinglePass source={srcStarfieldGleam} colors={colors} />;
   return null;
 }

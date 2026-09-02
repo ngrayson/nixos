@@ -13,7 +13,10 @@ const float majorLineFrequency = 5.0;
 const float minorLineFrequency = 1.0;
 const vec4 gridColor = vec4(0.5);
 const float scale = 5.0;
-const vec4 lineColor = vec4(0.25, 0.5, 1.0, 1.0);
+// Was `const vec4 lineColor = vec4(0.25, 0.5, 1.0, 1.0);`. A const initialiser
+// has to be compile-time constant, so following the theme means this — and the
+// bgColors array built from it — become functions instead.
+vec4 lineColor() { return vec4(themeTint(uAccent, 1.0), 1.0); }
 const float minLineWidth = 0.02;
 const float maxLineWidth = 0.5;
 const float lineSpeed = 1.0 * overallSpeed;
@@ -28,11 +31,13 @@ const float minOffsetSpread = 0.6;
 const float maxOffsetSpread = 2.0;
 const int linesPerGroup = 16;
 
-const vec4[] bgColors = vec4[]
-    (
-        lineColor * 0.5,
-        lineColor - vec4(0.2, 0.2, 0.7, 1)
-        );
+// Original: bgColors[0] = lineColor * 0.5, bgColors[1] = lineColor - vec4(0.2,
+// 0.2, 0.7, 1) — a darker, hue-shifted companion. The theme's void token is
+// exactly that role, so the gradient now runs from a dimmed accent into it.
+vec4 bgColor(int i) {
+    return i == 0 ? vec4(themeTint(uAccent, 1.0) * 0.5, 1.0)
+                  : vec4(themeTint(uVoid, 0.5), 1.0);
+}
 
 #define drawCircle(pos, radius, coord) smoothstep(radius + gridSmoothWidth, radius, length(coord - (pos)))
 
@@ -97,10 +102,10 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
 
         line = line + circle;
-        lines += line * lineColor * rand;
+        lines += line * lineColor() * rand;
     }
 
-    fragColor = mix(bgColors[0], bgColors[1], uv.x);
+    fragColor = mix(bgColor(0), bgColor(1), uv.x);
     fragColor *= verticalFade;
     fragColor.a = 1.0;
     // debug grid:

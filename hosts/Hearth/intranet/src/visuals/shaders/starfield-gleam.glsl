@@ -10,7 +10,11 @@
 
 
 vec3 palette (float t){
- vec3 a = vec3(0.498, 0.588, 1.128);
+ // `a` is the DC offset — the color the stars sit around — so that is the one
+ // term the theme replaces. b/c/d are left alone: they are the amplitude,
+ // frequency and phase that give the field its shimmer between hues, and
+ // overwriting them would flatten the effect rather than recolor it.
+ vec3 a = themeTint(uAccent, 1.128);
  vec3 b = vec3(0.303, 0.388, 0.273);
  vec3 c = vec3(1.763, 0.938, 0.787);
  vec3 d = vec3(-2.982, 1.818, 1.948);
