@@ -28,6 +28,22 @@ export default function Modal({ title, label, icon, onClose, children, size }) {
       className="modal-backdrop"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
+        // Everything inside a modal stops here.
+        //
+        // This is portalled to document.body, but React's synthetic events
+        // bubble through the REACT tree, not the DOM tree — so without this,
+        // a click anywhere in the modal keeps travelling up to whichever
+        // component rendered it. A weather card that opens this modal on
+        // click then reopens it in the same event batch that the backdrop or
+        // the X just closed it, and the later setState wins: the modal never
+        // visibly closes. Only Esc worked, because that is a separate
+        // document keydown listener that never touches this path.
+        //
+        // Stopping at the portal root rather than on each close control is
+        // deliberate: every click inside is affected, not just the two that
+        // close, and this way there is nothing to remember when the next
+        // control is added.
+        event.stopPropagation();
       }}
     >
       <div
