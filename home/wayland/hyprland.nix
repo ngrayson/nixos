@@ -195,10 +195,20 @@ in {
 
         # Palm rejection (Theseus) makes it impossible to hold SUPER while
         # dragging with the pen, so the $mod+drag gestures in `bindm` above are
-        # unreachable there. This submap exposes the same two dispatchers with
+        # unreachable there. This mode exposes the same two dispatchers with
         # nothing held: SUPER+A toggles in, Escape or SUPER+A again toggles out.
         # `resizewindow` picks the nearest edge from the click point, so the
         # whole window is the target -- there is no border strip to hit.
+        #
+        # The mouse binds are NOT in the submap. Submaps do not apply to
+        # `bindm` -- one placed here is parsed and listed by `hyprctl binds`
+        # but never consulted (confirmed live 2026-09-02). Instead
+        # hypr-resize-move-toggle installs the modifier-less pair in the
+        # global keymap on entry and removes it on exit, with a 30s dead-man
+        # timer as backstop. Every way in and out -- SUPER+A, Escape, the
+        # timer -- must go through that script; a bare `submap, reset` here
+        # would exit the submap while leaving bare clicks dragging windows
+        # everywhere.
         #
         # This lives in extraConfig rather than `settings` because a submap is
         # positional: every bind after `submap = NAME` belongs to that submap
@@ -214,12 +224,10 @@ in {
         # too (`modmask=8 key=h`); uppercase appears only alongside SHIFT
         # (`modmask=9 key=Q`). Shipped uppercase once and it silently did
         # nothing while `hyprctl binds` happily listed it.
-        bind = $mod, a, submap, resize-move
+        bind = $mod, a, exec, ${lib.getExe hs.hyprResizeMoveToggle}
         submap = resize-move
-        bindm = , mouse:272, movewindow
-        bindm = , mouse:273, resizewindow
-        bind = , escape, submap, reset
-        bind = $mod, a, submap, reset
+        bind = , escape, exec, ${lib.getExe hs.hyprResizeMoveToggle}
+        bind = $mod, a, exec, ${lib.getExe hs.hyprResizeMoveToggle}
         submap = reset
       '';
   };
@@ -237,5 +245,6 @@ in {
     hs.hyprQuickshellIpc
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
+    hs.hyprResizeMoveToggle
   ];
 }
