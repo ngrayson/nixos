@@ -10,12 +10,32 @@
   pkgs,
   ...
 }: let
-  # The query flag tells the dashboard it is being viewed on this kiosk, which
+  # The query flags tell the dashboard it is being viewed on this kiosk, which
   # is the only way the page can know: home.wizt.org is served to phones and
-  # laptops too, and nothing else distinguishes the viewer. App.jsx reads it to
-  # drop the TV Jellyfin link, which is useless on a wall panel that runs no
-  # Jellyfin client. Other viewers load the bare URL and are unaffected.
-  kioskUrl = "https://home.wizt.org/?hideJellyfin=1&showSystemStats=1";
+  # laptops too, and nothing else distinguishes the viewer. App.jsx reads them
+  # to drop the TV Jellyfin link (useless on a wall panel that runs no Jellyfin
+  # client), to show this machine's own CPU/battery/temperature, and to default
+  # the animated background off. Other viewers load the bare URL and are
+  # unaffected.
+  #
+  # disableAnimatedBackground differs from the other two: it SEEDS a stored
+  # Settings preference on a first load only, so switching the background back
+  # on from the panel itself sticks. It replaces a --force-prefers-reduced-motion
+  # Chromium flag that decided the same thing but could only be changed by
+  # rebuilding and redeploying Go3.
+  #
+  # Why it is off here at all. The dashboard's animated WebGL background is the
+  # single largest source of heat on this machine. Measured 2026-09-01 over 24
+  # samples: Chromium's gpu-process held a 112% mean (more than a full core,
+  # continuously) and the package hit 85°C. Crucially that load did not move
+  # when the panel went dim and then off — the backlight is a kernel-level
+  # thing the browser cannot see, so it kept compositing every frame into a
+  # display nobody was looking at.
+  #
+  # A wall dashboard is read at a glance from across a room. An animated
+  # background earns nothing there, and this is a fanless tablet mounted flat
+  # against a wall with nowhere to dump the heat.
+  kioskUrl = "https://home.wizt.org/?hideJellyfin=1&showSystemStats=1&disableAnimatedBackground=1";
   chromiumFlags = [
     "--kiosk"
     "--app=${kioskUrl}"
@@ -28,22 +48,12 @@
     "--no-first-run"
     "--disable-session-crashed-bubble"
     "--disable-features=TranslateUI"
-    # The dashboard's animated WebGL background (Atmosphere in App.jsx) is
-    # mounted only when the viewer does NOT ask for reduced motion, so this
-    # switches it off here without touching shared dashboard code or any other
-    # viewer.
-    #
-    # It is the single largest source of heat on this machine. Measured
-    # 2026-09-01 over 24 samples: Chromium's gpu-process held a 112% mean
-    # (more than a full core, continuously) and the package hit 85°C. Crucially
-    # that load did not move when the panel went dim and then off — the
-    # backlight is a kernel-level thing the browser cannot see, so it kept
-    # compositing every frame into a display nobody was looking at.
-    #
-    # A wall dashboard is read at a glance from across a room. An animated
-    # background earns nothing there, and this is a fanless tablet mounted
-    # flat against a wall with nowhere to dump the heat.
-    "--force-prefers-reduced-motion"
+    # No --force-prefers-reduced-motion here any more: the animated background
+    # is now decided by a Settings toggle, seeded off by kioskUrl's
+    # disableAnimatedBackground flag (see the comment there). Forcing the
+    # accessibility media query was a blunt instrument for it — it could not be
+    # changed without a redeploy, and it lied to any other part of the page
+    # that legitimately asks whether the viewer wants reduced motion.
   ];
   # wlroots draws a cursor whenever the seat has a pointer capability, and on
   # the Go 3 the ELAN9038 panel and its stylus are the ONLY devices exposing
