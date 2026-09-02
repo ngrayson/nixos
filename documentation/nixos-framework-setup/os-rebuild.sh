@@ -51,7 +51,9 @@ Options:
   --host HOST             Named nixosConfigurations output (default: hostname)
   --edit[=SCOPE]          Open a guided target, or one of:
                           base, flake, host, hardware, home
-  --format                Run the flake formatter before validation
+  --format                Run the flake formatter over git-tracked .nix sources
+                          before validation (gitignored operator config is left
+                          alone)
   --yes                   Skip the rebuild confirmation
   --allow-host-mismatch   Permit activation for a host other than this machine
   --commit                Commit dirty changes after a successful rebuild, even
@@ -713,8 +715,25 @@ main() {
   fi
 
   if ((FORMAT)); then
-    info "Formatting flake sources"
-    nix fmt "$FLAKE_ROOT"
+    # Git-tracked sources only. `nix fmt "$FLAKE_ROOT"` handed alejandra a
+    # directory, and alejandra does not read .gitignore, so it also rewrote the
+    # gitignored per-widget hosts/Hearth/intranet/config/*/config.nix files —
+    # hand-edited operator config the repo deliberately does not own. Worse, it
+    # did so invisibly: gitignored edits never appear in `git status`, so there
+    # was nothing to notice. Observed 2026-09-02, when `nix fmt -- --check .`
+    # reported two of those files as needing formatting on an otherwise clean
+    # tree.
+    #
+    # This is also the file set `checks.formatting` in flake.nix uses
+    # (`alejandra --check ${inputs.self}`, git-tracked only), so the write path
+    # and the check path now agree instead of only appearing to.
+    #
+    # The subshell cd is load-bearing twice: `git ls-files` prints paths
+    # relative to the repo root, and `nix fmt` resolves its formatter from the
+    # flake in the current directory — which previously meant `os-rebuild
+    # --format` only worked when invoked from inside the checkout.
+    info "Formatting tracked flake sources"
+    (cd "$FLAKE_ROOT" && git ls-files -z '*.nix' | xargs -0 -r nix fmt --)
   fi
 
   collect_change_scope
