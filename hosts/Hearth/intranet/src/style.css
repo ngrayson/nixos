@@ -155,6 +155,32 @@ main {
   font-weight: 650;
 }
 
+/* Touch sizing for the Settings modal, roughly 2x the base metrics.
+ *
+ * Scoped to .modal-card rather than applied to the base rules because
+ * .map-provider-btn is shared: Transit's map-provider picker uses the same
+ * class, sits in a widget card, and is mouse-sized on purpose. Modal.jsx wraps
+ * every modal body in .modal-card, and no other modal uses either class today,
+ * so this is Settings-only without hardcoding a Settings-specific class.
+ *
+ * Every control in the modal is covered, including ones added later: the theme
+ * picker reuses .shader-picker for exactly this reason.
+ */
+.modal-card .map-provider-btn {
+  padding: 0.4rem 1.1rem;
+  font-size: 1.5rem;
+}
+
+.modal-card .shader-picker {
+  /* select inherits this through `font: inherit`, so it sizes the label and
+   * the dropdown together. */
+  font-size: 1.7rem;
+}
+
+.modal-card .shader-picker select {
+  padding: 0.7rem 1.1rem;
+}
+
 .widget-card h2,
 section h2,
 .poll h2 {
