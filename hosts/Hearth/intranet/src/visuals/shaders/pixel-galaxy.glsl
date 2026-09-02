@@ -125,6 +125,11 @@ void mainImage(out vec4 O,vec2 I)
     // rather than tinting a smooth gradient. v can exceed 1 on bright cores;
     // mix extrapolates there, which blows them out the way vec3(v) used to.
     O.rgb = mix(uVoid, themeTint(uAccent, 1.0), v);
+    // GLSL ES 3.00 leaves an out variable's unwritten components undefined, and
+    // this was the one shader here that never wrote alpha. The canvas is created
+    // with alpha:true, so that channel is what composites the background against
+    // the page — not a value to leave to the driver.
+    O.a = 1.0;
     //O.g = sin((iTime+.6-abs(-4.-uv.y))*3.14)/2.+.7;
     // O.r=n+0.5;
     
