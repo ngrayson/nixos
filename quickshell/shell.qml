@@ -703,9 +703,17 @@ ShellRoot {
 
 		WlSessionLockSurface {
 			id: lockSessionSurface
-			// Wallpaper on every output (protocol still requires a surface per screen).
-			// Chrome only on the center output — same idea as the SDDM greeter on Tawa.
-			readonly property bool showLockUi: {
+			// Chrome on EVERY output, not just the center one. activate() below
+			// DPMS-blanks the sides, so a prompt on the geometric centre alone
+			// means any monitor the user wakes by hand shows bare wallpaper with
+			// no way to type a password — observed on Tawa 2026-09-02, where
+			// recovery was `hyprctl dispatch dpms on` from another machine.
+			//
+			// This is cheap because lockContext is a single shared object: every
+			// surface already mirrors the same typed text and the same failure
+			// shake through LockSurface's Connections on context.currentText.
+			// Keyboard focus still lands on exactly one surface — `primary`.
+			readonly property bool isPrimaryOutput: {
 				const c = shellRoot.centerOutputScreen();
 				return c && screen && c.name === screen.name;
 			}
@@ -716,7 +724,8 @@ ShellRoot {
 				anchors.fill: parent
 				context: lockContext
 				preview: false
-				showUi: lockSessionSurface.showLockUi
+				showUi: true
+				primary: lockSessionSurface.isPrimaryOutput
 			}
 		}
 	}
@@ -754,6 +763,12 @@ ShellRoot {
 				context: lockContext
 				preview: true
 				showUi: previewWin.previewOpen && previewWin.isCenterScreen
+				// Explicit rather than defaulted: `primary` defaults to true, and
+				// the preview's focus used to ride on showUi. Pinning it to the
+				// same center test keeps the preview exactly as it was — its
+				// single-output Esc gate is a separate card's problem, not a
+				// regression to introduce here.
+				primary: previewWin.isCenterScreen
 				onDismissRequested: shellRoot.lockPreview = false
 			}
 		}
