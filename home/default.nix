@@ -21,6 +21,7 @@
     ./services/polkit-agent.nix
     ./services/nm-applet.nix
     ./services/hypridle.nix
+    ./services/gammastep.nix
     ./services/spotifyd.nix
     ./activation/plasma-multi-monitor.nix
     ./xdg/config.nix
