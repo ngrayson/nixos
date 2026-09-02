@@ -156,6 +156,64 @@ in rec {
     ' <<<"$json")
   '';
 
+  # SUPER+A toggle for the resize-move mode. Submaps do not apply to mouse
+  # binds -- a `bindm` inside a submap block is parsed and listed by
+  # `hyprctl binds` but never consulted (confirmed live on Tawa 2026-09-02) --
+  # so the modifier-less drag binds are installed in the GLOBAL keymap on
+  # entry and removed on exit. Every path out of the mode must run this
+  # script: a bare `submap reset` would leave bare clicks dragging windows
+  # everywhere, which is the worst failure this feature can have.
+  hyprResizeMoveToggle = pkgs.writeShellScriptBin "hypr-resize-move-toggle" ''
+    set -euo pipefail
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    H="${pkgs.hyprland}/bin/hyprctl"
+
+    # Dead-man timeout, seconds. While the mode is on a bare left-click drags
+    # windows -- inside applications too -- so a forgotten mode must
+    # self-heal. 30s is deliberate: an arranging pass that outlives it is
+    # one SUPER+A from re-entry.
+    TIMEOUT=30
+    PIDFILE="$XDG_RUNTIME_DIR/hypr-resize-move-timeout.pid"
+
+    disarm() {
+      if [[ -f "$PIDFILE" ]]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        rm -f "$PIDFILE"
+      fi
+    }
+
+    leave() {
+      disarm
+      "$H" keyword unbind ,mouse:272 >/dev/null || true
+      "$H" keyword unbind ,mouse:273 >/dev/null || true
+      "$H" dispatch submap reset >/dev/null || true
+    }
+
+    enter() {
+      # A stale timer from a previous entry must never fire into this one.
+      disarm
+      "$H" keyword bindm ,mouse:272,movewindow >/dev/null
+      "$H" keyword bindm ,mouse:273,resizewindow >/dev/null
+      "$H" dispatch submap resize-move >/dev/null
+      (
+        sleep "$TIMEOUT"
+        # Reached only if never disarmed. Same end state as a manual exit:
+        # zero modifier-less global mouse binds, submap back to default.
+        rm -f "$PIDFILE"
+        "$H" keyword unbind ,mouse:272 >/dev/null || true
+        "$H" keyword unbind ,mouse:273 >/dev/null || true
+        "$H" dispatch submap reset >/dev/null || true
+      ) &
+      echo $! >"$PIDFILE"
+    }
+
+    if [[ "$("$H" submap 2>/dev/null || echo default)" == "resize-move" ]]; then
+      leave
+    else
+      enter
+    fi
+  '';
+
   # Suppress idle lock while Slippi emulation is active.
   quickshellLockGuarded = pkgs.writeShellScriptBin "quickshell-lock-guarded" ''
     set -euo pipefail
