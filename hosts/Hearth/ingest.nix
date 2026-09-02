@@ -272,7 +272,18 @@
           result, src, dest, library = (line.split("\t") + ["", "", "", ""])[:4]
           entry = {"src": src, "dest": dest, "library": library,
                    "at": now, "result": result}
-          if result in ("linked", "skipped"):
+          # `skipped` is deliberately not recorded here. hearth-ingest
+          # re-walks the entire share every run, so every already-filed file
+          # produces a `skipped` row on every single run. Those used to go into
+          # `recent` alongside real filings, and because `fresh` is prepended
+          # before the 25-item truncation, one quiet run's re-scan filled the
+          # whole window and evicted every `linked` row. That is why the Ingest
+          # card was empty except during the ~5 minutes between a run that
+          # filed something and the next timer tick.
+          #
+          # Nothing consumed them anyway: Ingest.jsx filters `recent` down to
+          # `linked` before rendering, so a re-scan was never news.
+          if result == "linked":
               fresh.append(entry)
           elif result == "conflict":
               pending.append(entry)
@@ -294,6 +305,12 @@
               previous = json.load(fh).get("recent") or []
       except (OSError, ValueError):
           previous = []
+
+      # A ledger written before this change still holds `skipped` rows, and it
+      # lives in /run, which a deploy does not clear. Without dropping them
+      # here they would sit in the window until new filings pushed 25 entries
+      # past them — so the fix would look like it had not worked.
+      previous = [e for e in previous if e.get("result") == "linked"]
 
       payload = {
           "pending": pending,
