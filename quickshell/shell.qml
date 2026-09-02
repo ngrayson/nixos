@@ -1093,44 +1093,14 @@ ShellRoot {
 				onTriggered: barWindow.tipOn = true
 			}
 
-			// Shared hover/press feedback for status-cluster icons.
-			component StatusPill: MouseArea {
-				id: pill
+			// Icon-sized defaults over the shared chrome (BarHoverArea.qml): the
+			// status cluster is a row of 22x22 squares and every one of them arms the
+			// bar tooltip, so those two things live here rather than in the shared
+			// component, which stays size- and host-agnostic for wider widgets.
+			component StatusPill: BarHoverArea {
 				implicitWidth: 22
 				implicitHeight: 22
-				hoverEnabled: true
-				cursorShape: Qt.PointingHandCursor
-				property string tipKind: ""
-				scale: pressed ? 0.94 : 1
-				Behavior on scale {
-					NumberAnimation {
-						duration: 90
-						easing.type: Easing.OutCubic
-					}
-				}
-				onEntered: {
-					if (pill.tipKind !== "")
-						barWindow.armTip(pill, pill.tipKind);
-				}
-				onExited: barWindow.disarmTip()
-
-				Rectangle {
-					z: -1
-					anchors.fill: parent
-					radius: 4
-					color: {
-						if (pill.pressed)
-							return Qt.alpha(Theme.selection, 0.28);
-						if (pill.containsMouse)
-							return Qt.alpha(Theme.selection, 0.16);
-						return "transparent";
-					}
-					Behavior on color {
-						ColorAnimation {
-							duration: 100
-						}
-					}
-				}
+				tipHost: barWindow
 			}
 
 			// One inhibitor per output is fine; Hyprland treats a visible PanelWindow as
@@ -1150,6 +1120,7 @@ ShellRoot {
 					model: 10
 
 					delegate: Rectangle {
+						id: wsPill
 						required property int index
 
 						property int wid: index + 1
@@ -1165,18 +1136,21 @@ ShellRoot {
 						radius: 6
 						color: isFocused ? Theme.border : (occupied ? Theme.surface : "transparent")
 
-						Text {
-							id: wsLabel
-							anchors.centerIn: parent
-							text: parent.wid
-							color: (parent.isFocused || parent.occupied) ? Theme.text : Theme.muted
-							font.pixelSize: 14
-						}
-
-						MouseArea {
+						// The number lives inside the hover area so the press-squish takes
+						// it along; the pill's own focused/occupied background stays put.
+						BarHoverArea {
 							anchors.fill: parent
+							radius: 6
 							acceptedButtons: Qt.LeftButton
-							onClicked: Hyprland.dispatch("workspace " + parent.wid)
+							onClicked: Hyprland.dispatch("workspace " + wsPill.wid)
+
+							Text {
+								id: wsLabel
+								anchors.centerIn: parent
+								text: wsPill.wid
+								color: (wsPill.isFocused || wsPill.occupied) ? Theme.text : Theme.muted
+								font.pixelSize: 14
+							}
 						}
 					}
 				}
@@ -1200,29 +1174,33 @@ ShellRoot {
 					implicitHeight: 24
 					implicitWidth: mediaRow.implicitWidth + 16
 
-					RowLayout {
-						id: mediaRow
-						anchors.centerIn: parent
-						spacing: 4
-
-						Text {
-							color: shellRoot.mediaPlayer?.isPlaying ? Theme.sage : Theme.text
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: shellRoot.mediaIcon()
-						}
-
-						Text {
-							color: Theme.text
-							font.pixelSize: 12
-							text: shellRoot.mediaLabel()
-						}
-					}
-
-					MouseArea {
+					// mediaRow moved inside the hover area rather than beside it, so the
+					// press-squish takes the icon and label with it. The plain MouseArea
+					// this replaces had no cursor, highlight or press feedback at all.
+					BarHoverArea {
 						anchors.fill: parent
+						radius: 8
 						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 						scrollGestureEnabled: true
+
+						RowLayout {
+							id: mediaRow
+							anchors.centerIn: parent
+							spacing: 4
+
+							Text {
+								color: shellRoot.mediaPlayer?.isPlaying ? Theme.sage : Theme.text
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.mediaIcon()
+							}
+
+							Text {
+								color: Theme.text
+								font.pixelSize: 12
+								text: shellRoot.mediaLabel()
+							}
+						}
 						onClicked: mouse => {
 							const p = shellRoot.mediaPlayer;
 							if (!p)
@@ -1361,16 +1339,15 @@ ShellRoot {
 						Repeater {
 							model: shellRoot.trayCollapsed ? null : SystemTray.items
 
-							delegate: MouseArea {
+							delegate: StatusPill {
 								id: trayDelegate
 								required property var modelData
 
-								implicitWidth: 22
-								implicitHeight: 22
 								acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-								hoverEnabled: true
 								scrollGestureEnabled: true
 
+								// StatusPill arms the tip without a payload, so re-arm with this
+								// tray item attached.
 								onEntered: barWindow.armTip(trayDelegate, "tray", modelData)
 								onExited: barWindow.disarmTip()
 								onClicked: mouse => {
