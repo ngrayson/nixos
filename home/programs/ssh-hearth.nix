@@ -5,8 +5,9 @@
 # HEARTH_SSH_HOSTNAME (hearth.tail6cd822.ts.net). OpenSSH to sshd:22, not
 # Tailscale SSH.
 #
-# PATH shim lives here (not only a zsh alias) so hearth-deploy works in any
-# shell, including before the next Home Manager switch.
+# PATH shims live here (not only zsh aliases) so hearth-deploy and
+# hearth-intranet-deploy work in any shell, including before the next Home
+# Manager switch.
 {
   lib,
   nixosConfig ? null,
@@ -22,6 +23,18 @@ in {
     text = ''
       #!/usr/bin/env bash
       exec bash "$HOME/.config/nixos/scripts/hearth-deploy.sh" "$@"
+    '';
+  };
+
+  # Fast path for home.wizt.org only: builds .#hearth-intranet and rsyncs it
+  # into /var/lib/hearth-intranet/current on Hearth. No nixos-rebuild, no Caddy
+  # restart. hearth-deploy switch stays authoritative and re-syncs the declared
+  # build over anything this pushed.
+  home.file.".local/bin/hearth-intranet-deploy" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      exec bash "$HOME/.config/nixos/scripts/hearth-intranet-deploy.sh" "$@"
     '';
   };
 

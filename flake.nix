@@ -80,6 +80,26 @@
 
     formatter.${system} = nixpkgs.legacyPackages.${system}.alejandra;
 
+    # The home.wizt.org dashboard as a standalone build target, so a CSS or JSX
+    # change can be deployed with scripts/hearth-intranet-deploy.sh instead of a
+    # whole `hearth-deploy switch` (full host evaluation, build, closure copy and
+    # activation for a one-line tweak). hosts/Hearth/caddy.nix imports the exact
+    # same file, so this output and the switch can never disagree about what the
+    # dashboard is.
+    #
+    # `nix build .#hearth-intranet` needs --impure: the derivation reads the
+    # gitignored per-widget config.nix through builtins.getEnv NIXOS_DIR (see
+    # hosts/Hearth/intranet/config/default.nix).
+    packages.${system}.hearth-intranet = import ./hosts/Hearth/intranet-package.nix {
+      pkgs = import nixpkgs {
+        inherit system;
+        # Mirrors common/base.nix so this resolves the same package set the
+        # host does. Nothing here is unfree; the flag only keeps the two
+        # evaluations from diverging if that ever changes.
+        config.allowUnfree = true;
+      };
+    };
+
     # Hostname-only evals, not toplevel. A full nixosSystem closure is too
     # heavy for 8 GB Conveyor codespaces; this still fails `nix flake check`
     # if any host module graph cannot evaluate.
