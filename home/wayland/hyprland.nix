@@ -87,6 +87,29 @@ in {
       # Needed so notification default-actions (Discord, etc.) can raise their window.
       misc = {
         focus_on_activate = true;
+        # Let a replacement client adopt an orphaned ext-session-lock.
+        #
+        # The lock is a WlSessionLock living inside Quickshell's own process
+        # (quickshell/shell.qml), so anything that kills the bar kills the lock
+        # client -- and `ext-session-lock-v1` deliberately keeps the session
+        # LOCKED when a client dies without unlock_and_destroy. With this
+        # false (the upstream default) that state is unrecoverable: no client
+        # may take over, so there is no way to draw a password prompt.
+        #
+        # That is not hypothetical. On 2026-09-03 a Quickshell reload on a
+        # locked Tawa left the machine unenterable, and recovery needed
+        # `hyprctl keyword misc:allow_session_lock_restore true` by hand --
+        # from an agent session that happened to still be running. getty@tty1
+        # is disabled here (SDDM owns tty1), so the fallback is thin.
+        #
+        # The tradeoff, stated honestly: restore is also a surface someone
+        # with local code execution could use to attach their own lock UI.
+        # Against a machine that can become unenterable, availability wins.
+        #
+        # Runtime `hyprctl keyword` does NOT survive: the Home Manager
+        # activation hook below runs `hyprctl reload`, which resets this to
+        # the config value on every switch. It has to live here.
+        allow_session_lock_restore = true;
       };
       bind =
         [
