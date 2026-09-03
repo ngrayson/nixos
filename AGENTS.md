@@ -250,7 +250,21 @@ the Home Manager copy (fallback only).
 **Locking is a user-confirmed action:** ask before `qs-quickshell-ipc call
 lock activate` **or** `call lock preview`. Locking seizes every monitor, not
 a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
-every output but one. Always clear your own test — `qs-quickshell-ipc call
+every output but one.
+
+**One definition of the centre output.** Quickshell's `centerOutputScreen()`
+is the only place that decides which output is "centre" — it prefers
+`Hyprland.focusedMonitor` and falls back to the desktop-midpoint walk. It
+passes the keep-lit name to `hypr-dpms-side-off <name>`; that script must
+never derive it again. It used to, from `hyprctl monitors -j`, whose
+`width`/`height` are **pre-transform** where `Quickshell.screens` are
+**post-transform** — so a rotated panel is 2560 wide to one and 1440 to the
+other, and a disagreement would blank the only monitor showing the password
+prompt. Do not "fix" the two APIs to agree; keep one decision.
+`hypr-dpms-side-off` fails open (unknown or empty name blanks nothing), and
+`hypr-dpms-side-on` deliberately restores **every** output rather than
+mirroring the exclusion — refusing to blank is harmless, refusing to restore
+leaves a locked machine dark. Always clear your own test — `qs-quickshell-ipc call
 lock cancelPreview` for the preview, `hyprctl dispatch dpms on` to re-light
 blanked monitors — and confirm you are clean: `hyprctl layers | grep
 qs-lock-preview` returns nothing, and `hyprctl monitors -j | jq '.[] |
