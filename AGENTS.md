@@ -305,23 +305,40 @@ ones:
 hyprctl -j layers | jq -r 'to_entries[] | "\(.key): live=\([.value.levels[][]? | select(.namespace=="quickshell") | select(.pid != -1)] | length) stale=\([.value.levels[][]? | select(.namespace=="quickshell") | select(.pid == -1)] | length)"'
 ```
 
-**This is conditional, and the condition is not established.** Measured on
-Tawa 2026-09-03: 27 stale per output accumulated across a long run of
-reloads — but that whole run happened while the session was locked with a
-dead lock client. After the session was unlocked and an `os-rebuild switch`
-ran, the count went to **0 on every output with the compositor untouched**
-(same pid, same instance signature), and two further reloads leaked nothing
-at all. So a reload does **not** unconditionally leak, and clearing them does
-**not** require a compositor restart. The leading hypothesis is that Hyprland
-defers layer cleanup while an `ext-session-lock` is held; that is untested.
+**The condition is DPMS, not the lock.** A Quickshell instance that dies while
+an output is **DPMS-off** leaves a stale surface on that output, and it is
+reclaimed when the output is lit again. Measured on Tawa 2026-09-03 by
+reloading the bar during a session lock, which blanks the sides and keeps the
+main output lit:
 
-Cost, while they do accumulate: about **11 kB each** (Hyprland RSS grew 508 kB
-over 45 of them), no exclusive zone (`reserved` stays `[0,32,0,0]` at any
-count), and no measurable effect on IPC latency. **Do not attribute desktop
-slowness to them** without measuring.
+| | DP-1 (blanked) | DP-3 (blanked) | HDMI-A-1 (lit) |
+|---|---|---|---|
+| before reload | S0 | S0 | S0 |
+| after reload | **S1** | **S1** | **S0** |
+| after unlock, outputs relit | S0 | S0 | S0 |
 
-**Locking is a user-confirmed action:** ask before `qs-quickshell-ipc call
-lock activate` **or** `call lock preview`. Locking seizes every monitor, not
+A control reload with everything lit and unlocked leaks nothing. Two earlier
+write-ups of this were wrong: "every reload leaks" (it does not), and then "a
+held `ext-session-lock` is the trigger" (it is not). The overnight case that
+produced 27 per output only looked lock-shaped because hypridle had
+DPMS-blanked all three outputs an hour earlier.
+
+Cost while they exist: about **11 kB each** (Hyprland RSS grew 508 kB over 45
+of them), no exclusive zone (`reserved` stays `[0,32,0,0]` at any count), and
+no measurable effect on IPC latency — and they clear themselves once the
+output comes back. **Do not attribute desktop slowness to them** without
+measuring.
+
+**Locking and blanking are user-confirmed actions:** check whether Nick is
+active and ask before `quickshell-lock` (the real lock — there is no
+`ipc call lock activate` any more; the lock is its own instance, see
+`quickshell/lock.qml`), before `qs-quickshell-ipc call lock preview`, and
+before anything that turns an output off: `hypr-dpms-side-off`,
+`hypr-dpms-all-off`, `hyprctl dispatch dpms off`. He added the blanking half
+on 2026-09-03 after an agent darkened monitors he was working on. Note that
+running `lock.qml` at all blanks the sides as part of its startup, so
+"neutering the lock" is not enough to make it safe to run — neuter every
+display path. Recovery is `hyprctl dispatch dpms on`. Locking seizes every monitor, not
 a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
 every output but one.
 
