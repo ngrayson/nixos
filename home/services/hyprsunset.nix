@@ -35,7 +35,21 @@
   # Seconds to ease over when something changes discretely -- a toggle, a
   # pause, a settings edit -- rather than because the clock moved. 0 disables
   # the ease and restores the old instant push.
-  discreteRampSec = 5;
+  #
+  # Responsiveness comes from the change STARTING immediately, not from
+  # finishing quickly, so this is deliberately long.
+  discreteRampSec = 10;
+  # Milliseconds between ramp steps. Kept separate from the duration above
+  # because the two tune opposite things: duration is how the ease FEELS,
+  # interval is what it COSTS. The old code hardcoded `steps = sec * 4`, which
+  # welded them together -- a longer ease could only be bought with more
+  # pushes per second. 10s at 500ms is the same 20 steps as the old 5s at
+  # 250ms, at half the instantaneous rate.
+  #
+  # Do not raise much past 500ms without checking for banding: a 2000->6500K
+  # sweep moves ~225K per step here, and coarser steps start to read as
+  # stepping rather than a fade.
+  rampStepMs = 500;
 
   stateHome = "\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr-sunset";
   confHome = "\${XDG_CONFIG_HOME:-$HOME/.config}/hypr-sunset";
@@ -66,6 +80,10 @@
     NIGHT_GAMMA="$(read_setting nightGamma ${toString nightGamma})"
     TRANSITION_MIN="$(read_setting transitionMin ${toString transitionMin})"
     DISCRETE_RAMP_SEC="$(read_setting discreteRampSec ${toString discreteRampSec})"
+    RAMP_STEP_MS="$(read_setting rampStepMs ${toString rampStepMs})"
+    # Floor it: 0 would divide by zero computing the step count, and anything
+    # below a frame is pointless work.
+    [ "$RAMP_STEP_MS" -lt 50 ] && RAMP_STEP_MS=50
   '';
 
   hyprSunsetApply = pkgs.writeShellApplication {
@@ -311,21 +329,44 @@
             trap 'exit 143' TERM
             trap 'exit 130' INT
 
-            steps=$((DISCRETE_RAMP_SEC * 4))
+            steps=$(((DISCRETE_RAMP_SEC * 1000) / RAMP_STEP_MS))
             [ "$steps" -lt 1 ] && steps=1
-            for i in $(seq 1 "$steps"); do
-              sleep 0.25
-              p="$(awk -v i="$i" -v n="$steps" 'BEGIN{printf "%.4f", i/n}')"
-              t="$(ease_between "$CUR_TEMP" "$TEMP" "$p")"
-              g="$(ease_between "$CUR_GAMMA" "$GAMMA" "$p")"
-              "$HYPRCTL" hyprsunset temperature "$t" >/dev/null 2>&1 || true
-              "$HYPRCTL" hyprsunset gamma "$g" >/dev/null 2>&1 || true
-              publish_state "$t" "$g" true
-            done
+            step_sleep="$(awk -v ms="$RAMP_STEP_MS" 'BEGIN{printf "%.3f", ms/1000}')"
+
+            # Push only when the eased integer actually moved. Gamma spans
+            # 90->100 across a whole ramp while temperature spans thousands,
+            # so consecutive gamma steps are routinely byte-identical --
+            # measured 10 of 20 on a full 2000->6500K sweep. hyprsunset does
+            # NOT skip these for us: an identical-value push measured the same
+            # cost as a changed one (0.17ms vs 0.11ms), so this layer is the
+            # only place the waste can be removed.
+            last_t="$CUR_TEMP"
+            last_g="$CUR_GAMMA"
+            push_step() {
+              if [ "$1" != "$last_t" ]; then
+                "$HYPRCTL" hyprsunset temperature "$1" >/dev/null 2>&1 || true
+                last_t="$1"
+              fi
+              if [ "$2" != "$last_g" ]; then
+                "$HYPRCTL" hyprsunset gamma "$2" >/dev/null 2>&1 || true
+                last_g="$2"
+              fi
+              publish_state "$1" "$2" "$3"
+            }
+
+            # The whole eased table in ONE awk, rather than two `ease_between`
+            # spawns per step -- that was ~40 processes per ramp. Same curve as
+            # ease_between, and the same %d truncation, deliberately.
+            while read -r t g; do
+              sleep "$step_sleep"
+              push_step "$t" "$g" true
+            done < <(awk -v ta="$CUR_TEMP" -v tb="$TEMP" \
+              -v ga="$CUR_GAMMA" -v gb="$GAMMA" -v n="$steps" \
+              'BEGIN{for(i=1;i<=n;i++){p=i/n; e=p*p*(3-2*p);
+                     printf "%d %d\n", ta+(tb-ta)*e, ga+(gb-ga)*e}}')
+
             # Land exactly on the target rather than on the last eased step.
-            "$HYPRCTL" hyprsunset temperature "$TEMP" >/dev/null 2>&1 || true
-            "$HYPRCTL" hyprsunset gamma "$GAMMA" >/dev/null 2>&1 || true
-            publish_state "$TEMP" "$GAMMA" false
+            push_step "$TEMP" "$GAMMA" false
           ) &
           echo $! >"$RAMPFILE"
           exit 0
@@ -398,6 +439,10 @@
           val="''${3:-}"
           case "$key" in
             dayTemp | nightTemp | dayGamma | nightGamma | transitionMin) ;;
+            # discreteRampSec was missing here since it shipped, so
+            # `hypr-sunset-ctl set discreteRampSec 0` -- the documented way to
+            # turn the ease off -- exited 2 with "unknown key".
+            discreteRampSec | rampStepMs) ;;
             *)
               echo "hypr-sunset-ctl set: unknown key '$key'" >&2
               exit 2
