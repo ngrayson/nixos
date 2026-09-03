@@ -37,6 +37,7 @@ ShellRoot {
 			// Restore every output, not just the ones we blanked. Refusing to
 			// blank is harmless; refusing to restore leaves a dark desk.
 			restoreSides.running = true;
+			quitFallback.start();
 		}
 	}
 
@@ -90,11 +91,42 @@ ShellRoot {
 
 	Process {
 		id: restoreSides
-		command: ["hypr-dpms-all-on"]
-		// Only now is it safe to go: the lock has been released and the
-		// screens are back. Exit code is ignored on purpose -- a failed
-		// restore must not strand this process holding nothing.
-		onExited: if (lockRoot.quitting) Qt.quit()
+		// hypr-dpms-side-on, NOT hypr-dpms-all-on. Only the former is in
+		// home.packages and therefore on PATH; hypr-dpms-all-on exists solely
+		// as a store path behind `lib.getExe` in hypridle/Hearth config, so
+		// calling it by name here silently failed and the side monitors never
+		// came back after an unlock. Observed on Tawa 2026-09-03.
+		//
+		// side-on is the right script regardless: it deliberately restores
+		// EVERY output rather than mirroring side-off's exclusion, because
+		// refusing to blank is harmless while refusing to restore leaves a
+		// dark desk.
+		//
+		// The `||` fallback is not paranoia: if the named script is ever
+		// missing again, `hyprctl dispatch dpms on` still lights everything.
+		// A dark desk is the worst outcome this file can produce.
+		command: ["sh", "-c", "hypr-dpms-side-on || hyprctl dispatch dpms on"]
+		onExited: lockRoot.finishQuit()
+	}
+
+	// Quitting must not depend on the restore succeeding, or even starting.
+	// It failed exactly that way on 2026-09-03: the command named a script
+	// that was not on PATH, the Process never spawned, onExited never fired,
+	// and the locker stayed resident after unlock. That is worse than the dark
+	// monitors it also caused -- `quickshell-lock` passes `-n`, so a resident
+	// locker makes the NEXT lock a silent no-op and the machine stops locking.
+	Timer {
+		id: quitFallback
+		interval: 2500
+		repeat: false
+		onTriggered: lockRoot.finishQuit()
+	}
+
+	// Safe to call more than once; whichever path gets here first wins.
+	function finishQuit(): void {
+		if (!lockRoot.quitting)
+			return;
+		Qt.quit();
 	}
 
 	property bool sidesBlanked: false
