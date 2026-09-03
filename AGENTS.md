@@ -213,8 +213,8 @@ them).
 **Layout (right side):** media pill | tray pill | **one status cluster** |
 clock. Cluster order: updates (rebuild wrench, flake-input count, origin
 commits to pull), qs-reload (only if `quickshell/*.qml` changed since last
-start), wifi, bluetooth, brightness, battery, keep-awake, mic, volume,
-power. Keep click/scroll/tooltip behavior per icon; do not split those back
+start), wifi, bluetooth, brightness, battery, resize-move (only while that
+mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is
 `qs-nixos-term pull`.
@@ -223,6 +223,12 @@ minutes (`qs-nixos-status --online`); left-click on origin-behind is
 modal (`showOsd`), not a percent on the pill. Audio IPC:
 `qs-quickshell-ipc call audio notifyChange` (follows the live bar after
 reload).
+
+**Resize-move pill:** state is pushed by `hypr-resize-move-toggle`
+(`qs-quickshell-ipc call resizemove enter <seconds>` / `… leave`), never
+polled — that script is the only thing that enters or leaves the mode. Its
+IPC calls are best-effort, so the mode still works with the bar dead; the
+pill can go stale, the compositor state cannot.
 
 **Tooltips:** `barWindow.armTip(item, kind)` / `disarmTip()`. One
 `PopupWindow` on the `PanelWindow`, never nested inside a pill (that

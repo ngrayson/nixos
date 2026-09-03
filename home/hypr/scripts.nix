@@ -175,6 +175,14 @@ in rec {
     TIMEOUT=30
     PIDFILE="$XDG_RUNTIME_DIR/hypr-resize-move-timeout.pid"
 
+    # Bar indicator. Best-effort on purpose: the mode must work with Quickshell
+    # dead, so every call here is allowed to fail silently. The bar is told,
+    # never asked -- this script is the only thing that enters or leaves the
+    # mode, so there is nothing for the bar to poll.
+    IPC="${lib.getExe hyprQuickshellIpc}"
+    notify_on() { "$IPC" call resizemove enter "$TIMEOUT" >/dev/null 2>&1 || true; }
+    notify_off() { "$IPC" call resizemove leave >/dev/null 2>&1 || true; }
+
     disarm() {
       if [[ -f "$PIDFILE" ]]; then
         kill "$(cat "$PIDFILE")" 2>/dev/null || true
@@ -187,6 +195,7 @@ in rec {
       "$H" keyword unbind ,mouse:272 >/dev/null || true
       "$H" keyword unbind ,mouse:273 >/dev/null || true
       "$H" dispatch submap reset >/dev/null || true
+      notify_off
     }
 
     enter() {
@@ -195,14 +204,17 @@ in rec {
       "$H" keyword bindm ,mouse:272,movewindow >/dev/null
       "$H" keyword bindm ,mouse:273,resizewindow >/dev/null
       "$H" dispatch submap resize-move >/dev/null
+      notify_on
       (
         sleep "$TIMEOUT"
         # Reached only if never disarmed. Same end state as a manual exit:
-        # zero modifier-less global mouse binds, submap back to default.
+        # zero modifier-less global mouse binds, submap back to default,
+        # indicator cleared.
         rm -f "$PIDFILE"
         "$H" keyword unbind ,mouse:272 >/dev/null || true
         "$H" keyword unbind ,mouse:273 >/dev/null || true
         "$H" dispatch submap reset >/dev/null || true
+        notify_off
       ) &
       echo $! >"$PIDFILE"
     }
