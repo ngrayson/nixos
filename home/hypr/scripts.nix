@@ -1000,8 +1000,6 @@ in rec {
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
     PGREP="${lib.getExe' pkgs.procps "pgrep"}"
     GREP="${lib.getExe' pkgs.gnugrep "grep"}"
-    TR="${lib.getExe' pkgs.coreutils "tr"}"
-    HEAD="${lib.getExe' pkgs.coreutils "head"}"
 
     if [ "''${QS_RELOAD_WORKER:-}" != 1 ]; then
       exec "$SETSID" -f env QS_RELOAD_WORKER=1 "$0"
@@ -1035,15 +1033,32 @@ in rec {
     # exists, so comparing against "$QS" would miss exactly the case that
     # matters.
     qs_pids() {
-      local pid argv0
+      local pid i
+      local -a argv
       for pid in $("$PGREP" -f -- "-p $SRC" 2>/dev/null || true); do
         [ "$pid" = "$$" ] && continue
         [ -r "/proc/$pid/cmdline" ] || continue
-        argv0="$("$TR" '\0' '\n' <"/proc/$pid/cmdline" 2>/dev/null | "$HEAD" -n 1)"
-        case "''${argv0##*/}" in
-          quickshell | .quickshell-wrapped) printf '%s\n' "$pid" ;;
-          *) ;;
+        # NUL-delimited argv, so a path containing spaces cannot split.
+        # `-d ""` is bash's NUL delimiter. Double quotes, not the usual empty
+        # single-quoted form: a bare pair of single quotes anywhere in this
+        # block -- comments included -- closes the Nix indented string.
+        mapfile -d "" -t argv <"/proc/$pid/cmdline" 2>/dev/null || continue
+        [ "''${#argv[@]}" -gt 0 ] || continue
+        case "''${argv[0]##*/}" in
+          quickshell | .quickshell-wrapped) ;;
+          *) continue ;;
         esac
+        # The value after -p must equal $SRC EXACTLY. pgrep -f above only
+        # narrows candidates; it matches substrings, and "$SRC" is a prefix of
+        # "$SRC/lock.qml" -- a separate config (the lock screen) that must
+        # survive a bar reload. Killing it would drop an active session lock,
+        # which is the whole failure this precision exists to prevent.
+        for ((i = 1; i < ''${#argv[@]}; i++)); do
+          if [ "''${argv[i]}" = "-p" ] && [ "''${argv[i + 1]:-}" = "$SRC" ]; then
+            printf '%s\n' "$pid"
+            break
+          fi
+        done
       done
     }
 
