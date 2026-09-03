@@ -849,11 +849,17 @@ ShellRoot {
 			visible: previewOpen
 			color: Theme.bg
 			exclusionMode: ExclusionMode.Ignore
-			focusable: previewOpen && isCenterScreen
+			// Every preview surface is focusable, not just the center one.
+			// Previously the other outputs showed full-screen lock chrome while
+			// accepting no keyboard focus at all, so they looked like a stuck
+			// lock screen with no way out. Exclusive stays on the center surface
+			// only -- an exclusive grab on every output at once trades this bug
+			// for a worse one.
+			focusable: previewOpen
 
 			WlrLayershell.layer: WlrLayer.Overlay
 			WlrLayershell.namespace: "qs-lock-preview-" + modelData.name
-			WlrLayershell.keyboardFocus: (previewOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+			WlrLayershell.keyboardFocus: previewOpen ? (isCenterScreen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand) : WlrKeyboardFocus.None
 
 			anchors.top: true
 			anchors.bottom: true
@@ -865,15 +871,34 @@ ShellRoot {
 				context: lockContext
 				preview: true
 				showUi: previewWin.previewOpen && previewWin.isCenterScreen
-				// Explicit rather than defaulted: `primary` defaults to true, and
-				// the preview's focus used to ride on showUi. Pinning it to the
-				// same center test keeps the preview exactly as it was — its
-				// single-output Esc gate is a separate card's problem, not a
-				// regression to introduce here.
+				// showUi draws the chrome; primary takes the keystrokes. Only
+				// the center surface needs either. Esc is deliberately NOT gated
+				// on them -- see the Shortcut in LockSurface.qml.
 				primary: previewWin.isCenterScreen
 				onDismissRequested: shellRoot.lockPreview = false
 			}
 		}
+	}
+
+	// Backstop: the preview clears itself after two minutes. Esc widened to
+	// every output above is the intended exit, but a layer-shell surface only
+	// receives keys once the compositor has given it focus, so "press Esc" is
+	// not a guarantee on an output the user never clicked. This is, and it is
+	// why the card asked for both.
+	//
+	// Bound to `running` rather than started and stopped inside preview() /
+	// cancelPreview() / onUnlocked: every path that clears lockPreview --
+	// including onDismissRequested and activate() -- stops it for free, and a
+	// fresh preview restarts the full interval. Three manual call sites would
+	// be three chances to miss one.
+	//
+	// The preview holds no ext-session-lock and protects nothing, so a timeout
+	// here is not a security property. Never give the real WlSessionLock one.
+	Timer {
+		interval: 120000
+		repeat: false
+		running: shellRoot.lockPreview
+		onTriggered: shellRoot.lockPreview = false
 	}
 
 	IpcHandler {
