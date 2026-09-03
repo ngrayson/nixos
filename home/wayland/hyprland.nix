@@ -254,4 +254,40 @@ in {
     hs.hyprDpmsSideOn
     hs.hyprResizeMoveToggle
   ];
+
+  # `os-rebuild switch` swaps the hyprland.conf symlink, and Hyprland picks the
+  # new file up on its own MOST of the time -- but not always, and when it does
+  # not there is no error: the binds keep working, they are just the previous
+  # generation's. A change verified by hand right after a switch then gets
+  # reported as broken, which has already cost a debugging round. The
+  # intermittency is NOT understood -- a watch race across the symlink
+  # replacement is the standing hypothesis, unconfirmed, and an earlier
+  # "home-manager never triggers the auto-reload" theory was falsified by a
+  # switch that took effect unaided. Reloading unconditionally sidesteps the
+  # question for a few milliseconds of activation time; it is not a fix for the
+  # underlying race, and does not claim to be.
+  #
+  # `hyprctl reload` drops runtime `keyword` state. That state is ephemeral by
+  # design, and its only consumer is hypr-resize-move-toggle's runtime mouse
+  # binds -- where losing them is the safe direction to fail: the resize-move
+  # mode ends, rather than sticking on with bare clicks dragging windows.
+  #
+  # Instances are enumerated rather than read from HYPRLAND_INSTANCE_SIGNATURE
+  # because activation runs outside the compositor's environment. No compositor
+  # -- a headless boot, or a switch run before the session starts -- means zero
+  # instances and a clean no-op. Verified no-op under `set -eu` with the
+  # runtime dir empty, with it unset, and with a stale socket dir left by a
+  # dead compositor. Nothing here may fail the switch.
+  #
+  # This module is workstation-only (Tawa, Theseus); Hearth and Go3 import
+  # ../hypr/scripts.nix directly and never get this hook.
+  home.activation.hyprlandReload = lib.hm.dag.entryAfter ["linkGeneration"] ''
+    hyprlandInstances=$(${pkgs.hyprland}/bin/hyprctl -j instances 2>/dev/null \
+      | ${lib.getExe pkgs.jq} -r '.[].instance' 2>/dev/null || true)
+    for sig in $hyprlandInstances; do
+      # -q rather than a >/dev/null redirect: the redirect would also swallow
+      # the $DRY_RUN_CMD echo, leaving `dry-activate` silent about this step.
+      $DRY_RUN_CMD ${pkgs.hyprland}/bin/hyprctl -q -i "$sig" reload 2>/dev/null || true
+    done
+  '';
 }
