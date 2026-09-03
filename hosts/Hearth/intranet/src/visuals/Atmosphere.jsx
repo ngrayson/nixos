@@ -1,16 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Float } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
+import { themeVisualColors } from "../lib/themePref.js";
 import ShadertoyLayer from "./ShadertoyLayer.jsx";
 
-function cssVar(name, fallback) {
-  if (typeof document === "undefined") return fallback;
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
-
-function Field({ accent }) {
+function Field({ accent, strong }) {
   const a = useRef(null);
   const b = useRef(null);
   useFrame((_, dt) => {
@@ -37,7 +32,7 @@ function Field({ accent }) {
       <Float speed={0.35} rotationIntensity={0.15} floatIntensity={0.25}>
         <mesh position={[1.85, 0.85, -1.4]}>
           <octahedronGeometry args={[0.45, 0]} />
-          <meshBasicMaterial color="#d7fffb" transparent opacity={0.7} />
+          <meshBasicMaterial color={strong} transparent opacity={0.7} />
         </mesh>
       </Float>
     </group>
@@ -75,20 +70,13 @@ function useAtmosphereGate() {
   return { wrapRef, reduce, play: visible && onScreen && !reduce };
 }
 
-export default function Atmosphere({ shaderId = "geometry" }) {
+export default function Atmosphere({ shaderId = "geometry", themeId }) {
   const { wrapRef, reduce, play } = useAtmosphereGate();
-  const [colors, setColors] = useState({
-    void: "#122221",
-    accent: "#2fc7be",
-  });
+  // Recomputed whenever the picker changes the theme. This used to be state set
+  // by a mount-only effect, which is why the background stayed in whichever
+  // palette was active when the page loaded no matter what Settings said.
+  const colors = useMemo(() => themeVisualColors(themeId), [themeId]);
   const toy = shaderId !== "geometry";
-
-  useEffect(() => {
-    setColors({
-      void: cssVar("--void", "#122221"),
-      accent: cssVar("--accent", "#2fc7be"),
-    });
-  }, []);
 
   if (reduce) return null;
 
@@ -102,11 +90,11 @@ export default function Atmosphere({ shaderId = "geometry" }) {
         style={{ width: "100%", height: "100%" }}
       >
         {toy ? (
-          <ShadertoyLayer shaderId={shaderId} />
+          <ShadertoyLayer shaderId={shaderId} colors={colors} />
         ) : (
           <>
             <color attach="background" args={[colors.void]} />
-            <Field accent={colors.accent} />
+            <Field accent={colors.accent} strong={colors.strong} />
             <EffectComposer disableNormalPass>
               <Bloom luminanceThreshold={0.8} intensity={0.85} mipmapBlur />
             </EffectComposer>

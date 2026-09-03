@@ -155,6 +155,32 @@ main {
   font-weight: 650;
 }
 
+/* Touch sizing for the Settings modal, roughly 2x the base metrics.
+ *
+ * Scoped to .modal-card rather than applied to the base rules because
+ * .map-provider-btn is shared: Transit's map-provider picker uses the same
+ * class, sits in a widget card, and is mouse-sized on purpose. Modal.jsx wraps
+ * every modal body in .modal-card, and no other modal uses either class today,
+ * so this is Settings-only without hardcoding a Settings-specific class.
+ *
+ * Every control in the modal is covered, including ones added later: the theme
+ * picker reuses .shader-picker for exactly this reason.
+ */
+.modal-card .map-provider-btn {
+  padding: 0.4rem 1.1rem;
+  font-size: 1.5rem;
+}
+
+.modal-card .shader-picker {
+  /* select inherits this through `font: inherit`, so it sizes the label and
+   * the dropdown together. */
+  font-size: 1.7rem;
+}
+
+.modal-card .shader-picker select {
+  padding: 0.7rem 1.1rem;
+}
+
 .widget-card h2,
 section h2,
 .poll h2 {
@@ -430,6 +456,15 @@ section h3 {
   margin-top: 0.55rem;
   padding-top: 0.45rem;
   border-top: 1px solid color-mix(in srgb, var(--chrome) 80%, transparent);
+  /* The card opens the forecast modal, so it has to read as interactive; it
+   * is also keyboard-focusable now, which needs a visible focus ring. */
+  cursor: pointer;
+}
+
+.weather-place:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) - 0.3rem);
 }
 
 /* Two short places share a line, but fall back to one when the card is too
@@ -501,16 +536,29 @@ section h3 {
   font-size: 0.8rem;
 }
 
+/* Read at a distance on a wall display, so the strip is deliberately much
+ * larger than the card body around it. Three separate rules rather than one
+ * bump to `.forecast-strip li`: the icon, the day label and the temperatures
+ * scale by different factors (3x, 2x, 2x), so they can no longer all inherit a
+ * single base size. Safe to target `.forecast-strip` bare — ForecastStrip is
+ * only ever mounted with detail === "long", i.e. the focus widget; the combo
+ * widget never renders one. */
 .forecast-day {
   color: var(--strong);
-  font-size: 0.72rem;
+  font-size: 1.44rem;
   letter-spacing: 0.02em;
 }
 
 .forecast-temps {
   display: inline-flex;
   gap: 0.3rem;
+  font-size: 1.6rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* .nf sets no size of its own, so the icon was inheriting the li's 0.8rem. */
+.forecast-strip .nf {
+  font-size: 2.4rem;
 }
 
 .forecast-low {
@@ -1027,7 +1075,22 @@ section h3 {
 }
 
 .poll-fill {
-  transition: transform 0.25s linear, opacity 0.3s ease;
+  /* Deliberately no transform transition.
+   *
+   * Buses.jsx ticks `now` every 250ms and this bar's transition was also
+   * 0.25s, so a new target landed exactly as the previous tween finished: the
+   * layer animated continuously, 24/7, and never idled. Measured on the live
+   * dashboard with the animated background already off, scoping
+   * `transition: none` to this one element took the browser from 95.8% of a
+   * core to 16% — about 80 points, more than anything else on the page.
+   *
+   * It bought little visually either. Over a 60s poll a 250ms tick moves the
+   * bar 1/240th of its width — around 1.4px on this card — so the tween was
+   * smoothing a step that is barely visible to begin with. The opacity
+   * transition stays: it runs only when the bar switches to its off state,
+   * not continuously.
+   */
+  transition: opacity 0.3s ease;
 }
 
 .poll-fill.is-awaiting {

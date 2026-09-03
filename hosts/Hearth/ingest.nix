@@ -18,13 +18,19 @@
   jellyfinSecrets = ../../secrets/hearth-jellyfin.yaml;
   haveJellyfinKey = builtins.pathExists jellyfinSecrets;
 
+  # Not a module — see hearthchime.nix's own header. Same import shape
+  # battery-alert.nix already uses.
+  hearthchimePost = import ./hearthchime.nix {inherit pkgs;};
+
   hearth-ingest = pkgs.writeShellApplication {
     name = "hearth-ingest";
     runtimeInputs = [
       pkgs.coreutils
       pkgs.util-linux
       pkgs.findutils
+      pkgs.gawk
       pkgs.python3
+      hearthchimePost
     ];
     text = ''
       set -euo pipefail
@@ -266,7 +272,18 @@
           result, src, dest, library = (line.split("\t") + ["", "", "", ""])[:4]
           entry = {"src": src, "dest": dest, "library": library,
                    "at": now, "result": result}
-          if result in ("linked", "skipped"):
+          # `skipped` is deliberately not recorded here. hearth-ingest
+          # re-walks the entire share every run, so every already-filed file
+          # produces a `skipped` row on every single run. Those used to go into
+          # `recent` alongside real filings, and because `fresh` is prepended
+          # before the 25-item truncation, one quiet run's re-scan filled the
+          # whole window and evicted every `linked` row. That is why the Ingest
+          # card was empty except during the ~5 minutes between a run that
+          # filed something and the next timer tick.
+          #
+          # Nothing consumed them anyway: Ingest.jsx filters `recent` down to
+          # `linked` before rendering, so a re-scan was never news.
+          if result == "linked":
               fresh.append(entry)
           elif result == "conflict":
               pending.append(entry)
@@ -289,6 +306,12 @@
       except (OSError, ValueError):
           previous = []
 
+      # A ledger written before this change still holds `skipped` rows, and it
+      # lives in /run, which a deploy does not clear. Without dropping them
+      # here they would sit in the window until new filings pushed 25 entries
+      # past them — so the fix would look like it had not worked.
+      previous = [e for e in previous if e.get("result") == "linked"]
+
       payload = {
           "pending": pending,
           "recent": (fresh + previous)[:25],
@@ -303,6 +326,53 @@
       os.chmod(tmp, 0o644)
       os.replace(tmp, out)
       PY
+
+      # Say what actually landed, in Hearthchime.
+      #
+      # Built from this run's own `linked` records rather than by polling
+      # Jellyfin: link_one() writes those the moment the hardlink succeeds, so
+      # there is no library-scan lag and no dedup-by-timestamp guesswork. Only
+      # `linked` counts — `skipped` means the file was already there.
+      #
+      # One message per run, not one per file, matching how the Jellyfin notify
+      # above batches every new path into a single request: a season pack
+      # arriving in one cycle should be one post, not a flood.
+      #
+      # Unreachable on --dry-run, which exits well above this, and a dry run
+      # only ever writes `dry-run` rows anyway, never `linked`.
+      #
+      # Runs last on purpose: everything the run owes the system — the
+      # hardlinks, the Jellyfin notify, the ledger — is already durable before
+      # a Discord post is attempted.
+      linked_list="$(awk -F'\t' -v root="$LIBRARY_ROOT/" '
+        $1 == "linked" && $3 != "" {
+          dest = $3
+          # Library-relative reads better than a long absolute path. Strip the
+          # library root, then the library directory itself: `rel` is relative
+          # to the SHARE root, so it still starts with "tv/" or "movies/", and
+          # field 4 already carries that name. Without the second strip the
+          # message reads "tv: tv/Show/...".
+          if (index(dest, root) == 1) dest = substr(dest, length(root) + 1)
+          lib = $4 "/"
+          if (index(dest, lib) == 1) dest = substr(dest, length(lib) + 1)
+          printf "%s: %s\n", $4, dest
+        }' "$RECORD_FILE")"
+
+      if [[ -n "$linked_list" ]]; then
+        total="$(printf '%s\n' "$linked_list" | wc -l)"
+        # Discord rejects a body over 2000 characters and
+        # hearth-hearthchime-post fails open, so an unbounded list would not
+        # arrive truncated — it would not arrive at all. Cap the listing and
+        # let the count carry the rest.
+        shown="$(printf '%s\n' "$linked_list" | head -n 15)"
+        msg="Jellyfin: $total new file(s)"$'\n'"$shown"
+        if [[ "$total" -gt 15 ]]; then
+          msg="$msg"$'\n'"...and $((total - 15)) more"
+        fi
+        # No guard: hearth-hearthchime-post fails open by contract, and a
+        # Discord outage must never fail a run whose hardlinks already landed.
+        hearth-hearthchime-post "$msg"
+      fi
     '';
   };
 in {

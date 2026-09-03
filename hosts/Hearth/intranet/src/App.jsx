@@ -2,6 +2,11 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import Modal from "./components/Modal.jsx";
 import WidgetGrid from "./components/WidgetGrid.jsx";
 import { Fact, ICO, Icon } from "./lib/icons.jsx";
+import {
+  animationPrefIsSet,
+  readAnimationPref,
+  writeAnimationPref,
+} from "./lib/animationPref.js";
 import { readShaderPref, SHADER_OPTIONS, writeShaderPref } from "./lib/shaderPref.js";
 import {
   applyTheme,
@@ -70,24 +75,31 @@ function useBuildReload() {
   }, []);
 }
 
-function AtmosphereGate({ shaderId }) {
-  const [mount, setMount] = useState(false);
+function AtmosphereGate({ shaderId, themeId, animate }) {
+  const [motionOk, setMotionOk] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setMount(!mq.matches);
+    const sync = () => setMotionOk(!mq.matches);
     sync();
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
-  if (!mount) return null;
+  // Two independent gates, both of which must allow it. prefers-reduced-motion
+  // is an accessibility signal from the OS and always wins; `animate` is the
+  // viewer's own choice in Settings.
+  //
+  // Not mounting is the whole point rather than an optimisation: mounting
+  // alone held Chromium's gpu-process at a 112% mean and drove Go3's fanless
+  // package to 85°C (measured over 24 samples, 2026-09-01).
+  if (!motionOk || !animate) return null;
   return (
     <Suspense fallback={null}>
-      <Atmosphere shaderId={shaderId} />
+      <Atmosphere shaderId={shaderId} themeId={themeId} />
     </Suspense>
   );
 }
 
-function SettingsModal({ shaderId, onShader, themeId, onTheme, onClose }) {
+function SettingsModal({ shaderId, onShader, themeId, onTheme, animate, onAnimate, onClose }) {
   const { pref, setFormat } = useTimeFormat();
   // Empty under `vite dev`, where /themes.js is not generated — no point
   // showing a picker with nothing in it.
@@ -108,6 +120,32 @@ function SettingsModal({ shaderId, onShader, themeId, onTheme, onClose }) {
               aria-checked={pref === id}
               className={pref === id ? "map-provider-btn is-active" : "map-provider-btn"}
               onClick={() => setFormat(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <span className="settings-label">Animate background</span>
+        {/* Same radiogroup shape as the Time row above rather than a checkbox:
+            it inherits the modal's touch sizing, which is what makes it
+            usable on Go3's panel — the one viewer that most needs it. */}
+        <div className="map-provider" role="radiogroup" aria-label="Animate background">
+          {[
+            [true, "On"],
+            [false, "Off"],
+          ].map(([value, label]) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={animate === value}
+              className={animate === value ? "map-provider-btn is-active" : "map-provider-btn"}
+              onClick={() => {
+                writeAnimationPref(value);
+                onAnimate(value);
+              }}
             >
               {label}
             </button>
@@ -167,6 +205,18 @@ const hideJellyfin = params?.get("hideJellyfin") === "1";
 // Go3's kiosk URL sets this too. Independent of hideJellyfin: both ride the
 // same URL and neither implies the other.
 const showSystemStats = params?.get("showSystemStats") === "1";
+// Go3's kiosk URL carries this too, and it behaves differently from the other
+// two: it SEEDS a stored preference rather than acting as a permanent
+// override. Only on a browser that has never decided — so switching the
+// background back on from Settings on the panel itself sticks, instead of the
+// query string re-forcing it off on the next reload.
+//
+// Runs at module scope, which is before Shell's useState(readAnimationPref)
+// on first render, so there is no race between seeding and reading.
+const disableAnimatedBackground = params?.get("disableAnimatedBackground") === "1";
+if (disableAnimatedBackground && !animationPrefIsSet()) {
+  writeAnimationPref(false);
+}
 
 // Go3 serves its own CPU/RAM/battery/Wi-Fi/temperature on loopback, because a
 // web page has no API for OS-level stats and this page comes from Hearth.
@@ -221,6 +271,7 @@ function KioskStats() {
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
   const [themeId, setThemeId] = useState(readThemePref);
+  const [animate, setAnimate] = useState(readAnimationPref);
   const [settingsOpen, setSettingsOpen] = useState(false);
   useBuildReload();
   // Repaints the eight CSS custom properties style.css declares in :root —
@@ -272,7 +323,7 @@ function Shell() {
 
   return (
     <>
-      <AtmosphereGate shaderId={shaderId} />
+      <AtmosphereGate shaderId={shaderId} themeId={themeId} animate={animate} />
       <main>
         <nav className="site-nav" aria-label="Hearth">
           <a
@@ -327,6 +378,8 @@ function Shell() {
           onShader={setShaderId}
           themeId={themeId}
           onTheme={setThemeId}
+          animate={animate}
+          onAnimate={setAnimate}
           onClose={() => setSettingsOpen(false)}
         />
       ) : null}

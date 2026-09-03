@@ -22,6 +22,15 @@ host), **Go3** (Surface Go 3 kiosk), **Gcp**.
 - Activate **this machine** with `os-rebuild switch` (alias). Never run
   `sudo` yourself: give the user the command plus a check (`readlink
   /run/current-system`, or `qs-nixos-status`).
+- **Do not commandeer the user's live session without asking.** Moving the
+  mouse cursor, sending synthetic input, taking screenshots, locking or
+  blanking the screen, and restarting the bar or compositor all seize shared
+  hardware: the machine you run on is usually the machine the user is sitting
+  at, and none of those is a scoped, undoable edit. Prefer verification that
+  stays inside the repo; when only a live check will do, say what you are
+  about to do and ask first. Restore whatever you took over — cursor
+  position, monitor power, anything left on screen — and crop screenshots to
+  the region under test rather than grabbing whole outputs.
 - **Hearth** is built on Tawa and activated with `hearth-deploy`
   (`scripts/hearth-deploy.sh`) from **Tawa's current branch**. Do not
   `os-rebuild switch --host Hearth` on Tawa, and do not routine-switch Hearth
@@ -204,8 +213,8 @@ them).
 **Layout (right side):** media pill | tray pill | **one status cluster** |
 clock. Cluster order: updates (rebuild wrench, flake-input count, origin
 commits to pull), qs-reload (only if `quickshell/*.qml` changed since last
-start), wifi, bluetooth, brightness, battery, keep-awake, mic, volume,
-power. Keep click/scroll/tooltip behavior per icon; do not split those back
+start), wifi, bluetooth, brightness, battery, resize-move (only while that
+mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is
 `qs-nixos-term pull`.
@@ -214,6 +223,12 @@ minutes (`qs-nixos-status --online`); left-click on origin-behind is
 modal (`showOsd`), not a percent on the pill. Audio IPC:
 `qs-quickshell-ipc call audio notifyChange` (follows the live bar after
 reload).
+
+**Resize-move pill:** state is pushed by `hypr-resize-move-toggle`
+(`qs-quickshell-ipc call resizemove enter <seconds>` / `… leave`), never
+polled — that script is the only thing that enters or leaves the mode. Its
+IPC calls are best-effort, so the mode still works with the bar dead; the
+pill can go stale, the compositor state cannot.
 
 **Tooltips:** `barWindow.armTip(item, kind)` / `disarmTip()`. One
 `PopupWindow` on the `PanelWindow`, never nested inside a pill (that
@@ -227,6 +242,17 @@ must be `''${`.
 (`qs-quickshell-reload`), or `qs-quickshell-reload`. Session `exec-once` and
 reload both use `-p ~/.config/nixos/quickshell`. `~/.config/quickshell` is
 the Home Manager copy (fallback only).
+
+**Locking is a user-confirmed action:** ask before `qs-quickshell-ipc call
+lock activate` **or** `call lock preview`. Locking seizes every monitor, not
+a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
+every output but one. Always clear your own test — `qs-quickshell-ipc call
+lock cancelPreview` for the preview, `hyprctl dispatch dpms on` to re-light
+blanked monitors — and confirm you are clean: `hyprctl layers | grep
+qs-lock-preview` returns nothing, and `hyprctl monitors -j | jq '.[] |
+select(.dpmsStatus == false)'` returns nothing. There is no `deactivate` IPC
+for a real lock, by design, so have an SSH session open before locking
+anything.
 
 Scope: `quickshell/**/*.qml`, `home/hypr/scripts.nix`,
 `home/wayland/hyprland.nix`.

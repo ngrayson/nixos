@@ -2,7 +2,10 @@
 # Missing dir → empty hrefs. Do not fail caddy.
 {pkgs, ...}: let
   galleryDir = (import ./intranet/config).gallery.galleryDir or "";
-  extraRo = if galleryDir != "" then [galleryDir] else [];
+  extraRo =
+    if galleryDir != ""
+    then [galleryDir]
+    else [];
   writer = pkgs.writeShellApplication {
     name = "hearth-intranet-gallery";
     runtimeInputs = [pkgs.coreutils pkgs.python3];

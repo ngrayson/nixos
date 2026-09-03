@@ -8,10 +8,7 @@
 # trusted-users + passwordless wheel sudo let Tawa run `hearth-deploy`
 # (nix-copy-closure as wiz, then --use-remote-sudo). Same sudo policy as
 # profiles/server.nix; keep this host-local so Tawa/Theseus stay prompting.
-{
-  lib,
-  ...
-}: {
+{lib, ...}: {
   imports = [../../common/tailscale.nix];
 
   # MagicDNS as the only resolv.conf nameserver hung public lookups (nix

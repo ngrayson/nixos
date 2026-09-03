@@ -53,6 +53,13 @@ in {
         gaps_in = 10;
         gaps_out = 15;
         border_size = 2;
+        # Border-drag resize, and with `hover_icon_on_border` (default 1) the
+        # native resize cursor when hovering a border. Deliberately GLOBAL:
+        # Hyprland has no way to scope it to a submap, so this is on outside
+        # the resize-move mode too. Nick accepted that trade 2026-09-02 for
+        # the sake of having any cursor feedback at all. `extend_border_grab_area`
+        # (default 15) keeps the target generous despite border_size = 2.
+        resize_on_border = true;
         # Active scheme (home/theme/hosts.nix): overrides Stylix Hyprland `col.*`
         "col.active_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.accent}ff)";
         "col.inactive_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.surface}ff)";
@@ -192,6 +199,43 @@ in {
       + ''
         # Non-consuming: Escape still reaches apps; closes pavucontrol when that window is focused.
         bindn = , escape, exec, ${lib.getExe hs.pavuEscapeClose}
+
+        # Palm rejection (Theseus) makes it impossible to hold SUPER while
+        # dragging with the pen, so the $mod+drag gestures in `bindm` above are
+        # unreachable there. This mode exposes the same two dispatchers with
+        # nothing held: SUPER+A toggles in, Escape or SUPER+A again toggles out.
+        # `resizewindow` picks the nearest edge from the click point, so the
+        # whole window is the target -- there is no border strip to hit.
+        #
+        # The mouse binds are NOT in the submap. Submaps do not apply to
+        # `bindm` -- one placed here is parsed and listed by `hyprctl binds`
+        # but never consulted (confirmed live 2026-09-02). Instead
+        # hypr-resize-move-toggle installs the modifier-less pair in the
+        # global keymap on entry and removes it on exit, with a 30s dead-man
+        # timer as backstop. Every way in and out -- SUPER+A, Escape, the
+        # timer -- must go through that script; a bare `submap, reset` here
+        # would exit the submap while leaving bare clicks dragging windows
+        # everywhere.
+        #
+        # This lives in extraConfig rather than `settings` because a submap is
+        # positional: every bind after `submap = NAME` belongs to that submap
+        # until `submap = reset`, and the attrset generator gives no ordering
+        # guarantee. Keep this block last, and keep the trailing `submap =
+        # reset` -- without it, anything appended later would silently land
+        # inside the submap instead of the global keymap.
+        #
+        # The key is lowercase `a` on purpose. Registered as `A` it never
+        # fires: `hyprctl binds` showed `modmask=64 key=A` -- SUPER with no
+        # SHIFT (SHIFT is 1) -- while pressing Super+a emits keysym `a`, so
+        # nothing matched. Every other unshifted bind in this file is lowercase
+        # too (`modmask=8 key=h`); uppercase appears only alongside SHIFT
+        # (`modmask=9 key=Q`). Shipped uppercase once and it silently did
+        # nothing while `hyprctl binds` happily listed it.
+        bind = $mod, a, exec, ${lib.getExe hs.hyprResizeMoveToggle}
+        submap = resize-move
+        bind = , escape, exec, ${lib.getExe hs.hyprResizeMoveToggle}
+        bind = $mod, a, exec, ${lib.getExe hs.hyprResizeMoveToggle}
+        submap = reset
       '';
   };
 
@@ -208,5 +252,6 @@ in {
     hs.hyprQuickshellIpc
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
+    hs.hyprResizeMoveToggle
   ];
 }

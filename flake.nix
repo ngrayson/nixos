@@ -80,6 +80,26 @@
 
     formatter.${system} = nixpkgs.legacyPackages.${system}.alejandra;
 
+    # The home.wizt.org dashboard as a standalone build target, so a CSS or JSX
+    # change can be deployed with scripts/hearth-intranet-deploy.sh instead of a
+    # whole `hearth-deploy switch` (full host evaluation, build, closure copy and
+    # activation for a one-line tweak). hosts/Hearth/caddy.nix imports the exact
+    # same file, so this output and the switch can never disagree about what the
+    # dashboard is.
+    #
+    # `nix build .#hearth-intranet` needs --impure: the derivation reads the
+    # gitignored per-widget config.nix through builtins.getEnv NIXOS_DIR (see
+    # hosts/Hearth/intranet/config/default.nix).
+    packages.${system}.hearth-intranet = import ./hosts/Hearth/intranet-package.nix {
+      pkgs = import nixpkgs {
+        inherit system;
+        # Mirrors common/base.nix so this resolves the same package set the
+        # host does. Nothing here is unfree; the flag only keeps the two
+        # evaluations from diverging if that ever changes.
+        config.allowUnfree = true;
+      };
+    };
+
     # Hostname-only evals, not toplevel. A full nixosSystem closure is too
     # heavy for 8 GB Conveyor codespaces; this still fails `nix flake check`
     # if any host module graph cannot evaluate.
@@ -100,6 +120,36 @@
       hearth-hostname = checkHost "Hearth" "Hearth";
       go3-hostname = checkHost "Go3" "Go3";
       gcp-hostname = checkHost "Gcp" "Gcp";
+
+      # Nothing else in `checks` looks at style, so formatting drift survives
+      # review and then taxes the next card that touches the file: on
+      # 2026-09-01 `caddy.nix` and eleven other tracked files had fallen out of
+      # alejandra, and reformatting the one block a card needed dragged an
+      # unrelated hunk in with it. Unlike the hostname checks above this one
+      # only parses the tree rather than evaluating a host closure, so the 8 GB
+      # codespace constraint noted there does not apply.
+      #
+      # Scoped to `inputs.self`, which is git-tracked files only — the
+      # gitignored per-widget `hosts/Hearth/intranet/config/*/config.nix` files
+      # are deliberately outside it. `nix flake check --no-build` never builds
+      # and so never runs this, so to get the same answer without a build,
+      # mirror that scope explicitly:
+      #
+      #   git ls-files -z '*.nix' | xargs -0 nix run nixpkgs#alejandra -- --check
+      #
+      # Do NOT reach for `nix fmt -- --check .` here. It hands alejandra a
+      # working-directory path, and alejandra has no notion of .gitignore, so it
+      # walks the per-widget config files this check cannot see. Observed
+      # 2026-09-02: it reported two of them as needing formatting while this
+      # check itself exited 0. They are hand-edited operator config that nothing
+      # keeps alejandra-clean, so the two commands agree only by luck.
+      formatting =
+        pkgs.runCommand "check-formatting" {
+          nativeBuildInputs = [pkgs.alejandra];
+        } ''
+          alejandra --check ${inputs.self}
+          touch "$out"
+        '';
     };
   };
 }

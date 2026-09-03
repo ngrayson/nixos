@@ -11,54 +11,22 @@
 # Caddy waits on the ACME unit.
 {
   config,
-  lib,
   pkgs,
   ...
 }: let
-  lan = import ../../common/lan.nix;
   # Gitignored config.nix per widget (see intranet/config/default.nix).
   intranetCfg = import ./intranet/config;
   tailnetIPv4 = "100.84.222.78";
-  intranetSrc = lib.fileset.toSource {
-    root = ./intranet;
-    fileset = lib.fileset.unions [
-      ./intranet/package.json
-      ./intranet/package-lock.json
-      ./intranet/vite.config.js
-      ./intranet/index.html
-      ./intranet/src
-      ./intranet/public
-    ];
-  };
-  intranetApp = pkgs.buildNpmPackage {
-    pname = "hearth-intranet";
-    version = "0.0.1";
-    src = intranetSrc;
-    npmDepsHash = "sha256-3u4D8me9OiirC5dx91CWnL4sAviSFTZmiO6Bs1zTpg0=";
-    npmBuildScript = "build";
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out"
-      cp -r dist/. "$out/"
-      runHook postInstall
-    '';
-  };
-  intranetPublic = {
-    clock = intranetCfg.clock or {};
-    weather = {
-      locations = (intranetCfg.weather or {}).locations or [];
-      temperatureUnit = (intranetCfg.weather or {}).temperatureUnit or "F";
-    };
-    transit = {
-      busStops = (intranetCfg.transit or {}).busStops or [];
-      mapQuery = (intranetCfg.transit or {}).mapQuery or "";
-      mapZoom = (intranetCfg.transit or {}).mapZoom or 10;
-      mapProvider = (intranetCfg.transit or {}).mapProvider or "waze";
-    };
-    health = intranetCfg.health or {};
-    gallery = {};
-    calendar = {};
-  };
+  # Same derivation flake.nix exposes as packages.x86_64-linux.hearth-intranet,
+  # so a full switch and scripts/hearth-intranet-deploy.sh always agree.
+  intranetRoot = import ./intranet-package.nix {inherit pkgs;};
+  # Caddy serves the app off this persistent directory rather than off the
+  # store path, so pushing a new dashboard build no longer rewrites the
+  # Caddyfile — which is what made every CSS tweak cost a whole nixos-rebuild
+  # switch. /var/lib and not /run: unlike the JSON widgets, which a timer
+  # regenerates within a minute of boot, nothing would repopulate the site
+  # itself after a reboot short of another switch.
+  intranetServeDir = "/var/lib/hearth-intranet/current";
   hudHeaders = ''
     header {
       X-Content-Type-Options nosniff
@@ -69,67 +37,6 @@
       Content-Security-Policy "default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://maps.gstatic.com https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://127.0.0.1:18090 https://api.open-meteo.com https://air-quality-api.open-meteo.com https://maps.googleapis.com https://maps.gstatic.com https://www.google.com; worker-src 'self' blob:; frame-src https://embed.waze.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   '';
-  intranetLanJs = pkgs.writeText "lan.js" ''
-    window.hearthLan = "${lan.hosts.Hearth}";
-  '';
-  intranetCfgJs = pkgs.writeText "intranet-config.js" ''
-    window.hearthIntranet = ${builtins.toJSON intranetPublic};
-  '';
-  # The dashboard's palette is picked in Settings from the same named schemes
-  # the desktops use, so the hex values are generated from home/theme/schemes
-  # rather than copied into the app. style.css's :root block still carries
-  # Ghost's tokens as the pre-hydration fallback; everything after mount comes
-  # from here, so editing a scheme reaches the page instead of drifting from
-  # it. A scheme added to home/theme/schemes/default.nix shows up in the
-  # picker with no JS change.
-  intranetThemesJs = pkgs.writeText "themes.js" ''
-    window.hearthThemes = ${
-      builtins.toJSON (lib.mapAttrs (_: scheme: {inherit (scheme) name slug tokens;})
-        (import ../../home/theme/schemes))
-    };
-  '';
-  # Identifies the content Caddy is serving, so a long-lived tab can notice a
-  # new deploy and reload itself — the kiosk loads this page once and never
-  # navigates away, so nothing else would ever tell it.
-  #
-  # Covers the generated config and lan files as well as the built app: adding
-  # a weather location changes what the running page holds in memory just as
-  # much as a code change does, and the app derivation alone would miss it.
-  #
-  # Not a timestamp — a rebuild producing identical content leaves this
-  # unchanged, so clients never reload for nothing. Hashed rather than served
-  # as the store path itself, so a world-readable file does not publish
-  # /nix/store paths.
-  intranetBuildId = builtins.hashString "sha256" (
-    toString intranetApp
-    + toString intranetLanJs
-    + toString intranetCfgJs
-    + toString intranetThemesJs
-  );
-  intranetRoot =
-    pkgs.runCommand "hearth-intranet" {
-      lanJs = intranetLanJs;
-      cfgJs = intranetCfgJs;
-      themesJs = intranetThemesJs;
-      nerdFont = "${pkgs.nerd-fonts.symbols-only}/share/fonts/truetype/NerdFonts/Symbols/SymbolsNerdFont-Regular.ttf";
-      faviconSvg = ./intranet/favicon.svg;
-      nativeBuildInputs = [pkgs.resvg pkgs.imagemagick];
-    } ''
-      mkdir -p "$out"
-      cp -r ${intranetApp}/. "$out/"
-      chmod -R u+w "$out"
-      cp "$lanJs" "$out/lan.js"
-      cp "$cfgJs" "$out/intranet-config.js"
-      cp "$themesJs" "$out/themes.js"
-      cp "$nerdFont" "$out/SymbolsNerdFont.ttf"
-      cp "$faviconSvg" "$out/favicon.svg"
-      resvg "$faviconSvg" "$out/favicon-32.png" -w 32 -h 32
-      resvg "$faviconSvg" "$out/apple-touch-icon.png" -w 180 -h 180
-      magick "$out/favicon-32.png" "$out/favicon.ico"
-      # Polled by the dashboard; served by the same catch-all file_server as
-      # everything else in here, so it needs no Caddy route of its own.
-      echo "${intranetBuildId}" > "$out/build-id.txt"
-    '';
 in {
   sops.secrets.acme-cloudflare-env = {
     sopsFile = ../../secrets/acme-cloudflare.env;
@@ -203,19 +110,72 @@ in {
           file_server
         }
         ${
-    if (intranetCfg.gallery.galleryDir or "") != ""
-    then ''
-      handle_path /gallery/* {
-        root * ${intranetCfg.gallery.galleryDir}
-        file_server
-      }
-    ''
-    else ""
-  }
-        root * ${intranetRoot}
+          if (intranetCfg.gallery.galleryDir or "") != ""
+          then ''
+            handle_path /gallery/* {
+              root * ${intranetCfg.gallery.galleryDir}
+              file_server
+            }
+          ''
+          else ""
+        }
+        root * ${intranetServeDir}
         file_server
       '';
     };
+  };
+
+  # The served directory outlives any one build, so it is created here rather
+  # than by the sync unit: Caddy's `root *` points at it unconditionally, and a
+  # missing root would turn every request into a 404 with no clue why.
+  # hearth-deploy already puts the gitignored widget config.nix files in the
+  # sibling `config/` for restic, so the parent is shared.
+  systemd.tmpfiles.rules = [
+    "d /var/lib/hearth-intranet 0755 root root -"
+    "d ${intranetServeDir} 0755 root root -"
+  ];
+
+  # scripts/hearth-intranet-deploy.sh rsyncs into the directory above over SSH,
+  # so rsync has to be on Hearth's system PATH and not only in the sync unit.
+  # It is already pulled in incidentally today; declared here so the fast path
+  # does not silently break if that changes.
+  environment.systemPackages = [pkgs.rsync];
+
+  # Keeps a real switch fully authoritative. ${intranetRoot} is interpolated
+  # into the unit, so the unit's own text changes whenever the dashboard build
+  # changes, and switch-to-configuration's normal unit diffing re-runs this on
+  # exactly the switches where the app moved — no extra trigger needed. That is
+  # also what erases any divergence left behind by a fast-path deploy: the
+  # switch copies the declared build back over it.
+  #
+  # --delete so a file dropped from the build does not linger; --chmod because
+  # store trees are read-only and rsync could not write into its own
+  # destination on the next run.
+  #
+  # --checksum is load-bearing, not caution. Nix normalises every store file's
+  # mtime to 1, so rsync's default size+mtime quick check sees no difference in
+  # any file whose length happens to be unchanged and skips it. build-id.txt is
+  # always exactly 65 bytes, so it was silently never updated — the one file the
+  # kiosk polls to decide whether to reload. Observed 2026-09-02: a fast-path
+  # deploy replaced the hashed asset bundles but left build-id.txt reading the
+  # previous deploy's hash.
+  systemd.services.hearth-intranet-sync = {
+    description = "Sync the declared home.wizt.org build into ${intranetServeDir}";
+    wantedBy = ["multi-user.target"];
+    # A fresh boot must not let Caddy serve an empty directory.
+    before = ["caddy.service"];
+    # Deliberately no RemainAfterExit. A switch is only authoritative if it
+    # re-syncs every time, and unit diffing alone does not do that: a fast-path
+    # deploy of an uncommitted tweak leaves the declared build — and therefore
+    # this unit's text — unchanged, so a subsequent switch would see nothing to
+    # restart and the divergence would survive it. Left inactive after each run,
+    # the unit is instead started on every activation.
+    serviceConfig.Type = "oneshot";
+    path = [pkgs.rsync];
+    script = ''
+      mkdir -p ${intranetServeDir}
+      rsync -a --checksum --delete --chmod=D755,F644 ${intranetRoot}/ ${intranetServeDir}/
+    '';
   };
 
   systemd.services.caddy = {

@@ -168,6 +168,24 @@ ShellRoot {
 	// Centered power menu (sleep / hibernate / restart / shutdown). Esc dismisses.
 	property bool powerMenuVisible: false
 
+	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
+	// moves windows and a bare right-drag resizes them, so knowing it is on is
+	// not cosmetic -- ordinary clicking behaves differently everywhere.
+	//
+	// State is PUSHED by hypr-resize-move-toggle over IPC rather than polled:
+	// that script is the only thing that enters or leaves the mode, so it knows
+	// each transition exactly and there is nothing to poll for. If the bar is
+	// restarted while the mode is active the pill will be missing, but the
+	// script's dead-man timer clears the mode within its timeout regardless --
+	// the indicator can go stale, the compositor state cannot.
+	property bool resizeMoveActive: false
+	property int resizeMoveRemaining: 0
+
+	function resizeMoveTooltipText(): string {
+		return "Resize/move mode on · bare left-drag moves, right-drag resizes"
+			+ "\nExits in " + resizeMoveRemaining + "s, or on Escape / Super+A";
+	}
+
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
 	property bool trayCollapsed: false
 
@@ -378,6 +396,8 @@ ShellRoot {
 			return batteryTooltipText();
 		if (kind === "idle")
 			return idleTooltipText();
+		if (kind === "resizemove")
+			return resizeMoveTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -703,9 +723,17 @@ ShellRoot {
 
 		WlSessionLockSurface {
 			id: lockSessionSurface
-			// Wallpaper on every output (protocol still requires a surface per screen).
-			// Chrome only on the center output — same idea as the SDDM greeter on Tawa.
-			readonly property bool showLockUi: {
+			// Chrome on EVERY output, not just the center one. activate() below
+			// DPMS-blanks the sides, so a prompt on the geometric centre alone
+			// means any monitor the user wakes by hand shows bare wallpaper with
+			// no way to type a password — observed on Tawa 2026-09-02, where
+			// recovery was `hyprctl dispatch dpms on` from another machine.
+			//
+			// This is cheap because lockContext is a single shared object: every
+			// surface already mirrors the same typed text and the same failure
+			// shake through LockSurface's Connections on context.currentText.
+			// Keyboard focus still lands on exactly one surface — `primary`.
+			readonly property bool isPrimaryOutput: {
 				const c = shellRoot.centerOutputScreen();
 				return c && screen && c.name === screen.name;
 			}
@@ -716,7 +744,8 @@ ShellRoot {
 				anchors.fill: parent
 				context: lockContext
 				preview: false
-				showUi: lockSessionSurface.showLockUi
+				showUi: true
+				primary: lockSessionSurface.isPrimaryOutput
 			}
 		}
 	}
@@ -754,6 +783,12 @@ ShellRoot {
 				context: lockContext
 				preview: true
 				showUi: previewWin.previewOpen && previewWin.isCenterScreen
+				// Explicit rather than defaulted: `primary` defaults to true, and
+				// the preview's focus used to ride on showUi. Pinning it to the
+				// same center test keeps the preview exactly as it was — its
+				// single-output Esc gate is a separate card's problem, not a
+				// regression to introduce here.
+				primary: previewWin.isCenterScreen
 				onDismissRequested: shellRoot.lockPreview = false
 			}
 		}
@@ -781,6 +816,47 @@ ShellRoot {
 		function cancelPreview(): void {
 			shellRoot.lockPreview = false;
 			lockContext.currentText = "";
+		}
+	}
+
+	// Driven by hypr-resize-move-toggle on every transition, including the
+	// dead-man timeout firing. Both calls are best-effort on the script side:
+	// the mode must work with the bar dead.
+	IpcHandler {
+		target: "resizemove"
+
+		// Return type required or quickshell will not register this for
+		// `ipc call resizemove enter`.
+		function enter(seconds: string): void {
+			const parsed = parseInt(seconds, 10);
+			shellRoot.resizeMoveRemaining = isNaN(parsed) ? 0 : parsed;
+			shellRoot.resizeMoveActive = true;
+		}
+
+		function leave(): void {
+			shellRoot.resizeMoveActive = false;
+			shellRoot.resizeMoveRemaining = 0;
+		}
+	}
+
+	// Counts the pill's label down while the mode is on. This is a display of
+	// the script's timer, not a second timer that can act -- only the script
+	// ever leaves the mode, so the two cannot disagree about compositor state.
+	Timer {
+		running: shellRoot.resizeMoveActive && shellRoot.resizeMoveRemaining > 0
+		interval: 1000
+		repeat: true
+		onTriggered: {
+			shellRoot.resizeMoveRemaining = Math.max(0, shellRoot.resizeMoveRemaining - 1);
+			// Self-clear at zero rather than waiting for the script's `leave`.
+			// The script's own timer fires at this same moment, so the normal
+			// path is unchanged -- but if that IPC call is ever lost (bar
+			// restarting, socket hiccup) the pill would otherwise sit at "0s"
+			// forever, claiming a mode that is not on. Erring toward hiding a
+			// live mode for a fraction of a second beats a permanently stuck
+			// indicator that nothing can clear.
+			if (shellRoot.resizeMoveRemaining === 0)
+				shellRoot.resizeMoveActive = false;
 		}
 	}
 
@@ -1093,44 +1169,14 @@ ShellRoot {
 				onTriggered: barWindow.tipOn = true
 			}
 
-			// Shared hover/press feedback for status-cluster icons.
-			component StatusPill: MouseArea {
-				id: pill
+			// Icon-sized defaults over the shared chrome (BarHoverArea.qml): the
+			// status cluster is a row of 22x22 squares and every one of them arms the
+			// bar tooltip, so those two things live here rather than in the shared
+			// component, which stays size- and host-agnostic for wider widgets.
+			component StatusPill: BarHoverArea {
 				implicitWidth: 22
 				implicitHeight: 22
-				hoverEnabled: true
-				cursorShape: Qt.PointingHandCursor
-				property string tipKind: ""
-				scale: pressed ? 0.94 : 1
-				Behavior on scale {
-					NumberAnimation {
-						duration: 90
-						easing.type: Easing.OutCubic
-					}
-				}
-				onEntered: {
-					if (pill.tipKind !== "")
-						barWindow.armTip(pill, pill.tipKind);
-				}
-				onExited: barWindow.disarmTip()
-
-				Rectangle {
-					z: -1
-					anchors.fill: parent
-					radius: 4
-					color: {
-						if (pill.pressed)
-							return Qt.alpha(Theme.selection, 0.28);
-						if (pill.containsMouse)
-							return Qt.alpha(Theme.selection, 0.16);
-						return "transparent";
-					}
-					Behavior on color {
-						ColorAnimation {
-							duration: 100
-						}
-					}
-				}
+				tipHost: barWindow
 			}
 
 			// One inhibitor per output is fine; Hyprland treats a visible PanelWindow as
@@ -1150,6 +1196,7 @@ ShellRoot {
 					model: 10
 
 					delegate: Rectangle {
+						id: wsPill
 						required property int index
 
 						property int wid: index + 1
@@ -1165,18 +1212,21 @@ ShellRoot {
 						radius: 6
 						color: isFocused ? Theme.border : (occupied ? Theme.surface : "transparent")
 
-						Text {
-							id: wsLabel
-							anchors.centerIn: parent
-							text: parent.wid
-							color: (parent.isFocused || parent.occupied) ? Theme.text : Theme.muted
-							font.pixelSize: 14
-						}
-
-						MouseArea {
+						// The number lives inside the hover area so the press-squish takes
+						// it along; the pill's own focused/occupied background stays put.
+						BarHoverArea {
 							anchors.fill: parent
+							radius: 6
 							acceptedButtons: Qt.LeftButton
-							onClicked: Hyprland.dispatch("workspace " + parent.wid)
+							onClicked: Hyprland.dispatch("workspace " + wsPill.wid)
+
+							Text {
+								id: wsLabel
+								anchors.centerIn: parent
+								text: wsPill.wid
+								color: (wsPill.isFocused || wsPill.occupied) ? Theme.text : Theme.muted
+								font.pixelSize: 14
+							}
 						}
 					}
 				}
@@ -1200,29 +1250,33 @@ ShellRoot {
 					implicitHeight: 24
 					implicitWidth: mediaRow.implicitWidth + 16
 
-					RowLayout {
-						id: mediaRow
-						anchors.centerIn: parent
-						spacing: 4
-
-						Text {
-							color: shellRoot.mediaPlayer?.isPlaying ? Theme.sage : Theme.text
-							font.pixelSize: 14
-							font.family: "IosevkaTermSlab NF"
-							text: shellRoot.mediaIcon()
-						}
-
-						Text {
-							color: Theme.text
-							font.pixelSize: 12
-							text: shellRoot.mediaLabel()
-						}
-					}
-
-					MouseArea {
+					// mediaRow moved inside the hover area rather than beside it, so the
+					// press-squish takes the icon and label with it. The plain MouseArea
+					// this replaces had no cursor, highlight or press feedback at all.
+					BarHoverArea {
 						anchors.fill: parent
+						radius: 8
 						acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 						scrollGestureEnabled: true
+
+						RowLayout {
+							id: mediaRow
+							anchors.centerIn: parent
+							spacing: 4
+
+							Text {
+								color: shellRoot.mediaPlayer?.isPlaying ? Theme.sage : Theme.text
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.mediaIcon()
+							}
+
+							Text {
+								color: Theme.text
+								font.pixelSize: 12
+								text: shellRoot.mediaLabel()
+							}
+						}
 						onClicked: mouse => {
 							const p = shellRoot.mediaPlayer;
 							if (!p)
@@ -1361,16 +1415,15 @@ ShellRoot {
 						Repeater {
 							model: shellRoot.trayCollapsed ? null : SystemTray.items
 
-							delegate: MouseArea {
+							delegate: StatusPill {
 								id: trayDelegate
 								required property var modelData
 
-								implicitWidth: 22
-								implicitHeight: 22
 								acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-								hoverEnabled: true
 								scrollGestureEnabled: true
 
+								// StatusPill arms the tip without a payload, so re-arm with this
+								// tray item attached.
 								onEntered: barWindow.armTip(trayDelegate, "tray", modelData)
 								onExited: barWindow.disarmTip()
 								onClicked: mouse => {
@@ -1635,6 +1688,40 @@ ShellRoot {
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
 									text: shellRoot.powerProfileIcon()
+								}
+							}
+						}
+
+						// Only visible while the mode is on -- an always-present
+						// pill would defeat the point, which is answering "is it
+						// on?" at a glance.
+						StatusPill {
+							id: resizeMovePill
+							visible: shellRoot.resizeMoveActive
+							implicitWidth: Math.max(22, resizeMoveRow.implicitWidth + 4)
+							tipKind: "resizemove"
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								Hyprland.dispatch("exec hypr-resize-move-toggle");
+							}
+
+							Row {
+								id: resizeMoveRow
+								anchors.centerIn: parent
+								spacing: 2
+
+								Text {
+									color: Theme.bright
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: String.fromCodePoint(0xF0A68)
+								}
+
+								Text {
+									color: Theme.bright
+									font.pixelSize: 12
+									text: shellRoot.resizeMoveRemaining + "s"
 								}
 							}
 						}

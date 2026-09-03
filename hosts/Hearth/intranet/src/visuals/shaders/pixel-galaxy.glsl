@@ -119,7 +119,12 @@ void mainImage(out vec4 O,vec2 I)
     float colorOffset = COLORS/(COLORS+1.);
     // restrict palette
     v = floor(v*COLORS+colorOffset)/COLORS;
-    O.rgb = vec3(v);//*vec3(1.,.4,.6);//vec3(.35,.62,.96);
+    // Was greyscale (`vec3(v)`), with two tint experiments left commented out.
+    // The value is already quantised to COLORS steps just above, so ramping it
+    // from the theme's void to its accent keeps the deliberate posterised look
+    // rather than tinting a smooth gradient. v can exceed 1 on bright cores;
+    // mix extrapolates there, which blows them out the way vec3(v) used to.
+    O.rgb = mix(uVoid, themeTint(uAccent, 1.0), v);
     //O.g = sin((iTime+.6-abs(-4.-uv.y))*3.14)/2.+.7;
     // O.r=n+0.5;
     
