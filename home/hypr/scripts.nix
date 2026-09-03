@@ -52,9 +52,42 @@ in rec {
       ${qsBin} ipc -p "$QS" -n "$@"
   '';
 
+  # Spawns the lock instance, then waits until it is actually up.
+  #
+  # Was `qs-quickshell-ipc call lock activate` against the bar. The lock now
+  # lives in its own Quickshell instance (quickshell/lock.qml) so that a bar
+  # reload -- including the automatic one on every os-rebuild switch -- cannot
+  # kill the lock client. When it could, ext-session-lock-v1 kept the session
+  # LOCKED with nothing able to draw a password prompt, and the machine needed
+  # a hand-typed `hyprctl keyword misc:allow_session_lock_restore true` to
+  # recover. Observed on Tawa 2026-09-03.
+  #
+  # Blocking until the instance exists is load-bearing, not politeness:
+  # hypr-before-sleep calls this and then lets systemd suspend. A fire-and-
+  # forget spawn races the suspend, and losing that race means the machine
+  # goes down unlocked and comes back unlocked.
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
     set -euo pipefail
-    exec ${lib.getExe hyprQuickshellIpc} call lock activate
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    ${qsLiveDirSnippet}
+    LOCK="$(qs_live_dir)/lock.qml"
+    GREP="${lib.getExe' pkgs.gnugrep "grep"}"
+    SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
+
+    # -n makes an already-running lock instance a no-op instead of a second
+    # lock attempt. Already locked is success here, not an error.
+    env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${qsBin} -d -n -p "$LOCK" || true
+
+    n=0
+    until ${qsBin} list -p "$LOCK" --any-display 2>/dev/null | "$GREP" -q "^Instance "; do
+      n=$((n + 1))
+      if [ "$n" -ge 50 ]; then
+        echo "quickshell-lock: lock instance did not come up within 5s" >&2
+        exit 1
+      fi
+      "$SLEEP" 0.1
+    done
   '';
 
   # Overlay preview of the lock UI. Esc dismisses; does not take ext-session-lock.
@@ -313,14 +346,16 @@ in rec {
     exec ${lib.getExe' pkgs.systemd "systemctl"} suspend-then-hibernate
   '';
 
-  # Lock, then re-enable outputs before systemd suspends (quickshell-lock uses exec and
-  # cannot be chained). Suspending while the 600s idle listener has DPMS off leaves this
+  # Lock, then re-enable outputs before systemd suspends. Suspending while the 600s idle listener has DPMS off leaves this
   # eDP panel dark on resume: `dispatch dpms on` then returns ok without lighting it.
   # Cost of waking outputs first is a brief flash before the machine goes down.
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    ${lib.getExe hyprQuickshellIpc} call lock activate
+    # quickshell-lock now blocks until the lock is really up, so this is a
+    # proper ordering rather than a hope. `|| true` so a failed lock still
+    # re-lights the outputs below -- it prints to stderr and the journal.
+    ${lib.getExe quickshellLock} || true
     ${lib.getExe' pkgs.coreutils "sleep"} 1
     ${lib.getExe hyprDpmsAllOn} || true
   '';

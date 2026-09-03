@@ -1,8 +1,9 @@
 //@ pragma UseQApplication
 // Required for system tray context menus (QsMenuAnchor.open needs QApplication mode).
-// Quickshell: top bar (Hyprland workspaces + clock) + WlSessionLock (PAM password).
+// Quickshell: top bar (Hyprland workspaces + clock). The session lock is a
+// SEPARATE instance -- see lock.qml.
 // One bar per output via `Variants` + `Quickshell.screens` (not follow-focus on a single PanelWindow).
-// Lock: `quickshell ipc -p <live config> -n call lock activate` (see `quickshell-lock`).
+// Lock: `quickshell-lock`, which spawns lock.qml as its own instance.
 // Preview (not a session lock, Esc dismisses): `ipc call lock preview` (see `quickshell-lock-preview`).
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
 // Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
@@ -734,143 +735,21 @@ ShellRoot {
 		return Theme.accent;
 	}
 
-	// The output that owns the lock prompt, the power menu and the sunset modal
-	// -- and, via blankSideMonitors(), the one output that stays lit while the
-	// session is locked.
-	//
-	// Focus first, geometry second. The midpoint heuristic alone put the lock
-	// prompt on whichever panel happened to sit in the middle of the desktop
-	// (HDMI-A-1 on Tawa), not the monitor being worked at. Geometry remains the
-	// fallback for the cases where there is no focused monitor to ask about.
-	//
-	// This is the SINGLE definition of "centre". hypr-dpms-side-off used to
-	// recompute it from `hyprctl monitors -j`, whose width/height are
-	// pre-transform where Quickshell.screens are post-transform -- two answers
-	// that agreed on Tawa's layout only by luck. The name is passed to the
-	// script now; nothing else may derive it.
-
+	// Kept for the PREVIEW only. The real session lock lives in its own
+	// Quickshell instance now (quickshell/lock.qml), which owns its own
+	// LockContext, its own side-blanking and its own unlock path -- so nothing
+	// the bar does, crashes doing, or is reloaded out from under can drop a
+	// live lock. The bar deliberately has no idea whether the session is
+	// locked; that is no longer its business.
 	LockContext {
 		id: lockContext
 
 		onUnlocked: {
 			lockContext.currentText = "";
-			if (shellRoot.lockPreview)
-				shellRoot.lockPreview = false;
-			else {
-				sessionLock.locked = false;
-				shellRoot.restoreSideMonitors();
-			}
+			shellRoot.lockPreview = false;
 		}
 	}
 
-	Process {
-		id: sideDpmsOff
-		running: false
-	}
-
-	Process {
-		id: sideDpmsOn
-		running: false
-		command: ["hypr-dpms-side-on"]
-	}
-
-	// The keep-lit output is resolved at call time from CenterOutput, the one
-	// definition of "centre" (see CenterOutput.qml for why there must only be
-	// one). An empty name makes the script blank nothing, which is the correct
-	// way to fail: the alternative is a locked machine with every screen dark.
-	function blankSideMonitors(): void {
-		if (sideDpmsOff.running)
-			sideDpmsOff.running = false;
-		sideDpmsOff.command = ["hypr-dpms-side-off", CenterOutput.name()];
-		sideDpmsOff.running = true;
-	}
-
-	function restoreSideMonitors(): void {
-		if (sideDpmsOn.running)
-			sideDpmsOn.running = false;
-		sideDpmsOn.running = true;
-	}
-
-	WlSessionLock {
-		id: sessionLock
-		locked: false
-
-		WlSessionLockSurface {
-			id: lockSessionSurface
-			// Chrome on EVERY output, not just the center one. activate() below
-			// DPMS-blanks the sides, so a prompt on the geometric centre alone
-			// means any monitor the user wakes by hand shows bare wallpaper with
-			// no way to type a password — observed on Tawa 2026-09-02, where
-			// recovery was `hyprctl dispatch dpms on` from another machine.
-			//
-			// This is cheap because lockContext is a single shared object: every
-			// surface already mirrors the same typed text and the same failure
-			// shake through LockSurface's Connections on context.currentText.
-			// Keyboard focus still lands on exactly one surface — `primary`.
-			readonly property bool isPrimaryOutput: {
-				const c = CenterOutput.screen();
-				return c && screen && c.name === screen.name;
-			}
-
-			color: Theme.bg
-
-			LockSurface {
-				anchors.fill: parent
-				context: lockContext
-				preview: false
-				showUi: true
-				primary: lockSessionSurface.isPrimaryOutput
-			}
-		}
-	}
-
-	// Not a session lock: Overlay layer-shell. Esc (and a correct password) dismisses.
-	Variants {
-		model: Quickshell.screens
-
-		PanelWindow {
-			id: previewWin
-			required property var modelData
-			readonly property bool isCenterScreen: {
-				const c = CenterOutput.screen();
-				return c && modelData && c.name === modelData.name;
-			}
-			readonly property bool previewOpen: shellRoot.lockPreview && !sessionLock.locked
-
-			screen: modelData
-			visible: previewOpen
-			color: Theme.bg
-			exclusionMode: ExclusionMode.Ignore
-			// Every preview surface is focusable, not just the center one.
-			// Previously the other outputs showed full-screen lock chrome while
-			// accepting no keyboard focus at all, so they looked like a stuck
-			// lock screen with no way out. Exclusive stays on the center surface
-			// only -- an exclusive grab on every output at once trades this bug
-			// for a worse one.
-			focusable: previewOpen
-
-			WlrLayershell.layer: WlrLayer.Overlay
-			WlrLayershell.namespace: "qs-lock-preview-" + modelData.name
-			WlrLayershell.keyboardFocus: previewOpen ? (isCenterScreen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand) : WlrKeyboardFocus.None
-
-			anchors.top: true
-			anchors.bottom: true
-			anchors.left: true
-			anchors.right: true
-
-			LockSurface {
-				anchors.fill: parent
-				context: lockContext
-				preview: true
-				showUi: previewWin.previewOpen && previewWin.isCenterScreen
-				// showUi draws the chrome; primary takes the keystrokes. Only
-				// the center surface needs either. Esc is deliberately NOT gated
-				// on them -- see the Shortcut in LockSurface.qml.
-				primary: previewWin.isCenterScreen
-				onDismissRequested: shellRoot.lockPreview = false
-			}
-		}
-	}
 
 	// Backstop: the preview clears itself after two minutes. Esc widened to
 	// every output above is the intended exit, but a layer-shell surface only
@@ -896,18 +775,13 @@ ShellRoot {
 	IpcHandler {
 		target: "lock"
 
-		// Return type required or quickshell will not register this for `ipc call lock activate`.
-		function activate(): void {
-			shellRoot.lockPreview = false;
-			lockContext.currentText = "";
-			sessionLock.locked = true;
-			// Match the SDDM greeter: keep the center panel lit, blank the sides.
-			shellRoot.blankSideMonitors();
-		}
-
+		// No `activate` here any more. Locking is `quickshell-lock`, which
+		// spawns quickshell/lock.qml as its own instance. Routing it through
+		// the bar is what made a bar reload able to drop a live session lock.
+		//
+		// Return type required or quickshell will not register these for
+		// `ipc call lock preview`.
 		function preview(): void {
-			if (sessionLock.locked)
-				return;
 			lockContext.currentText = "";
 			shellRoot.lockPreview = true;
 		}
@@ -965,8 +839,6 @@ ShellRoot {
 
 		// Return type required or quickshell will not register this for `ipc call power toggle`.
 		function toggle(): void {
-			if (sessionLock.locked)
-				return;
 			shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
 		}
 	}
@@ -1119,6 +991,13 @@ ShellRoot {
 
 	FileView {
 		path: `${shellRoot.qsSourceDir}/shell.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/lock.qml`
 		watchChanges: true
 		printErrors: false
 		onFileChanged: shellRoot.markQsReloadPending()
