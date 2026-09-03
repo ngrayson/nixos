@@ -10,6 +10,7 @@
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
     cp ${../../quickshell/PowerMenu.qml} $out/PowerMenu.qml
+    cp ${../../quickshell/SunsetMenu.qml} $out/SunsetMenu.qml
     cp ${../../quickshell/Theme.qml} $out/Theme.qml
     cp ${../../quickshell/qmldir} $out/qmldir
     cp ${../../quickshell/pam/password.conf} $out/pam/password.conf

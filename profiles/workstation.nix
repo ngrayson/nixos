@@ -39,6 +39,13 @@ in {
   # Required for Stylix GTK theming via Home Manager (`gtk` target).
   programs.dconf.enable = true;
 
+  # Location source for the screen-warmth scheduler (home/services/hyprsunset.nix),
+  # which needs sunrise/sunset for here rather than a hardcoded latitude. This
+  # was already true on Tawa, but only as a side effect of the desktop stack
+  # pulling geoclue in -- stated explicitly so removing Plasma later cannot
+  # silently take the sun times with it.
+  services.geoclue2.enable = true;
+
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;

@@ -181,6 +181,86 @@ ShellRoot {
 	property bool resizeMoveActive: false
 	property int resizeMoveRemaining: 0
 
+	// Screen warmth. Published by hypr-sunset-apply once per tick; the bar only
+	// ever displays it and shells out to hypr-sunset-ctl to change it. The
+	// scheduler is the single writer of the colour transform matrix -- see
+	// home/services/hyprsunset.nix.
+	property var sunsetState: ({})
+	property bool sunsetMenuVisible: false
+
+	readonly property string sunsetRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr-sunset`
+
+	function sunsetOk(): bool {
+		return (shellRoot.sunsetState?.ok ?? false) === true;
+	}
+
+	function sunsetPhase(): string {
+		return shellRoot.sunsetState?.phase ?? "";
+	}
+
+	function sunsetIcon(): string {
+		const phase = shellRoot.sunsetPhase();
+		if (phase === "off")
+			return String.fromCodePoint(0xF14E4); // nf-md-weather_sunny_off
+		if (phase === "night")
+			return String.fromCodePoint(0xF0594); // nf-md-weather_night
+		if (phase === "to-night")
+			return String.fromCodePoint(0xF059B); // nf-md-weather_sunset_down
+		if (phase === "to-day")
+			return String.fromCodePoint(0xF059C); // nf-md-weather_sunset_up
+		return String.fromCodePoint(0xF0599); // nf-md-weather_sunny
+	}
+
+	function sunsetColor(): string {
+		const phase = shellRoot.sunsetPhase();
+		if (phase === "off")
+			return Theme.muted;
+		if (phase === "to-night" || phase === "to-day")
+			return Theme.accent;
+		return Theme.text;
+	}
+
+	function sunsetClock(epoch): string {
+		if (!epoch)
+			return "--:--";
+		return Qt.formatTime(new Date(epoch * 1000), "HH:mm");
+	}
+
+	function sunsetUntilText(): string {
+		const st = shellRoot.sunsetState;
+		const next = st?.nextEvent ?? 0;
+		const now = st?.now ?? 0;
+		if (!next || !now)
+			return "";
+		const mins = Math.max(0, Math.round((next - now) / 60));
+		const h = Math.floor(mins / 60);
+		const m = mins % 60;
+		const span = h > 0 ? (h + "h " + m + "m") : (m + "m");
+		return span + " to " + (st?.nextKind ?? "sunset");
+	}
+
+	function sunsetTooltipText(): string {
+		const st = shellRoot.sunsetState;
+		if (!shellRoot.sunsetOk()) {
+			const reason = st?.reason ?? "starting up";
+			return "Screen warmth idle · " + (reason === "no-location" ? "waiting on a location fix" : reason);
+		}
+		const lines = [];
+		if (shellRoot.sunsetPhase() === "off") {
+			const until = st?.disabledUntil ?? 0;
+			lines.push(until > 0 ? ("Screen warmth paused until " + shellRoot.sunsetClock(until)) : "Screen warmth off");
+		} else {
+			lines.push("Screen warmth " + (st?.temp ?? "--") + "K · gamma " + (st?.gamma ?? "--") + "%");
+		}
+		lines.push("Night " + (st?.nightTemp ?? "--") + "K · gamma " + (st?.nightGamma ?? "--") + "%");
+		lines.push("Sunrise " + shellRoot.sunsetClock(st?.sunrise ?? 0) + " · sunset " + shellRoot.sunsetClock(st?.sunset ?? 0));
+		const until = shellRoot.sunsetUntilText();
+		if (until)
+			lines.push(until + " · ramp " + (st?.transitionMin ?? "--") + " min");
+		lines.push("Left-click pauses/resumes · right-click for options");
+		return lines.join("\n");
+	}
+
 	function resizeMoveTooltipText(): string {
 		return "Resize/move mode on · bare left-drag moves, right-drag resizes"
 			+ "\nExits " + resizeMoveRemaining + "s after you stop moving, or on Escape / Super+A";
@@ -398,6 +478,8 @@ ShellRoot {
 			return idleTooltipText();
 		if (kind === "resizemove")
 			return resizeMoveTooltipText();
+		if (kind === "sunset")
+			return sunsetTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -1046,6 +1128,40 @@ ShellRoot {
 		onFileChanged: shellRoot.markQsReloadPending()
 	}
 
+	FileView {
+		path: `${shellRoot.qsSourceDir}/SunsetMenu.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	// The scheduler rewrites this once per tick (atomically, via rename), so
+	// watching it is cheaper and more accurate than polling hyprsunset. Absent
+	// or malformed is normal at login before the first tick: leave the previous
+	// value rather than blanking the pill.
+	FileView {
+		id: sunsetStateFile
+		path: `${shellRoot.sunsetRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		// Named parseState, not reload: FileView already has a reload() and
+		// shadowing it here would recurse.
+		function parseState(): void {
+			const raw = sunsetStateFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.sunsetState = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next tick brings a whole file.
+			}
+		}
+
+		onLoaded: sunsetStateFile.parseState()
+		onFileChanged: sunsetStateFile.reload()
+	}
+
 	Timer {
 		interval: 1500
 		running: true
@@ -1629,6 +1745,31 @@ ShellRoot {
 						}
 
 						StatusPill {
+							id: sunsetPill
+							// Hidden until the scheduler has published a real
+							// state, so a machine with no location fix shows
+							// nothing rather than a pill that does nothing.
+							visible: shellRoot.sunsetOk()
+							tipKind: "sunset"
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									Hyprland.dispatch("exec hypr-sunset-ctl toggle");
+								else if (mouse.button === Qt.RightButton)
+									shellRoot.sunsetMenuVisible = !shellRoot.sunsetMenuVisible;
+							}
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.sunsetColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.sunsetIcon()
+							}
+						}
+
+						StatusPill {
 							id: brightnessPill
 							visible: shellRoot.brightnessPresent
 							tipKind: "brightness"
@@ -1921,6 +2062,42 @@ ShellRoot {
 				anchors.fill: parent
 				active: powerMenuWin.menuOpen && powerMenuWin.isCenterScreen
 				onDismissed: shellRoot.powerMenuVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: sunsetMenuWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = shellRoot.centerOutputScreen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool menuOpen: shellRoot.sunsetMenuVisible
+
+			screen: modelData
+			visible: menuOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: menuOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-sunset-menu-" + modelData.name
+			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			SunsetMenu {
+				anchors.fill: parent
+				active: sunsetMenuWin.menuOpen && sunsetMenuWin.isCenterScreen
+				state: shellRoot.sunsetState
+				onDismissed: shellRoot.sunsetMenuVisible = false
 			}
 		}
 	}
