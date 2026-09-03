@@ -213,7 +213,8 @@ them).
 **Layout (right side):** media pill | tray pill | **one status cluster** |
 clock. Cluster order: updates (rebuild wrench, flake-input count, origin
 commits to pull), qs-reload (only if `quickshell/*.qml` changed since last
-start), wifi, bluetooth, brightness, battery, resize-move (only while that
+start), wifi, bluetooth, screen-warmth (only once the scheduler has a location
+fix), brightness, battery, resize-move (only while that
 mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is
@@ -223,6 +224,36 @@ minutes (`qs-nixos-status --online`); left-click on origin-behind is
 modal (`showOsd`), not a percent on the pill. Audio IPC:
 `qs-quickshell-ipc call audio notifyChange` (follows the live bar after
 reload).
+
+**Screen warmth (f.lux replacement):** `home/services/hyprsunset.nix`.
+hyprsunset is the gamma backend and **must be the only colour-transform-matrix
+writer** — a second writer (gammastep, wlsunset, a stray `hyprctl hyprsunset`
+call) makes the screen flicker between them. gammastep is not an option
+regardless: wlr-gamma is dead on Tawa's outputs ("Zero outputs support gamma
+adjustment", see PR #173/#174).
+
+hyprsunset runs with `--identity` and **no** `profile` entries; all timing is
+`hypr-sunset-apply`, a 30s idempotent tick that recomputes the target from the
+clock and pushes only on change. That shape is what buys smoothing, geolocation
+and suspend-recovery — hyprsunset's built-in profiles are fixed wall-clock
+cutovers that cannot ramp and do not re-apply after a resume. The ramp is a
+smoothstep over the `transitionMin` window ending at sunrise/sunset; sun times
+come from `sunwait`, coordinates once from geoclue into
+`$XDG_RUNTIME_DIR/hypr-sunset/location.json` (**personal data — never commit
+them**; a hand-written `~/.config/hypr-sunset/location.json` overrides and
+skips geoclue entirely).
+
+The bar reads `$XDG_RUNTIME_DIR/hypr-sunset/state.json` and never calls
+`hyprctl hyprsunset` — every action goes through `hypr-sunset-ctl`
+(`toggle` / `disable <seconds>|sunrise` / `set <key> <value>`), preserving the
+single-writer rule. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
+`HYPR_SUNSET_CONFIG_DIR`, `HYPR_SUNSET_NOW` and `HYPR_SUNSET_HYPRCTL`, so the
+whole schedule can be exercised at an arbitrary clock against a scratch tree
+with no compositor. Use that rather than waiting for real dusk.
+
+Reading a boolean out of the override file uses `if .enabled == false`, never
+`.enabled // true` — jq's `//` treats `false` as empty, which silently breaks
+the toggle.
 
 **Resize-move pill:** state is pushed by `hypr-resize-move-toggle`
 (`qs-quickshell-ipc call resizemove enter <seconds>` / `… leave`), never

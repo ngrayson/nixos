@@ -27,6 +27,10 @@ in {
         source = "${hs.quickshellBundled}/PowerMenu.qml";
         force = true;
       };
+      "quickshell/SunsetMenu.qml" = {
+        source = "${hs.quickshellBundled}/SunsetMenu.qml";
+        force = true;
+      };
       "quickshell/Theme.qml" = {
         source = "${hs.quickshellBundled}/Theme.qml";
         force = true;
