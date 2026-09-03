@@ -1715,7 +1715,7 @@ ShellRoot {
 									color: Theme.bright
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
-									text: String.fromCodePoint(0xF01FF)
+									text: String.fromCodePoint(0xF0A68)
 								}
 
 								Text {
