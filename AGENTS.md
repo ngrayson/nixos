@@ -295,6 +295,29 @@ must be `''${`.
 reload both use `-p ~/.config/nixos/quickshell`. `~/.config/quickshell` is
 the Home Manager copy (fallback only).
 
+**Every reload leaves a dead layer surface behind, so never count bar layers
+without filtering.** When a Quickshell instance exits, its layer surfaces stay
+in Hyprland's list with `pid: -1`, one per output, and nothing short of a
+compositor restart reclaims them (`hyprctl reload` does not). A session with
+many reloads shows dozens, which reads as "the bar is running many times" and
+is not. Count only the live ones:
+
+```sh
+hyprctl -j layers | jq -r 'to_entries[] | "\(.key): live=\([.value.levels[][]? | select(.namespace=="quickshell") | select(.pid != -1)] | length)"'
+```
+
+Measured on Tawa 2026-09-03: exactly one leaks per output per instance death
+on the clean `quickshell kill` path — so the reload script's KILL escalation
+is not the cause — at about **11 kB each** (Hyprland RSS grew 508 kB over 45
+of them). They take no
+exclusive zone — `reserved` stays `[0,32,0,0]` however many accumulate — and
+45 of them moved IPC latency not at all. So this is inert bookkeeping, not a
+performance problem: **do not attribute desktop slowness to it** without
+measuring first. Surfaces the client destroys explicitly, such as the lock
+preview, are reclaimed normally; only what a *disconnecting* client leaves
+behind persists, which is why the `qs-lock-preview` cleanliness check above
+stays reliable.
+
 **Locking is a user-confirmed action:** ask before `qs-quickshell-ipc call
 lock activate` **or** `call lock preview`. Locking seizes every monitor, not
 a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
