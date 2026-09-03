@@ -243,6 +243,17 @@ come from `sunwait`, coordinates once from geoclue into
 them**; a hand-written `~/.config/hypr-sunset/location.json` overrides and
 skips geoclue entirely).
 
+Discrete changes — toggle, pause, a settings edit — ease over
+`discreteRampSec` (default 5s) via `hypr-sunset-apply --ramp`, using the same
+smoothstep. Two rules make that safe, and both were bugs before they were
+rules: a ramp registers a PID in `ramp.pid` and the 30s tick **skips entirely
+while one is live** (the tick's value IS the ramp's endpoint, so a tick landing
+mid-ramp snaps to the end) — but the lock is honoured only when `kill -0`
+confirms the PID, because a stale file would otherwise freeze the screen at one
+colour forever. The ramp's `TERM`/`INT` traps must `exit`; a trap that only
+cleans up leaves the loop running, so the disarm is swallowed and two ramps
+interleave. `publish_state` writes a per-PID temp file for the same reason.
+
 The bar reads `$XDG_RUNTIME_DIR/hypr-sunset/state.json` and never calls
 `hyprctl hyprsunset` — every action goes through `hypr-sunset-ctl`
 (`toggle` / `disable <seconds>|sunrise` / `set <key> <value>`), preserving the
