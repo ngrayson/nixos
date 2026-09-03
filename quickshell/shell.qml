@@ -846,7 +846,18 @@ ShellRoot {
 		running: shellRoot.resizeMoveActive && shellRoot.resizeMoveRemaining > 0
 		interval: 1000
 		repeat: true
-		onTriggered: shellRoot.resizeMoveRemaining = Math.max(0, shellRoot.resizeMoveRemaining - 1)
+		onTriggered: {
+			shellRoot.resizeMoveRemaining = Math.max(0, shellRoot.resizeMoveRemaining - 1);
+			// Self-clear at zero rather than waiting for the script's `leave`.
+			// The script's own timer fires at this same moment, so the normal
+			// path is unchanged -- but if that IPC call is ever lost (bar
+			// restarting, socket hiccup) the pill would otherwise sit at "0s"
+			// forever, claiming a mode that is not on. Erring toward hiding a
+			// live mode for a fraction of a second beats a permanently stuck
+			// indicator that nothing can clear.
+			if (shellRoot.resizeMoveRemaining === 0)
+				shellRoot.resizeMoveActive = false;
+		}
 	}
 
 	IpcHandler {
