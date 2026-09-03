@@ -226,9 +226,13 @@ reload).
 
 **Resize-move pill:** state is pushed by `hypr-resize-move-toggle`
 (`qs-quickshell-ipc call resizemove enter <seconds>` / `… leave`), never
-polled — that script is the only thing that enters or leaves the mode. Its
-IPC calls are best-effort, so the mode still works with the bar dead; the
-pill can go stale, the compositor state cannot.
+polled — that script is the only thing that enters or leaves the mode. The
+mode's deadline is idle-based, so `enter` is re-sent every second with the
+seconds left against whichever deadline binds first, and the number climbs
+back up whenever the cursor moves. The bar must therefore never run its own
+countdown; it clears the pill only when the pushes go stale (~3s). The IPC
+calls are best-effort, so the mode still works with the bar dead; the pill
+can go stale, the compositor state cannot.
 
 **Tooltips:** `barWindow.armTip(item, kind)` / `disarmTip()`. One
 `PopupWindow` on the `PanelWindow`, never nested inside a pill (that

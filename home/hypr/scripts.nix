@@ -168,11 +168,16 @@ in rec {
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
 
-    # Dead-man timeout, seconds. While the mode is on a bare left-click drags
-    # windows -- inside applications too -- so a forgotten mode must
-    # self-heal. 30s is deliberate: an arranging pass that outlives it is
-    # one SUPER+A from re-entry.
-    TIMEOUT=30
+    # Dead-man deadline. While the mode is on a bare left-click drags windows
+    # -- inside applications too -- so a forgotten mode must self-heal. The
+    # deadline is idle-based rather than fixed: the mode is dangerous when
+    # forgotten, not while it is being used, and a fixed timer ejected you
+    # mid-arrangement.
+    IDLE_TIMEOUT=5    # exit after this many seconds with no cursor movement
+    # Absolute cap. An idle timeout alone never rescues someone who is busy at
+    # the machine and has not noticed the mode is still on, which is exactly
+    # what the old fixed timer did cover.
+    MAX_DURATION=120
     PIDFILE="$XDG_RUNTIME_DIR/hypr-resize-move-timeout.pid"
 
     # Bar indicator. Best-effort on purpose: the mode must work with Quickshell
@@ -180,7 +185,7 @@ in rec {
     # never asked -- this script is the only thing that enters or leaves the
     # mode, so there is nothing for the bar to poll.
     IPC="${lib.getExe hyprQuickshellIpc}"
-    notify_on() { "$IPC" call resizemove enter "$TIMEOUT" >/dev/null 2>&1 || true; }
+    notify_on() { "$IPC" call resizemove enter "$1" >/dev/null 2>&1 || true; }
     notify_off() { "$IPC" call resizemove leave >/dev/null 2>&1 || true; }
 
     disarm() {
@@ -198,24 +203,56 @@ in rec {
       notify_off
     }
 
+    # Runs backgrounded for as long as the mode is on. Polls the cursor once a
+    # second, because hyprctl cursorpos is the only activity source reachable
+    # from here. Deliberately NOT the Wayland idle-notify protocol: Quickshell's
+    # keep-awake pill holds an IdleInhibitor, and while that is on the
+    # compositor reports the session as never idle -- which would silently
+    # disable this dead-man switch exactly when it is least expected.
+    watchdog() {
+      local start=$SECONDS last_move=$SECONDS
+      local prev now idle total idle_rem cap_rem remaining
+      prev="$("$H" cursorpos 2>/dev/null || echo "")"
+      while :; do
+        sleep 1
+        now="$("$H" cursorpos 2>/dev/null || echo "")"
+        if [[ "$now" != "$prev" ]]; then
+          prev="$now"
+          last_move=$SECONDS
+        fi
+        idle=$((SECONDS - last_move))
+        total=$((SECONDS - start))
+        # Count down against whichever deadline binds first, so the bar never
+        # shows a comfortable 5s while the absolute cap is about to fire.
+        idle_rem=$((IDLE_TIMEOUT - idle))
+        cap_rem=$((MAX_DURATION - total))
+        remaining=$((idle_rem < cap_rem ? idle_rem : cap_rem))
+        if [[ $remaining -lt 0 ]]; then
+          remaining=0
+        fi
+        notify_on "$remaining"
+        if [[ $idle -ge $IDLE_TIMEOUT || $total -ge $MAX_DURATION ]]; then
+          break
+        fi
+      done
+      # Reached only if never disarmed. Same end state as a manual exit:
+      # zero modifier-less global mouse binds, submap back to default,
+      # indicator cleared.
+      rm -f "$PIDFILE"
+      "$H" keyword unbind ,mouse:272 >/dev/null || true
+      "$H" keyword unbind ,mouse:273 >/dev/null || true
+      "$H" dispatch submap reset >/dev/null || true
+      notify_off
+    }
+
     enter() {
       # A stale timer from a previous entry must never fire into this one.
       disarm
       "$H" keyword bindm ,mouse:272,movewindow >/dev/null
       "$H" keyword bindm ,mouse:273,resizewindow >/dev/null
       "$H" dispatch submap resize-move >/dev/null
-      notify_on
-      (
-        sleep "$TIMEOUT"
-        # Reached only if never disarmed. Same end state as a manual exit:
-        # zero modifier-less global mouse binds, submap back to default,
-        # indicator cleared.
-        rm -f "$PIDFILE"
-        "$H" keyword unbind ,mouse:272 >/dev/null || true
-        "$H" keyword unbind ,mouse:273 >/dev/null || true
-        "$H" dispatch submap reset >/dev/null || true
-        notify_off
-      ) &
+      notify_on "$IDLE_TIMEOUT"
+      watchdog &
       echo $! >"$PIDFILE"
     }
 
