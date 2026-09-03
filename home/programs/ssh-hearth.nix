@@ -1,23 +1,14 @@
 # Workstation SSH alias for deploying to Hearth. Fragment lives in
 # ~/.ssh/config.d/hearth. Tawa's handwritten ~/.ssh/config already Includes
-# it (or has Host hearth). Theseus has no ~/.ssh/config yet, so HM writes a
-# Theseus-only Include. HostName must match scripts/hearth-deploy.sh
+# it (or has Host hearth). On hosts without a handwritten config,
+# home/programs/ssh-config.nix writes one that Includes config.d/*. HostName must match scripts/hearth-deploy.sh
 # HEARTH_SSH_HOSTNAME (hearth.tail6cd822.ts.net). OpenSSH to sshd:22, not
 # Tailscale SSH.
 #
 # PATH shims live here (not only zsh aliases) so hearth-deploy and
 # hearth-intranet-deploy work in any shell, including before the next Home
 # Manager switch.
-{
-  lib,
-  nixosConfig ? null,
-  ...
-}: let
-  hostName =
-    if nixosConfig == null
-    then ""
-    else nixosConfig.networking.hostName;
-in {
+{...}: {
   home.file.".local/bin/hearth-deploy" = {
     executable = true;
     text = ''
@@ -66,12 +57,6 @@ in {
         HostName hearth.tail6cd822.ts.net
         User wiz
         Port 22
-    '';
-  };
-
-  home.file.".ssh/config" = lib.mkIf (hostName == "Theseus") {
-    text = ''
-      Include config.d/hearth
     '';
   };
 }
