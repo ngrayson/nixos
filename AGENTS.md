@@ -325,13 +325,22 @@ lock activate` **or** `call lock preview`. Locking seizes every monitor, not
 a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
 every output but one.
 
-**One definition of the centre output.** The `CenterOutput` singleton
-(`quickshell/CenterOutput.qml`) is the only place that decides which output is
-"centre" — it prefers `Hyprland.focusedMonitor` and falls back to the
-desktop-midpoint walk. Every caller asks it (`CenterOutput.screen()` for the
-screen, `CenterOutput.name()` for the name); nothing re-derives the answer.
-It is a singleton precisely so the bar and the lock screen, which are separate
-Quickshell instances, cannot drift apart. It
+**One definition of the main output, and it is deterministic.** The
+`CenterOutput` singleton (`quickshell/CenterOutput.qml`) is the only place that
+decides which output is "main" — always the desktop-midpoint walk, **never**
+whichever output has focus. On Tawa that is HDMI-A-1, the unrotated panel his
+`hypr/monitors.conf` calls "center (HDMI)". Every caller asks it
+(`CenterOutput.screen()` / `CenterOutput.name()`); nothing re-derives it. It is
+a singleton precisely so the bar and the lock screen, which are separate
+Quickshell instances, cannot drift apart.
+
+**Do not restore focus-following.** PR #182 added it and the paragraph below
+still reads as an argument for it; Nick rejected it on 2026-09-03 for the lock,
+the power menu and the sunset modal alike — he wants to know without looking
+where the password box will be. Dropping it also removed a real race: the
+focus-based answer took ~250ms to settle in a fresh instance, during which a
+newly spawned lock screen would blank the monitor the user was actually at.
+The geometry answer is correct at `Component.onCompleted`. It
 passes the keep-lit name to `hypr-dpms-side-off <name>`; that script must
 never derive it again. It used to, from `hyprctl monitors -j`, whose
 `width`/`height` are **pre-transform** where `Quickshell.screens` are

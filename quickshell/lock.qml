@@ -78,13 +78,12 @@ ShellRoot {
 	}
 
 	// --- side blanking -------------------------------------------------
-	// Deliberately NOT done at Component.onCompleted. Hyprland.focusedMonitor
-	// is null for roughly the first 250ms of a new instance, and
-	// CenterOutput.screen() does not fail during that window -- it silently
-	// returns the GEOMETRIC middle. Measured on Tawa 2026-09-03: centre read
-	// HDMI-A-1 at t=0 and DP-1 (the actually focused output) from t=250ms.
-	// Blanking on the t=0 answer would darken the monitor the user is sitting
-	// at and light one they are not.
+	// Safe to do at startup now that CenterOutput is deterministic geometry:
+	// Quickshell.screens is populated before Component.onCompleted, so there
+	// is no window where the answer is wrong. This used to be gated on a
+	// CenterOutput.ready signal, because the focus-based answer took ~250ms to
+	// settle and blanking early would darken the monitor the user was at.
+	// Dropping focus-following removed the race along with the guard.
 	Process {
 		id: sideDpmsOff
 	}
@@ -129,36 +128,10 @@ ShellRoot {
 		Qt.quit();
 	}
 
-	property bool sidesBlanked: false
-
 	function blankSides(): void {
-		if (lockRoot.sidesBlanked)
-			return;
-		lockRoot.sidesBlanked = true;
 		sideDpmsOff.command = ["hypr-dpms-side-off", CenterOutput.name()];
 		sideDpmsOff.running = true;
 	}
 
-	Connections {
-		target: CenterOutput
-		function onReadyChanged(): void {
-			if (CenterOutput.ready)
-				lockRoot.blankSides();
-		}
-	}
-
-	// Bounded fallback: if focus never resolves (single-output machine, or
-	// Hyprland not answering) blank anyway rather than leaving the sides lit
-	// forever. CenterOutput.name() fails open -- an empty name blanks nothing.
-	Timer {
-		interval: 1500
-		running: true
-		repeat: false
-		onTriggered: lockRoot.blankSides()
-	}
-
-	Component.onCompleted: {
-		if (CenterOutput.ready)
-			lockRoot.blankSides();
-	}
+	Component.onCompleted: lockRoot.blankSides()
 }
