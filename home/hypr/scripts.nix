@@ -104,57 +104,62 @@ in rec {
     done < <("$H" -i 0 monitors -j | "$J" -r '.[].name')
   '';
 
-  # Blank every output except the geometric center panel (same midpoint heuristic as
-  # Quickshell `centerOutputScreen`). Used while the session is locked so side
-  # monitors go dark the way the SDDM greeter does on Tawa.
+  # Blank every output EXCEPT the one named in $1. Used while the session is
+  # locked so side monitors go dark the way the SDDM greeter does on Tawa.
+  #
+  # The keep-lit output is passed in rather than recomputed here. It used to be
+  # derived from a midpoint heuristic over `hyprctl monitors -j`, duplicating
+  # the same maths in Quickshell's centerOutputScreen() -- from a DIFFERENT
+  # geometry source: hyprctl reports pre-transform width/height while
+  # Quickshell.screens reports post-transform, so a rotated panel is 2560 wide
+  # to one and 1440 to the other. The two agreed on Tawa's layout by luck, and
+  # a disagreement would have blanked the only monitor showing the password
+  # prompt. One decision, made in QML, passed down.
+  #
+  # FAIL OPEN: an empty or unrecognised $1 blanks nothing and exits 0. The
+  # alternative failure -- blanking by exclusion against a name that matches
+  # nothing -- turns off every screen on a locked machine.
   hyprDpmsSideOff = pkgs.writeShellScriptBin "hypr-dpms-side-off" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
     J="${lib.getExe pkgs.jq}"
+
+    keep="''${1:-}"
+    [[ -n "$keep" ]] || exit 0
+
     json="$("$H" -i 0 monitors -j 2>/dev/null || true)"
     case "$json" in
       \[*) ;;
       *) exit 0 ;;
     esac
+
+    # Unknown name means the caller's idea of the desktop is stale; blanking
+    # by exclusion against it would darken everything.
+    if ! "$J" -e --arg keep "$keep" 'any(.[]; .name == $keep)' <<<"$json" >/dev/null; then
+      exit 0
+    fi
+
     while IFS= read -r name; do
       [[ -n "$name" ]] || continue
       "$H" -i 0 dispatch dpms off "$name" || true
-    done < <("$J" -r '
-      if length <= 1 then empty
-      else
-        (map(.x) | min) as $minX
-        | (map(.x + .width) | max) as $maxX
-        | (($minX + $maxX) / 2) as $mid
-        | (sort_by((.x + (.width / 2) - $mid) | fabs) | .[0].name) as $center
-        | .[] | select(.name != $center) | .name
-      end
-    ' <<<"$json")
+    done < <("$J" -r --arg keep "$keep" '.[] | select(.name != $keep) | .name' <<<"$json")
   '';
 
+  # Restore after hypr-dpms-side-off. Deliberately NOT the mirror image of it:
+  # this turns on EVERY output, including the one that was kept lit.
+  #
+  # The two directions have asymmetric failure modes. Refusing to blank leaves
+  # a monitor awake, which is harmless. Refusing to restore leaves a monitor
+  # dark with no way for the user to see what is happening -- so the wake path
+  # must never depend on correctly identifying which output to skip. Turning on
+  # an already-on monitor is a no-op, which makes "restore everything" strictly
+  # safer and behaviourally identical.
+  #
+  # This also retires the third copy of the old midpoint heuristic.
   hyprDpmsSideOn = pkgs.writeShellScriptBin "hypr-dpms-side-on" ''
-    set -euo pipefail
-    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    H="${pkgs.hyprland}/bin/hyprctl"
-    J="${lib.getExe pkgs.jq}"
-    json="$("$H" -i 0 monitors -j 2>/dev/null || true)"
-    case "$json" in
-      \[*) ;;
-      *) exit 0 ;;
-    esac
-    while IFS= read -r name; do
-      [[ -n "$name" ]] || continue
-      "$H" -i 0 dispatch dpms on "$name" || true
-    done < <("$J" -r '
-      if length <= 1 then empty
-      else
-        (map(.x) | min) as $minX
-        | (map(.x + .width) | max) as $maxX
-        | (($minX + $maxX) / 2) as $mid
-        | (sort_by((.x + (.width / 2) - $mid) | fabs) | .[0].name) as $center
-        | .[] | select(.name != $center) | .name
-      end
-    ' <<<"$json")
+    set -uo pipefail
+    exec ${lib.getExe hyprDpmsAllOn}
   '';
 
   # SUPER+A toggle for the resize-move mode. Submaps do not apply to mouse

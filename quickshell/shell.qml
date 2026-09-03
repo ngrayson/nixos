@@ -734,7 +734,20 @@ ShellRoot {
 		return Theme.accent;
 	}
 
-	// Monitor whose horizontal center is nearest the combined desktop midpoint (typical "center" panel).
+	// The output that owns the lock prompt, the power menu and the sunset modal
+	// -- and, via blankSideMonitors(), the one output that stays lit while the
+	// session is locked.
+	//
+	// Focus first, geometry second. The midpoint heuristic alone put the lock
+	// prompt on whichever panel happened to sit in the middle of the desktop
+	// (HDMI-A-1 on Tawa), not the monitor being worked at. Geometry remains the
+	// fallback for the cases where there is no focused monitor to ask about.
+	//
+	// This is the SINGLE definition of "centre". hypr-dpms-side-off used to
+	// recompute it from `hyprctl monitors -j`, whose width/height are
+	// pre-transform where Quickshell.screens are post-transform -- two answers
+	// that agreed on Tawa's layout only by luck. The name is passed to the
+	// script now; nothing else may derive it.
 	function centerOutputScreen(): var {
 		const screens = Quickshell.screens;
 		const n = screens.length;
@@ -742,6 +755,14 @@ ShellRoot {
 			return null;
 		if (n === 1)
 			return screens[0];
+
+		const focusedName = Hyprland.focusedMonitor?.name ?? "";
+		if (focusedName) {
+			for (let i = 0; i < n; ++i) {
+				if (screens[i].name === focusedName)
+					return screens[i];
+			}
+		}
 
 		let minX = screens[0].x;
 		let maxX = screens[0].x + screens[0].width;
@@ -782,7 +803,6 @@ ShellRoot {
 	Process {
 		id: sideDpmsOff
 		running: false
-		command: ["hypr-dpms-side-off"]
 	}
 
 	Process {
@@ -791,9 +811,14 @@ ShellRoot {
 		command: ["hypr-dpms-side-on"]
 	}
 
+	// The keep-lit output is resolved here, at call time, and handed to the
+	// script -- see centerOutputScreen(). An empty name makes the script blank
+	// nothing, which is the correct way to fail: the alternative is a locked
+	// machine with every screen dark.
 	function blankSideMonitors(): void {
 		if (sideDpmsOff.running)
 			sideDpmsOff.running = false;
+		sideDpmsOff.command = ["hypr-dpms-side-off", shellRoot.centerOutputScreen()?.name ?? ""];
 		sideDpmsOff.running = true;
 	}
 
