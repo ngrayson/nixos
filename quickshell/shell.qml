@@ -168,6 +168,24 @@ ShellRoot {
 	// Centered power menu (sleep / hibernate / restart / shutdown). Esc dismisses.
 	property bool powerMenuVisible: false
 
+	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
+	// moves windows and a bare right-drag resizes them, so knowing it is on is
+	// not cosmetic -- ordinary clicking behaves differently everywhere.
+	//
+	// State is PUSHED by hypr-resize-move-toggle over IPC rather than polled:
+	// that script is the only thing that enters or leaves the mode, so it knows
+	// each transition exactly and there is nothing to poll for. If the bar is
+	// restarted while the mode is active the pill will be missing, but the
+	// script's dead-man timer clears the mode within its timeout regardless --
+	// the indicator can go stale, the compositor state cannot.
+	property bool resizeMoveActive: false
+	property int resizeMoveRemaining: 0
+
+	function resizeMoveTooltipText(): string {
+		return "Resize/move mode on · bare left-drag moves, right-drag resizes"
+			+ "\nExits in " + resizeMoveRemaining + "s, or on Escape / Super+A";
+	}
+
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
 	property bool trayCollapsed: false
 
@@ -378,6 +396,8 @@ ShellRoot {
 			return batteryTooltipText();
 		if (kind === "idle")
 			return idleTooltipText();
+		if (kind === "resizemove")
+			return resizeMoveTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -797,6 +817,36 @@ ShellRoot {
 			shellRoot.lockPreview = false;
 			lockContext.currentText = "";
 		}
+	}
+
+	// Driven by hypr-resize-move-toggle on every transition, including the
+	// dead-man timeout firing. Both calls are best-effort on the script side:
+	// the mode must work with the bar dead.
+	IpcHandler {
+		target: "resizemove"
+
+		// Return type required or quickshell will not register this for
+		// `ipc call resizemove enter`.
+		function enter(seconds: string): void {
+			const parsed = parseInt(seconds, 10);
+			shellRoot.resizeMoveRemaining = isNaN(parsed) ? 0 : parsed;
+			shellRoot.resizeMoveActive = true;
+		}
+
+		function leave(): void {
+			shellRoot.resizeMoveActive = false;
+			shellRoot.resizeMoveRemaining = 0;
+		}
+	}
+
+	// Counts the pill's label down while the mode is on. This is a display of
+	// the script's timer, not a second timer that can act -- only the script
+	// ever leaves the mode, so the two cannot disagree about compositor state.
+	Timer {
+		running: shellRoot.resizeMoveActive && shellRoot.resizeMoveRemaining > 0
+		interval: 1000
+		repeat: true
+		onTriggered: shellRoot.resizeMoveRemaining = Math.max(0, shellRoot.resizeMoveRemaining - 1)
 	}
 
 	IpcHandler {
@@ -1627,6 +1677,40 @@ ShellRoot {
 									font.pixelSize: 14
 									font.family: "IosevkaTermSlab NF"
 									text: shellRoot.powerProfileIcon()
+								}
+							}
+						}
+
+						// Only visible while the mode is on -- an always-present
+						// pill would defeat the point, which is answering "is it
+						// on?" at a glance.
+						StatusPill {
+							id: resizeMovePill
+							visible: shellRoot.resizeMoveActive
+							implicitWidth: Math.max(22, resizeMoveRow.implicitWidth + 4)
+							tipKind: "resizemove"
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								Hyprland.dispatch("exec hypr-resize-move-toggle");
+							}
+
+							Row {
+								id: resizeMoveRow
+								anchors.centerIn: parent
+								spacing: 2
+
+								Text {
+									color: Theme.bright
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: String.fromCodePoint(0xF01FF)
+								}
+
+								Text {
+									color: Theme.bright
+									font.pixelSize: 12
+									text: shellRoot.resizeMoveRemaining + "s"
 								}
 							}
 						}
