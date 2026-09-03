@@ -325,9 +325,13 @@ lock activate` **or** `call lock preview`. Locking seizes every monitor, not
 a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
 every output but one.
 
-**One definition of the centre output.** Quickshell's `centerOutputScreen()`
-is the only place that decides which output is "centre" — it prefers
-`Hyprland.focusedMonitor` and falls back to the desktop-midpoint walk. It
+**One definition of the centre output.** The `CenterOutput` singleton
+(`quickshell/CenterOutput.qml`) is the only place that decides which output is
+"centre" — it prefers `Hyprland.focusedMonitor` and falls back to the
+desktop-midpoint walk. Every caller asks it (`CenterOutput.screen()` for the
+screen, `CenterOutput.name()` for the name); nothing re-derives the answer.
+It is a singleton precisely so the bar and the lock screen, which are separate
+Quickshell instances, cannot drift apart. It
 passes the keep-lit name to `hypr-dpms-side-off <name>`; that script must
 never derive it again. It used to, from `hyprctl monitors -j`, whose
 `width`/`height` are **pre-transform** where `Quickshell.screens` are

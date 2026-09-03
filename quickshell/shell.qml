@@ -748,43 +748,6 @@ ShellRoot {
 	// pre-transform where Quickshell.screens are post-transform -- two answers
 	// that agreed on Tawa's layout only by luck. The name is passed to the
 	// script now; nothing else may derive it.
-	function centerOutputScreen(): var {
-		const screens = Quickshell.screens;
-		const n = screens.length;
-		if (n === 0)
-			return null;
-		if (n === 1)
-			return screens[0];
-
-		const focusedName = Hyprland.focusedMonitor?.name ?? "";
-		if (focusedName) {
-			for (let i = 0; i < n; ++i) {
-				if (screens[i].name === focusedName)
-					return screens[i];
-			}
-		}
-
-		let minX = screens[0].x;
-		let maxX = screens[0].x + screens[0].width;
-		for (let i = 1; i < n; ++i) {
-			const s = screens[i];
-			minX = Math.min(minX, s.x);
-			maxX = Math.max(maxX, s.x + s.width);
-		}
-
-		const mid = (minX + maxX) / 2;
-		let best = screens[0];
-		let bestDist = Math.abs(best.x + best.width / 2 - mid);
-		for (let i = 1; i < n; ++i) {
-			const s = screens[i];
-			const d = Math.abs(s.x + s.width / 2 - mid);
-			if (d < bestDist) {
-				bestDist = d;
-				best = s;
-			}
-		}
-		return best;
-	}
 
 	LockContext {
 		id: lockContext
@@ -811,14 +774,14 @@ ShellRoot {
 		command: ["hypr-dpms-side-on"]
 	}
 
-	// The keep-lit output is resolved here, at call time, and handed to the
-	// script -- see centerOutputScreen(). An empty name makes the script blank
-	// nothing, which is the correct way to fail: the alternative is a locked
-	// machine with every screen dark.
+	// The keep-lit output is resolved at call time from CenterOutput, the one
+	// definition of "centre" (see CenterOutput.qml for why there must only be
+	// one). An empty name makes the script blank nothing, which is the correct
+	// way to fail: the alternative is a locked machine with every screen dark.
 	function blankSideMonitors(): void {
 		if (sideDpmsOff.running)
 			sideDpmsOff.running = false;
-		sideDpmsOff.command = ["hypr-dpms-side-off", shellRoot.centerOutputScreen()?.name ?? ""];
+		sideDpmsOff.command = ["hypr-dpms-side-off", CenterOutput.name()];
 		sideDpmsOff.running = true;
 	}
 
@@ -845,7 +808,7 @@ ShellRoot {
 			// shake through LockSurface's Connections on context.currentText.
 			// Keyboard focus still lands on exactly one surface — `primary`.
 			readonly property bool isPrimaryOutput: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
 				return c && screen && c.name === screen.name;
 			}
 
@@ -869,7 +832,7 @@ ShellRoot {
 			id: previewWin
 			required property var modelData
 			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
 				return c && modelData && c.name === modelData.name;
 			}
 			readonly property bool previewOpen: shellRoot.lockPreview && !sessionLock.locked
@@ -1156,6 +1119,13 @@ ShellRoot {
 
 	FileView {
 		path: `${shellRoot.qsSourceDir}/shell.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/CenterOutput.qml`
 		watchChanges: true
 		printErrors: false
 		onFileChanged: shellRoot.markQsReloadPending()
@@ -2092,7 +2062,7 @@ ShellRoot {
 			id: powerMenuWin
 			required property var modelData
 			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
 				return c && modelData && c.name === modelData.name;
 			}
 			readonly property bool menuOpen: shellRoot.powerMenuVisible
@@ -2127,7 +2097,7 @@ ShellRoot {
 			id: sunsetMenuWin
 			required property var modelData
 			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
 				return c && modelData && c.name === modelData.name;
 			}
 			readonly property bool menuOpen: shellRoot.sunsetMenuVisible
@@ -2162,7 +2132,7 @@ ShellRoot {
 		PanelWindow {
 			required property var modelData
 			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
 				return c && modelData && c.name === modelData.name;
 			}
 

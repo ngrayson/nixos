@@ -7,6 +7,7 @@
   quickshellBundled = pkgs.runCommand "quickshell-hm-config" {} ''
     mkdir -p $out/pam
     cp ${../../quickshell/shell.qml} $out/shell.qml
+    cp ${../../quickshell/CenterOutput.qml} $out/CenterOutput.qml
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
     cp ${../../quickshell/PowerMenu.qml} $out/PowerMenu.qml
