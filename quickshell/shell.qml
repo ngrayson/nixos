@@ -183,7 +183,7 @@ ShellRoot {
 
 	function resizeMoveTooltipText(): string {
 		return "Resize/move mode on · bare left-drag moves, right-drag resizes"
-			+ "\nExits in " + resizeMoveRemaining + "s, or on Escape / Super+A";
+			+ "\nExits " + resizeMoveRemaining + "s after you stop moving, or on Escape / Super+A";
 	}
 
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
@@ -827,36 +827,37 @@ ShellRoot {
 
 		// Return type required or quickshell will not register this for
 		// `ipc call resizemove enter`.
+		// Called once per second while the mode is on, not once at entry: the
+		// deadline is idle-based, so the number resets upward whenever the
+		// cursor moves. The script owns all timing; the bar only displays.
 		function enter(seconds: string): void {
 			const parsed = parseInt(seconds, 10);
 			shellRoot.resizeMoveRemaining = isNaN(parsed) ? 0 : parsed;
 			shellRoot.resizeMoveActive = true;
+			resizeMoveStaleTimer.restart();
 		}
 
 		function leave(): void {
+			resizeMoveStaleTimer.stop();
 			shellRoot.resizeMoveActive = false;
 			shellRoot.resizeMoveRemaining = 0;
 		}
 	}
 
-	// Counts the pill's label down while the mode is on. This is a display of
-	// the script's timer, not a second timer that can act -- only the script
-	// ever leaves the mode, so the two cannot disagree about compositor state.
+	// Staleness watchdog, not a countdown. The bar must never decrement on its
+	// own: the deadline is idle-based, so the pushed value climbs back up every
+	// time the cursor moves, and a local decrement would fight it -- worse, a
+	// self-clear at zero would hide a mode that is genuinely still on. This
+	// fires only when the pushes stop without a `leave` arriving (script
+	// killed, socket hiccup), where a pill that vanishes a beat early beats one
+	// stuck forever claiming a mode that is not active.
 	Timer {
-		running: shellRoot.resizeMoveActive && shellRoot.resizeMoveRemaining > 0
-		interval: 1000
-		repeat: true
+		id: resizeMoveStaleTimer
+		interval: 3000
+		repeat: false
 		onTriggered: {
-			shellRoot.resizeMoveRemaining = Math.max(0, shellRoot.resizeMoveRemaining - 1);
-			// Self-clear at zero rather than waiting for the script's `leave`.
-			// The script's own timer fires at this same moment, so the normal
-			// path is unchanged -- but if that IPC call is ever lost (bar
-			// restarting, socket hiccup) the pill would otherwise sit at "0s"
-			// forever, claiming a mode that is not on. Erring toward hiding a
-			// live mode for a fraction of a second beats a permanently stuck
-			// indicator that nothing can clear.
-			if (shellRoot.resizeMoveRemaining === 0)
-				shellRoot.resizeMoveActive = false;
+			shellRoot.resizeMoveActive = false;
+			shellRoot.resizeMoveRemaining = 0;
 		}
 	}
 
