@@ -200,6 +200,10 @@ ShellRoot {
 
 	function sunsetIcon(): string {
 		const phase = shellRoot.sunsetPhase();
+		// A discrete change (toggle, pause, settings edit) eases over a few
+		// seconds; show it moving rather than sitting on the destination icon.
+		if (shellRoot.sunsetState?.ramping === true)
+			return String.fromCodePoint(0xF059A); // nf-md-weather_sunset
 		if (phase === "off")
 			return String.fromCodePoint(0xF14E4); // nf-md-weather_sunny_off
 		if (phase === "night")
