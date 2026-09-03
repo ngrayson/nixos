@@ -998,9 +998,10 @@ in rec {
     SRC="${quickshellLiveDir}"
     SETSID="${lib.getExe' pkgs.util-linux "setsid"}"
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
-    PKILL="${lib.getExe' pkgs.procps "pkill"}"
     PGREP="${lib.getExe' pkgs.procps "pgrep"}"
     GREP="${lib.getExe' pkgs.gnugrep "grep"}"
+    TR="${lib.getExe' pkgs.coreutils "tr"}"
+    HEAD="${lib.getExe' pkgs.coreutils "head"}"
 
     if [ "''${QS_RELOAD_WORKER:-}" != 1 ]; then
       exec "$SETSID" -f env QS_RELOAD_WORKER=1 "$0"
@@ -1016,13 +1017,48 @@ in rec {
       "$SLEEP" 0.05
     done
 
-    # Fallback: match cmdline `-p <live dir>` (comm name is not "quickshell").
-    "$PKILL" -TERM -f -- "-p $SRC" || true
+    # Fallback for an instance that ignored `quickshell kill` above. The comm
+    # name is not "quickshell" (Nix wrapper), so candidates still have to be
+    # found by cmdline -- but every candidate is then CHECKED before it is
+    # signalled.
+    #
+    # This used to be a bare `pkill -f -- "-p $SRC"`, which signals any
+    # process whose argv merely CONTAINS that path. It killed two unrelated
+    # shells whose only crime was searching for Quickshell with that string on
+    # their own command line. os-rebuild now runs this on every switch, so the
+    # blast radius reaches anything running alongside a rebuild -- and the
+    # loop escalates to KILL, so a mismatched process gets no clean shutdown.
+    #
+    # Checked via argv[0], NOT /proc/pid/exe: the Nix wrapper makes exe
+    # resolve to `.quickshell-wrapped`, and after a rebuild the running
+    # instance is the OLD store path -- which is the entire reason this script
+    # exists, so comparing against "$QS" would miss exactly the case that
+    # matters.
+    qs_pids() {
+      local pid argv0
+      for pid in $("$PGREP" -f -- "-p $SRC" 2>/dev/null || true); do
+        [ "$pid" = "$$" ] && continue
+        [ -r "/proc/$pid/cmdline" ] || continue
+        argv0="$("$TR" '\0' '\n' <"/proc/$pid/cmdline" 2>/dev/null | "$HEAD" -n 1)"
+        case "''${argv0##*/}" in
+          quickshell | .quickshell-wrapped) printf '%s\n' "$pid" ;;
+          *) ;;
+        esac
+      done
+    }
+
+    pids="$(qs_pids)"
+    if [ -n "$pids" ]; then
+      # Word splitting is deliberate: one signal for every matched pid.
+      # shellcheck disable=SC2086
+      kill -TERM $pids 2>/dev/null || true
+    fi
     n=0
-    while "$PGREP" -f -- "-p $SRC" >/dev/null 2>&1; do
+    while pids="$(qs_pids)"; [ -n "$pids" ]; do
       n=$((n + 1))
       if [ "$n" -ge 25 ]; then
-        "$PKILL" -KILL -f -- "-p $SRC" || true
+        # shellcheck disable=SC2086
+        kill -KILL $pids 2>/dev/null || true
         break
       fi
       "$SLEEP" 0.1
