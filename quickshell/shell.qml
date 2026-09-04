@@ -1210,6 +1210,14 @@ ShellRoot {
 			property var tipTray: null
 			property bool tipOn: false
 
+			// Whether THIS per-screen bar is the one on the main monitor. The
+			// anchored media dropdown below uses it so the popup always drops
+			// from the main-monitor bar's pill, matching PowerMenu/SunsetMenu.
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+
 			function armTip(item, kind: string, trayItem): void {
 				tipItem = item;
 				tipKind = kind;
@@ -1305,6 +1313,7 @@ ShellRoot {
 				}
 
 				Rectangle {
+					id: mediaPill
 					visible: shellRoot.mediaPresent
 					radius: 8
 					color: Theme.surface
@@ -1980,6 +1989,34 @@ ShellRoot {
 					}
 				}
 			}
+
+			// Media controls dropdown, anchored just below the now-playing pill
+			// (right-click opens it). Uses the same xdg-popup anchoring as the
+			// hover tooltip above rather than a full-screen overlay, and is
+			// pinned to the main-monitor bar (barWindow.isCenterScreen) so it
+			// always drops from that pill -- matching PowerMenu/SunsetMenu --
+			// even if a different screen's pill was the one clicked.
+			PopupWindow {
+				id: mediaDropdown
+				visible: barWindow.isCenterScreen && shellRoot.mediaPopupVisible && shellRoot.mediaPresent
+				grabFocus: true
+				color: "transparent"
+				implicitWidth: mediaDropdownContent.contentWidth
+				implicitHeight: mediaDropdownContent.contentHeight
+				anchor.window: barWindow
+				anchor.item: mediaPill
+				anchor.edges: Edges.Bottom
+				anchor.gravity: Edges.Bottom
+
+				MediaPopup {
+					id: mediaDropdownContent
+					anchors.fill: parent
+					active: mediaDropdown.visible
+					player: shellRoot.mediaPlayer
+					audioLevel: shellRoot.audioPercent
+					onDismissed: shellRoot.mediaPopupVisible = false
+				}
+			}
 		}
 	}
 
@@ -2057,45 +2094,6 @@ ShellRoot {
 				active: sunsetMenuWin.menuOpen && sunsetMenuWin.isCenterScreen
 				state: shellRoot.sunsetState
 				onDismissed: shellRoot.sunsetMenuVisible = false
-			}
-		}
-	}
-
-	Variants {
-		model: Quickshell.screens
-
-		PanelWindow {
-			id: mediaPopupWin
-			required property var modelData
-			readonly property bool isCenterScreen: {
-				const c = CenterOutput.screen();
-				return c && modelData && c.name === modelData.name;
-			}
-			// Closes on its own if the player disappears while open, so a
-			// popup can never outlive the media it controls.
-			readonly property bool menuOpen: shellRoot.mediaPopupVisible && shellRoot.mediaPresent
-
-			screen: modelData
-			visible: menuOpen && isCenterScreen
-			color: "transparent"
-			exclusionMode: ExclusionMode.Ignore
-			focusable: menuOpen && isCenterScreen
-
-			WlrLayershell.layer: WlrLayer.Overlay
-			WlrLayershell.namespace: "qs-media-popup-" + modelData.name
-			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-
-			anchors.top: true
-			anchors.bottom: true
-			anchors.left: true
-			anchors.right: true
-
-			MediaPopup {
-				anchors.fill: parent
-				active: mediaPopupWin.menuOpen && mediaPopupWin.isCenterScreen
-				player: shellRoot.mediaPlayer
-				audioLevel: shellRoot.audioPercent
-				onDismissed: shellRoot.mediaPopupVisible = false
 			}
 		}
 	}

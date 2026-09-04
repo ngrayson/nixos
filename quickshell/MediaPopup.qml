@@ -3,8 +3,11 @@ import Quickshell
 
 // Media control popup, opened by RIGHT-clicking the now-playing bar widget
 // (Nick's choice, 2026-09-04: left-click stays play/pause on the bar, right
-// opens this). Mirrors SunsetMenu.qml / PowerMenu.qml: a focusable Overlay
-// PanelWindow (in shell.qml) hosts it, Esc and click-outside dismiss.
+// opens this). Rendered as a small dropdown anchored just below the media pill
+// (a grabFocus PopupWindow in shell.qml, reusing the same xdg-popup anchoring
+// the bar's hover tooltip uses), not a full-screen overlay. Esc dismisses;
+// clicking outside dismisses via the popup's grabbed focus. This content sizes
+// itself (contentWidth/contentHeight) so the hosting PopupWindow fits it.
 //
 // The player object (`Quickshell.Services.Mpris` MprisPlayer) is passed down
 // from shell.qml rather than resolved here, so the bar and the popup always
@@ -22,6 +25,13 @@ Item {
 	property int audioLevel: 0
 
 	signal dismissed()
+
+	// Natural size of the dropdown, exported so the hosting PopupWindow can size
+	// to it. Replaces the old full-screen overlay wrapper.
+	readonly property int contentWidth: 440
+	readonly property int contentHeight: cardCol.implicitHeight + 40
+	implicitWidth: root.contentWidth
+	implicitHeight: root.contentHeight
 
 	readonly property bool playing: root.player?.isPlaying ?? false
 	readonly property real lenSec: root.player?.length ?? 0
@@ -72,35 +82,17 @@ Item {
 			root.posSec = root.player?.position ?? 0;
 	}
 
-	Rectangle {
-		anchors.fill: parent
-		color: Theme.bg
-		opacity: 0.55
-	}
-
-	MouseArea {
-		anchors.fill: parent
-		onClicked: root.dismissed()
-	}
-
+	// The card IS the dropdown now: it fills the popup surface (which is sized to
+	// root.contentWidth/Height), rather than floating centred inside a
+	// full-screen scrim. No dimming and no click-catcher -- outside-click
+	// dismissal comes from the hosting PopupWindow's grabbed focus.
 	Rectangle {
 		id: card
-		width: 440
-		height: cardCol.implicitHeight + 40
+		anchors.fill: parent
 		radius: 12
 		color: Theme.depth
 		border.width: 1
 		border.color: Theme.border
-		anchors.horizontalCenter: parent.horizontalCenter
-		anchors.verticalCenter: parent.verticalCenter
-		anchors.verticalCenterOffset: parent.height * 0.15
-
-		// Eat clicks on the card so they don't fall through to the dismiss
-		// scrim behind it.
-		MouseArea {
-			anchors.fill: parent
-			onClicked: {}
-		}
 
 		Column {
 			id: cardCol
