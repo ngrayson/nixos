@@ -268,6 +268,26 @@ single-writer rule. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
 whole schedule can be exercised at an arbitrary clock against a scratch tree
 with no compositor. Use that rather than waiting for real dusk.
 
+The three scripts live in `home/services/hyprsunset/scripts.nix` (imported by
+the module), so they build and test without a host closure.
+`tests/hypr-sunset/run.sh` is a committed suite that drives the real
+`hypr-sunset-apply`/`hypr-sunset-ctl` against a scratch tree with a stub
+`hyprctl` (its shebang is `#!/bin/sh`, not `env bash` — the nix build sandbox
+has no `/usr/bin/env`), asserting the push count of every path: idempotent
+ticks push nothing, the sunset window ramps to night, the discrete ramp skips
+byte-identical steps, a tick landing mid-ramp is skipped, and preview fades out
+and back without writing state. It is wired into `nix flake check` as the
+`hypr-sunset-tests` check (TZ pinned to the fixed NYC test coordinates so
+sunrise/sunset order sanely) and also runs directly on a host. Every REAL push
+is appended to `$XDG_RUNTIME_DIR/hypr-sunset/pushes.log` — `epoch temp gamma
+<tick|ramp|preview>`, trimmed to the last 500 lines — so a felt in-game hitch
+can be lined up against an actual CTM write. `hypr-sunset-bench` is a manual,
+operator-run frame-time benchmark (MangoHud + vkcube) that A/Bs
+`render:ctm_animation`; it stops the timer, is the sole gamma writer for its
+run, and restores temperature / gamma / `ctm_animation` / the timer on every
+exit including Ctrl-C. Run it yourself with a game-like workload — nothing
+triggers it automatically.
+
 Reading a boolean out of the override file uses `if .enabled == false`, never
 `.enabled // true` — jq's `//` treats `false` as empty, which silently breaks
 the toggle.

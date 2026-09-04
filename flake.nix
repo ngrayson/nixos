@@ -150,6 +150,34 @@
           alejandra --check ${inputs.self}
           touch "$out"
         '';
+
+      # Deterministic script-level tests for the hyprsunset scheduler. Imports
+      # the SAME home/services/hyprsunset/scripts.nix the user session runs and
+      # drives hypr-sunset-apply/ctl against a scratch tree with a stub hyprctl
+      # (via the HYPR_SUNSET_* env hooks), so a green check proves the exact
+      # scripts on the display still push only when they should. No compositor,
+      # no real gamma writes. `tests/hypr-sunset/run.sh` also runs directly on a
+      # host. TZ is pinned to match the fixed NYC test coordinates so sunrise/
+      # sunset order sanely regardless of the host clock; tzdata is supplied so
+      # the sandbox can resolve it.
+      hypr-sunset-tests = let
+        sunset = import ./home/services/hyprsunset/scripts.nix {
+          inherit pkgs;
+          lib = pkgs.lib;
+        };
+      in
+        pkgs.runCommand "hypr-sunset-tests" {
+          nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.jq pkgs.gawk];
+          HYPR_SUNSET_APPLY_BIN = pkgs.lib.getExe sunset.apply;
+          HYPR_SUNSET_CTL_BIN = pkgs.lib.getExe sunset.ctl;
+          TZ = "America/New_York";
+          TZDIR = "${pkgs.tzdata}/share/zoneinfo";
+        } ''
+          export HOME="$(mktemp -d)"
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          bash ${./tests/hypr-sunset/run.sh}
+          touch "$out"
+        '';
     };
   };
 }
