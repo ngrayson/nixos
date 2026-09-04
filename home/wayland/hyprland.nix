@@ -276,6 +276,7 @@ in {
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
     hs.hyprResizeMoveToggle
+    hs.hyprCavaViz
   ];
 
   # `os-rebuild switch` swaps the hyprland.conf symlink, and Hyprland picks the

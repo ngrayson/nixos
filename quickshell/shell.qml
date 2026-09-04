@@ -2013,7 +2013,6 @@ ShellRoot {
 					anchors.fill: parent
 					active: mediaDropdown.visible
 					player: shellRoot.mediaPlayer
-					audioLevel: shellRoot.audioPercent
 					onDismissed: shellRoot.mediaPopupVisible = false
 				}
 			}

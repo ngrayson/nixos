@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 // Media control popup, opened by RIGHT-clicking the now-playing bar widget
 // (Nick's choice, 2026-09-04: left-click stays play/pause on the bar, right
@@ -19,10 +20,6 @@ Item {
 	property bool active: false
 	// shellRoot.mediaPlayer -- the same MPRIS player the bar widget drives.
 	property var player: null
-	// shellRoot.audioPercent -- scalar system volume, used only to scale the
-	// visualizer's amplitude. This is NOT spectral data; see the visualizer
-	// note below.
-	property int audioLevel: 0
 
 	signal dismissed()
 
@@ -40,12 +37,40 @@ Item {
 	// signal is not callable from QML, so a plain binding would sit frozen.
 	property real posSec: 0
 
-	// Advances the synthesized visualizer. A real bar-per-frequency spectrum
-	// would need new audio-capture infrastructure (cava/FFT on a PipeWire
-	// monitor) that this repo does not have -- deliberately out of scope for
-	// this card. This is an honest pulse: a moving wave whose amplitude tracks
-	// the system volume and which flattens when nothing is playing.
-	property real vizPhase: 0
+	// Real per-frequency-band levels for the visualizer: `vizRow.barCount`
+	// integers 0..100, updated once per cava frame from qs-cava-viz's stdout.
+	// Empty when nothing is playing, which flattens the bars.
+	property var vizLevels: []
+
+	// Real audio-reactive data: qs-cava-viz streams cava's raw ascii output, one
+	// line per frame (`barCount` semicolon-separated 0..100 values plus a
+	// trailing empty field). Runs ONLY while the popup is open AND a track is
+	// playing, so nothing captures audio in the background; when it stops, the
+	// levels are cleared so the bars flatten instead of freezing on the last
+	// frame.
+	Process {
+		id: cavaProc
+		command: ["qs-cava-viz"]
+		running: root.active && root.playing
+		stdout: SplitParser {
+			splitMarker: "\n"
+			onRead: line => {
+				const parts = line.split(";");
+				const out = [];
+				for (let i = 0; i < parts.length; ++i) {
+					if (parts[i] === "")
+						continue;
+					const n = parseInt(parts[i], 10);
+					out.push(isNaN(n) ? 0 : n);
+				}
+				root.vizLevels = out;
+			}
+		}
+		onRunningChanged: {
+			if (!running)
+				root.vizLevels = [];
+		}
+	}
 
 	function fmtTime(sec: real): string {
 		if (!sec || sec < 0)
@@ -62,17 +87,13 @@ Item {
 		onActivated: root.dismissed()
 	}
 
-	// Advances the visualizer wave and re-reads the play position so the
-	// scrubber tracks smoothly. Only runs while the popup is open.
+	// Re-reads the play position so the scrubber tracks smoothly. Only runs
+	// while the popup is open. (The visualizer is driven by cava, not this.)
 	Timer {
 		interval: 90
 		running: root.active
 		repeat: true
-		onTriggered: {
-			if (root.playing)
-				root.vizPhase += 0.34;
-			root.posSec = root.player?.position ?? 0;
-		}
+		onTriggered: root.posSec = root.player?.position ?? 0
 	}
 
 	// Seed the position immediately on open so the scrubber isn't at 0 for the
@@ -183,17 +204,16 @@ Item {
 						anchors.bottom: parent.bottom
 						color: root.playing ? Theme.sage : Theme.chrome
 
-						// Two sines at different rates, offset per bar, give a
-						// lively non-uniform wave; amplitude follows the volume.
+						// Real cava level for this band (0..100), scaled to the
+						// row's height. Flattens to the 4px floor when nothing is
+						// playing (vizLevels is empty then, so the lookup is 0).
 						height: {
 							if (!root.playing)
 								return 4;
 							const headroom = vizRow.height - 8;
-							const amp = 6 + (root.audioLevel / 100) * headroom;
-							const a = Math.sin(root.vizPhase * 0.9 + index * 0.6);
-							const b = Math.sin(root.vizPhase * 1.7 + index * 0.35);
-							const v = a * 0.6 + b * 0.4; // -1..1
-							return 4 + Math.abs(v) * amp;
+							const raw = root.vizLevels[index] ?? 0;
+							const level = Math.max(0, Math.min(100, raw));
+							return 4 + headroom * (level / 100);
 						}
 
 						Behavior on height {

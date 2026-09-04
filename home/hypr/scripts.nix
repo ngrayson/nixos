@@ -35,8 +35,37 @@
       fi
     }
   '';
+
+  # Config for the media popup's audio visualizer (quickshell/MediaPopup.qml).
+  # cava's `raw`/`ascii` output is one line per frame: `bars` semicolon-separated
+  # integers 0..`ascii_max_range`, which the QML parses directly. `bars` MUST
+  # match vizRow.barCount in MediaPopup.qml (26). `method = pulse` works because
+  # the audio stack is PipeWire-via-pulse (same compat layer the pamixer volume
+  # code uses). Verified on Tawa: 27 fields/line (26 values + trailing empty).
+  cavaVizConfig = pkgs.writeText "quickshell-cava.conf" ''
+    [general]
+    bars = 26
+    framerate = 30
+    [input]
+    method = pulse
+    source = auto
+    [output]
+    method = raw
+    raw_target = /dev/stdout
+    data_format = ascii
+    ascii_max_range = 100
+  '';
 in rec {
   inherit quickshellBundled quickshellConfigDir quickshellLiveDir;
+
+  # Real audio-reactive data for the media popup's visualizer: streams cava's
+  # raw output line-by-line on stdout, which MediaPopup.qml reads via a
+  # Quickshell.Io Process + SplitParser. Runs only while the popup is open and a
+  # track is playing (the QML binds `running` to that), so nothing captures
+  # audio in the background.
+  hyprCavaViz = pkgs.writeShellScriptBin "qs-cava-viz" ''
+    exec ${lib.getExe pkgs.cava} -p ${cavaVizConfig}
+  '';
 
   # Super+Shift+S / Print: region capture via hyprshot (clipboard only; spectacle needs KWin on Wayland).
   hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
