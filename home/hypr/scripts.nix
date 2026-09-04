@@ -7,6 +7,7 @@
   quickshellBundled = pkgs.runCommand "quickshell-hm-config" {} ''
     mkdir -p $out/pam
     cp ${../../quickshell/shell.qml} $out/shell.qml
+    cp ${../../quickshell/CenterOutput.qml} $out/CenterOutput.qml
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
     cp ${../../quickshell/PowerMenu.qml} $out/PowerMenu.qml
@@ -51,9 +52,42 @@ in rec {
       ${qsBin} ipc -p "$QS" -n "$@"
   '';
 
+  # Spawns the lock instance, then waits until it is actually up.
+  #
+  # Was `qs-quickshell-ipc call lock activate` against the bar. The lock now
+  # lives in its own Quickshell instance (quickshell/lock.qml) so that a bar
+  # reload -- including the automatic one on every os-rebuild switch -- cannot
+  # kill the lock client. When it could, ext-session-lock-v1 kept the session
+  # LOCKED with nothing able to draw a password prompt, and the machine needed
+  # a hand-typed `hyprctl keyword misc:allow_session_lock_restore true` to
+  # recover. Observed on Tawa 2026-09-03.
+  #
+  # Blocking until the instance exists is load-bearing, not politeness:
+  # hypr-before-sleep calls this and then lets systemd suspend. A fire-and-
+  # forget spawn races the suspend, and losing that race means the machine
+  # goes down unlocked and comes back unlocked.
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
     set -euo pipefail
-    exec ${lib.getExe hyprQuickshellIpc} call lock activate
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    ${qsLiveDirSnippet}
+    LOCK="$(qs_live_dir)/lock.qml"
+    GREP="${lib.getExe' pkgs.gnugrep "grep"}"
+    SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
+
+    # -n makes an already-running lock instance a no-op instead of a second
+    # lock attempt. Already locked is success here, not an error.
+    env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${qsBin} -d -n -p "$LOCK" || true
+
+    n=0
+    until ${qsBin} list -p "$LOCK" --any-display 2>/dev/null | "$GREP" -q "^Instance "; do
+      n=$((n + 1))
+      if [ "$n" -ge 50 ]; then
+        echo "quickshell-lock: lock instance did not come up within 5s" >&2
+        exit 1
+      fi
+      "$SLEEP" 0.1
+    done
   '';
 
   # Overlay preview of the lock UI. Esc dismisses; does not take ext-session-lock.
@@ -312,14 +346,16 @@ in rec {
     exec ${lib.getExe' pkgs.systemd "systemctl"} suspend-then-hibernate
   '';
 
-  # Lock, then re-enable outputs before systemd suspends (quickshell-lock uses exec and
-  # cannot be chained). Suspending while the 600s idle listener has DPMS off leaves this
+  # Lock, then re-enable outputs before systemd suspends. Suspending while the 600s idle listener has DPMS off leaves this
   # eDP panel dark on resume: `dispatch dpms on` then returns ok without lighting it.
   # Cost of waking outputs first is a brief flash before the machine goes down.
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    ${lib.getExe hyprQuickshellIpc} call lock activate
+    # quickshell-lock now blocks until the lock is really up, so this is a
+    # proper ordering rather than a hope. `|| true` so a failed lock still
+    # re-lights the outputs below -- it prints to stderr and the journal.
+    ${lib.getExe quickshellLock} || true
     ${lib.getExe' pkgs.coreutils "sleep"} 1
     ${lib.getExe hyprDpmsAllOn} || true
   '';
@@ -1000,8 +1036,6 @@ in rec {
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
     PGREP="${lib.getExe' pkgs.procps "pgrep"}"
     GREP="${lib.getExe' pkgs.gnugrep "grep"}"
-    TR="${lib.getExe' pkgs.coreutils "tr"}"
-    HEAD="${lib.getExe' pkgs.coreutils "head"}"
 
     if [ "''${QS_RELOAD_WORKER:-}" != 1 ]; then
       exec "$SETSID" -f env QS_RELOAD_WORKER=1 "$0"
@@ -1035,15 +1069,32 @@ in rec {
     # exists, so comparing against "$QS" would miss exactly the case that
     # matters.
     qs_pids() {
-      local pid argv0
+      local pid i
+      local -a argv
       for pid in $("$PGREP" -f -- "-p $SRC" 2>/dev/null || true); do
         [ "$pid" = "$$" ] && continue
         [ -r "/proc/$pid/cmdline" ] || continue
-        argv0="$("$TR" '\0' '\n' <"/proc/$pid/cmdline" 2>/dev/null | "$HEAD" -n 1)"
-        case "''${argv0##*/}" in
-          quickshell | .quickshell-wrapped) printf '%s\n' "$pid" ;;
-          *) ;;
+        # NUL-delimited argv, so a path containing spaces cannot split.
+        # `-d ""` is bash's NUL delimiter. Double quotes, not the usual empty
+        # single-quoted form: a bare pair of single quotes anywhere in this
+        # block -- comments included -- closes the Nix indented string.
+        mapfile -d "" -t argv <"/proc/$pid/cmdline" 2>/dev/null || continue
+        [ "''${#argv[@]}" -gt 0 ] || continue
+        case "''${argv[0]##*/}" in
+          quickshell | .quickshell-wrapped) ;;
+          *) continue ;;
         esac
+        # The value after -p must equal $SRC EXACTLY. pgrep -f above only
+        # narrows candidates; it matches substrings, and "$SRC" is a prefix of
+        # "$SRC/lock.qml" -- a separate config (the lock screen) that must
+        # survive a bar reload. Killing it would drop an active session lock,
+        # which is the whole failure this precision exists to prevent.
+        for ((i = 1; i < ''${#argv[@]}; i++)); do
+          if [ "''${argv[i]}" = "-p" ] && [ "''${argv[i + 1]:-}" = "$SRC" ]; then
+            printf '%s\n' "$pid"
+            break
+          fi
+        done
       done
     }
 

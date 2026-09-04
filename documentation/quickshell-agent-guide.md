@@ -10,7 +10,7 @@ The Hyprland session bar and lock live in `quickshell/` (`shell.qml`, `PowerMenu
 - `hyprctl dispatch dpms on` — re-lights every monitor `blankSideMonitors()` turned off.
 - Confirm you are clean: `hyprctl layers | grep qs-lock-preview` returns nothing, and `hyprctl monitors -j | jq '.[] | select(.dpmsStatus == false)'` returns nothing.
 
-This matters more than it sounds. Both the lock and the preview used to draw their password box and wire their Esc handler on a single output chosen by `centerOutputScreen()` geometry, so from any other monitor there was no visible way out at all. On 2026-09-02 that stranded a Tawa session mid-task.
+This matters more than it sounds. Both the lock and the preview used to draw their password box and wire their Esc handler on a single output chosen by centre-output geometry, so from any other monitor there was no visible way out at all. On 2026-09-02 that stranded a Tawa session mid-task.
 
 Most of that is now fixed. The real lock draws its prompt on **every** output (PR #166), and the preview accepts Esc on every output and clears itself after two minutes. Two things are still worth knowing:
 
