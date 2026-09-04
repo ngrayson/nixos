@@ -145,10 +145,16 @@
     ];
   };
 
+  # `name` is the extension id's name half: VS Code resolves the unique id as
+  # `<publisher>.<name>`, so this is deliberately `desktop-theme` (→ id
+  # `stellarium.desktop-theme`) and NOT the old `stellarium-desktop-theme`.
+  # The previous folder-drop delivery had id `stellarium.stellarium-desktop-theme`
+  # and VS Code poisoned it into `.obsolete`; a fresh id sidesteps that marker
+  # entirely. Version bumped so the registry entry differs from the stale one.
   vscodePackage = {
-    name = "stellarium-desktop-theme";
+    name = "desktop-theme";
     displayName = "Stellarium desktop theme";
-    version = "0.0.1";
+    version = "0.0.2";
     publisher = "stellarium";
     engines.vscode = "^1.0.0";
     contributes.themes = [
@@ -160,7 +166,52 @@
     ];
   };
 
-  extRel = ".vscode/extensions/stellarium.desktop-theme-0.0.1";
+  vscodeExtUniqueId = "${vscodePackage.publisher}.${vscodePackage.name}";
+
+  # Deliver the theme as a real extension derivation, laid out the way Home
+  # Manager's `programs.vscode` (mutableExtensionsDir) consumes it: the module
+  # symlinks `~/.vscode/extensions/<uniqueId>` → `$out/share/vscode/extensions/
+  # <uniqueId>` and reads `.vscodeExtUniqueId` / `.vscodeExtPublisher` /
+  # `.version` off the derivation for `.extensions-immutable.json`. Built with
+  # runCommand rather than `vscode-utils.buildVscodeExtension` because the
+  # latter's unpack phase assumes a `.vsix`/`extension/` source root; these are
+  # loose generated files, so a direct copy is simpler and unambiguous.
+  vscodeThemeExtension =
+    pkgs.runCommand "vscode-extension-${vscodePackage.name}-${vscodePackage.version}"
+    {
+      vscodeExtPublisher = vscodePackage.publisher;
+      vscodeExtName = vscodePackage.name;
+      inherit vscodeExtUniqueId;
+      inherit (vscodePackage) version;
+    }
+    ''
+      dst="$out/share/vscode/extensions/${vscodeExtUniqueId}"
+      mkdir -p "$dst/themes"
+      cp ${pkgs.writeText "package.json" (builtins.toJSON vscodePackage)} "$dst/package.json"
+      cp ${pkgs.writeText "theme.json" (builtins.toJSON vscodeTheme)} "$dst/themes/theme.json"
+    '';
+
+  # VS Code marked the old folder-drop extension as removed
+  # (`stellarium.stellarium-desktop-theme-0.0.1` in `.obsolete`) and skips
+  # anything listed there even on a directory rescan. The new id is unaffected,
+  # but clear the dead marker and the stale loose folder so the extensions dir
+  # doesn't carry cruft. jq is safe here: `.obsolete` is strict JSON, and the
+  # file may be absent (not an error).
+  patchVscodeObsolete = pkgs.writeShellScript "clear-vscode-obsolete-theme" ''
+    set -euo pipefail
+    exts="$HOME/.vscode/extensions"
+    obsolete="$exts/.obsolete"
+    if [ -f "$obsolete" ]; then
+      tmp=$(mktemp)
+      if ${lib.getExe pkgs.jq} 'del(."stellarium.stellarium-desktop-theme-0.0.1")' \
+        "$obsolete" > "$tmp" 2>/dev/null; then
+        mv "$tmp" "$obsolete"
+      else
+        rm -f "$tmp"
+      fi
+    fi
+    rm -rf "$exts/stellarium.desktop-theme-0.0.1"
+  '';
 
   obsidianCss = ''
     /* Generated from home/theme — ${t.name} */
@@ -297,9 +348,21 @@ in {
     force = true;
   };
 
+  # VS Code loads the generated theme as a registered extension (see
+  # `vscodeThemeExtension`). `mutableExtensionsDir` (the default) lets HM
+  # regenerate `extensions.json` via `code --list-extensions` on change while
+  # leaving Nick's gallery-installed extensions in place. Deliberately NO
+  # `profiles.default.userSettings`: `~/.config/Code/User/settings.json` is
+  # JSONC and Settings-Sync'd, and is patched in place by `patchEditors` above —
+  # handing it to HM would take ownership of the whole file.
+  programs.vscode = {
+    enable = true;
+    package = pkgs.vscode;
+    mutableExtensionsDir = true;
+    profiles.default.extensions = [vscodeThemeExtension];
+  };
+
   home.file = {
-    "${extRel}/package.json".text = builtins.toJSON vscodePackage;
-    "${extRel}/themes/theme.json".text = builtins.toJSON vscodeTheme;
     "${vaultTheme}/theme.css" = {
       text = obsidianCss;
       force = true;
@@ -316,5 +379,9 @@ in {
 
   home.activation.editorColorTheme = lib.hm.dag.entryAfter ["writeBoundary"] ''
     $DRY_RUN_CMD ${patchEditors}
+  '';
+
+  home.activation.clearVscodeObsoleteTheme = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    $DRY_RUN_CMD ${patchVscodeObsolete}
   '';
 }
