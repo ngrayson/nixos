@@ -31,6 +31,10 @@ in {
         source = "${hs.quickshellBundled}/SunsetMenu.qml";
         force = true;
       };
+      "quickshell/MediaPopup.qml" = {
+        source = "${hs.quickshellBundled}/MediaPopup.qml";
+        force = true;
+      };
       "quickshell/Theme.qml" = {
         source = "${hs.quickshellBundled}/Theme.qml";
         force = true;
