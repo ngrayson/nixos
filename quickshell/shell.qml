@@ -193,6 +193,12 @@ ShellRoot {
 	// (MediaPopup.qml). Left-click on the bar stays play/pause.
 	property bool mediaPopupVisible: false
 
+	// Clicking the clock opens the calendar popup (CalendarPopup.qml). Events
+	// come from home/services/calendar-sync.nix via the JSON cache below.
+	property bool calendarPopupVisible: false
+	readonly property var calendarEvents: calData.events || []
+	readonly property bool calendarOk: calData.ok
+
 	readonly property string sunsetRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr-sunset`
 
 	function sunsetOk(): bool {
@@ -1049,6 +1055,30 @@ ShellRoot {
 		onFileChanged: shellRoot.markQsReloadPending()
 	}
 
+	FileView {
+		path: `${shellRoot.qsSourceDir}/CalendarPopup.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	// Calendar events, written by home/services/calendar-sync.nix's timer.
+	// Absent/malformed is normal before the ICS secret is provisioned: the
+	// JsonAdapter keeps its defaults (ok=false, empty events) and the popup
+	// still shows the month grid.
+	FileView {
+		path: `${Quickshell.env("HOME")}/.cache/quickshell-calendar.json`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: reload()
+
+		JsonAdapter {
+			id: calData
+			property bool ok: false
+			property var events: []
+		}
+	}
+
 	// The scheduler rewrites this once per tick (atomically, via rename), so
 	// watching it is cheaper and more accurate than polling hyprsunset. Absent
 	// or malformed is normal at login before the first tick: leave the previous
@@ -1872,19 +1902,31 @@ ShellRoot {
 					}
 				}
 
-				Text {
-					id: clockLabel
-					color: Theme.text
-					font.pixelSize: 14
+				// Clock, click to open the calendar popup. BarHoverArea is
+				// transparent when idle, so the clock looks unchanged until
+				// hovered.
+				BarHoverArea {
+					id: clockArea
+					radius: 8
+					implicitWidth: clockLabel.implicitWidth + 14
+					implicitHeight: 24
+					onClicked: shellRoot.calendarPopupVisible = !shellRoot.calendarPopupVisible
 
-					Timer {
-						running: true
-						repeat: true
-						interval: 30000
-						onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+					Text {
+						id: clockLabel
+						anchors.centerIn: parent
+						color: Theme.text
+						font.pixelSize: 14
+
+						Timer {
+							running: true
+							repeat: true
+							interval: 30000
+							onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+						}
+
+						Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 					}
-
-					Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 				}
 
 				Timer {
@@ -2054,6 +2096,43 @@ ShellRoot {
 				player: shellRoot.mediaPlayer
 				audioLevel: shellRoot.audioPercent
 				onDismissed: shellRoot.mediaPopupVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: calendarPopupWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool menuOpen: shellRoot.calendarPopupVisible
+
+			screen: modelData
+			visible: menuOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: menuOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-calendar-popup-" + modelData.name
+			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			CalendarPopup {
+				anchors.fill: parent
+				active: calendarPopupWin.menuOpen && calendarPopupWin.isCenterScreen
+				events: shellRoot.calendarEvents
+				eventsOk: shellRoot.calendarOk
+				onDismissed: shellRoot.calendarPopupVisible = false
 			}
 		}
 	}
