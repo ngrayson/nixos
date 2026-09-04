@@ -84,17 +84,17 @@ function AtmosphereGate({ shaderId, themeId, animate }) {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
-  // Two independent gates, both of which must allow it. prefers-reduced-motion
-  // is an accessibility signal from the OS and always wins; `animate` is the
-  // viewer's own choice in Settings.
-  //
-  // Not mounting is the whole point rather than an optimisation: mounting
-  // alone held Chromium's gpu-process at a 112% mean and drove Go3's fanless
-  // package to 85°C (measured over 24 samples, 2026-09-01).
-  if (!motionOk || !animate) return null;
+  // prefers-reduced-motion is an accessibility signal from the OS and always
+  // wins: it fully unmounts the Canvas (no WebGL context at all) — the true
+  // minimal-GPU floor. `animate` is the viewer's Settings choice and no longer
+  // gates mounting: Off keeps the Canvas but freezes it (frameloop="never"),
+  // which PR #204 measured at ~11% CPU / 41°C on Go3 — the same as the old flat
+  // fallback, because a render-once context has no per-vsync redraw. The live
+  // 112%/85°C cost (PR #142) was that redraw loop, which Off no longer runs.
+  if (!motionOk) return null;
   return (
     <Suspense fallback={null}>
-      <Atmosphere shaderId={shaderId} themeId={themeId} />
+      <Atmosphere shaderId={shaderId} themeId={themeId} animate={animate} />
     </Suspense>
   );
 }

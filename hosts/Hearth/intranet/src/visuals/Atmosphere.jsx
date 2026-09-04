@@ -70,7 +70,7 @@ function useAtmosphereGate() {
   return { wrapRef, reduce, play: visible && onScreen && !reduce };
 }
 
-export default function Atmosphere({ shaderId = "geometry", themeId }) {
+export default function Atmosphere({ shaderId = "geometry", themeId, animate = true }) {
   const { wrapRef, reduce, play } = useAtmosphereGate();
   // Recomputed whenever the picker changes the theme. This used to be state set
   // by a mount-only effect, which is why the background stayed in whichever
@@ -80,10 +80,17 @@ export default function Atmosphere({ shaderId = "geometry", themeId }) {
 
   if (reduce) return null;
 
+  // "Animate background: Off" mounts this but freezes it: frameloop="never"
+  // renders the shader ONCE and never drives requestAnimationFrame again, so
+  // it becomes an inert bitmap the compositor just re-presents. Measured on Go3
+  // as ~11% CPU / 41C, identical to the old flat-colour fallback (PR #204) —
+  // the per-vsync redraw is the whole cost of the live mode, and this has none.
+  // When On, the existing visibility gate governs (never redraw while the tab
+  // is hidden or the canvas is off-screen).
   return (
     <div ref={wrapRef} className="atmosphere" aria-hidden="true">
       <Canvas
-        frameloop={play ? "always" : "never"}
+        frameloop={animate ? (play ? "always" : "never") : "never"}
         dpr={[1, 1.5]}
         gl={{ antialias: false, alpha: true, powerPreference: "low-power" }}
         camera={{ position: [0, 0, 3.6], fov: 48 }}
