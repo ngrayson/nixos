@@ -51,6 +51,16 @@
   # stepping rather than a fade.
   rampStepMs = 500;
 
+  # Preview: the "show me a night" demo the bar's modal triggers. Fade to
+  # night over previewFadeSec, hold previewHoldSec, then fade back to whatever
+  # was live before over previewFadeSec. Kept as two constants so the hold can
+  # diverge from the fades later. Both are mirrored BY HAND in
+  # quickshell/SunsetMenu.qml (previewFadeMs/previewHoldMs) -- there is no
+  # shared source of truth between this bash script and the QML, and building
+  # config-plumbing for two small numbers is not worth it.
+  previewFadeSec = 5;
+  previewHoldSec = 5;
+
   stateHome = "\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr-sunset";
   confHome = "\${XDG_CONFIG_HOME:-$HOME/.config}/hypr-sunset";
 
@@ -146,6 +156,81 @@
         awk -v a="$1" -v b="$2" -v p="$3" \
           'BEGIN{e=p*p*(3-2*p); printf "%d", a+(b-a)*e}'
       }
+
+      # Ease temperature+gamma from one pair to another over DUR seconds,
+      # pushing each step to hyprsunset. This is the step-table + push loop the
+      # discrete ramp used to inline; the ramp and the preview fades now share
+      # it rather than keeping two copies of the awk one-liner. $5 selects
+      # whether to also write state.json each step: "publish" for the discrete
+      # ramp (the pill's number moving is half of why the ease exists), "" for
+      # preview (a transient demo that must not clobber the real schedule
+      # number). Same smoothstep curve and %d truncation as ease_between. Skips
+      # a push whose eased integer did not move -- gamma spans only 90->100
+      # across a whole sweep, so consecutive steps are routinely byte-identical
+      # (measured 10 of 20), and an identical push costs the same as a changed
+      # one.
+      fade_between() {
+        local from_t="$1" from_g="$2" to_t="$3" to_g="$4" pub="$5" dur="$6"
+        local steps step_sleep last_t last_g t g
+        steps=$(((dur * 1000) / RAMP_STEP_MS))
+        [ "$steps" -lt 1 ] && steps=1
+        step_sleep="$(awk -v ms="$RAMP_STEP_MS" 'BEGIN{printf "%.3f", ms/1000}')"
+        last_t="$from_t"
+        last_g="$from_g"
+        while read -r t g; do
+          sleep "$step_sleep"
+          if [ "$t" != "$last_t" ]; then
+            "$HYPRCTL" hyprsunset temperature "$t" >/dev/null 2>&1 || true
+            last_t="$t"
+          fi
+          if [ "$g" != "$last_g" ]; then
+            "$HYPRCTL" hyprsunset gamma "$g" >/dev/null 2>&1 || true
+            last_g="$g"
+          fi
+          # `if`, not `&& publish_state`: the && form leaves the loop body's
+          # exit status at 1 whenever pub is empty (preview), and under set -e
+          # that aborts the caller right after the first fade -- the fade-back
+          # never runs and the screen stays stuck at night.
+          if [ -n "$pub" ]; then
+            publish_state "$t" "$g" true
+          fi
+        done < <(awk -v ta="$from_t" -v tb="$to_t" \
+          -v ga="$from_g" -v gb="$to_g" -v n="$steps" \
+          'BEGIN{for(i=1;i<=n;i++){p=i/n; e=p*p*(3-2*p);
+                 printf "%d %d\n", ta+(tb-ta)*e, ga+(gb-ga)*e}}')
+      }
+
+      # --- preview mode ----------------------------------------------------
+      # A manual one-off demo from the bar's modal: fade to night, hold, fade
+      # back to exactly what was live before. Deliberately ignores
+      # enabled/disabled/suppressed state (it is a demo, not a schedule change)
+      # and never writes state.json, so the pill keeps showing the real
+      # schedule number throughout. Reuses the RAMPFILE lock so a 30s tick
+      # cannot fight the fade, and returns BEFORE any geoclue/sun-time work --
+      # preview needs none of it and must not trigger a geoclue call or a
+      # "no-location" state write.
+      if [ "''${1:-}" = "--preview" ]; then
+        CUR_TEMP="$("$HYPRCTL" hyprsunset temperature 2>/dev/null | tr -dc '0-9' || true)"
+        CUR_GAMMA="$("$HYPRCTL" hyprsunset gamma 2>/dev/null | awk -F. '{print $1}' | tr -dc '0-9' || true)"
+        # Nothing to fade from if hyprsunset is not up yet.
+        [ -n "$CUR_TEMP" ] && [ -n "$CUR_GAMMA" ] || exit 0
+
+        disarm_ramp
+        (
+          # Same lock discipline as the discrete ramp: remove RAMPFILE only if
+          # it is still ours, and make TERM/INT actually exit so a newer ramp
+          # or preview cleanly takes over.
+          trap 'if [ "$(cat "$RAMPFILE" 2>/dev/null || true)" = "$BASHPID" ]; then rm -f "$RAMPFILE"; fi' EXIT
+          trap 'exit 143' TERM
+          trap 'exit 130' INT
+
+          fade_between "$CUR_TEMP" "$CUR_GAMMA" "$NIGHT_TEMP" "$NIGHT_GAMMA" "" ${toString previewFadeSec}
+          sleep ${toString previewHoldSec}
+          fade_between "$NIGHT_TEMP" "$NIGHT_GAMMA" "$CUR_TEMP" "$CUR_GAMMA" "" ${toString previewFadeSec}
+        ) &
+        echo $! >"$RAMPFILE"
+        exit 0
+      fi
 
       # --- location ------------------------------------------------------
       # A hand-written CONF_DIR/location.json always wins and geoclue is never
@@ -329,44 +414,12 @@
             trap 'exit 143' TERM
             trap 'exit 130' INT
 
-            steps=$(((DISCRETE_RAMP_SEC * 1000) / RAMP_STEP_MS))
-            [ "$steps" -lt 1 ] && steps=1
-            step_sleep="$(awk -v ms="$RAMP_STEP_MS" 'BEGIN{printf "%.3f", ms/1000}')"
-
-            # Push only when the eased integer actually moved. Gamma spans
-            # 90->100 across a whole ramp while temperature spans thousands,
-            # so consecutive gamma steps are routinely byte-identical --
-            # measured 10 of 20 on a full 2000->6500K sweep. hyprsunset does
-            # NOT skip these for us: an identical-value push measured the same
-            # cost as a changed one (0.17ms vs 0.11ms), so this layer is the
-            # only place the waste can be removed.
-            last_t="$CUR_TEMP"
-            last_g="$CUR_GAMMA"
-            push_step() {
-              if [ "$1" != "$last_t" ]; then
-                "$HYPRCTL" hyprsunset temperature "$1" >/dev/null 2>&1 || true
-                last_t="$1"
-              fi
-              if [ "$2" != "$last_g" ]; then
-                "$HYPRCTL" hyprsunset gamma "$2" >/dev/null 2>&1 || true
-                last_g="$2"
-              fi
-              publish_state "$1" "$2" "$3"
-            }
-
-            # The whole eased table in ONE awk, rather than two `ease_between`
-            # spawns per step -- that was ~40 processes per ramp. Same curve as
-            # ease_between, and the same %d truncation, deliberately.
-            while read -r t g; do
-              sleep "$step_sleep"
-              push_step "$t" "$g" true
-            done < <(awk -v ta="$CUR_TEMP" -v tb="$TEMP" \
-              -v ga="$CUR_GAMMA" -v gb="$GAMMA" -v n="$steps" \
-              'BEGIN{for(i=1;i<=n;i++){p=i/n; e=p*p*(3-2*p);
-                     printf "%d %d\n", ta+(tb-ta)*e, ga+(gb-ga)*e}}')
-
-            # Land exactly on the target rather than on the last eased step.
-            push_step "$TEMP" "$GAMMA" false
+            # Ease from the live value to the target, publishing each step so
+            # the pill's number moves as it goes. The last eased step is
+            # exactly the target, so hyprsunset already sits on it here.
+            fade_between "$CUR_TEMP" "$CUR_GAMMA" "$TEMP" "$GAMMA" publish "$DISCRETE_RAMP_SEC"
+            # Final state write marks the ramp finished (ramping=false).
+            publish_state "$TEMP" "$GAMMA" false
           ) &
           echo $! >"$RAMPFILE"
           exit 0
@@ -403,6 +456,13 @@
       write_setting() { jq "$1" "$SETTINGS" >"$SETTINGS".tmp && mv "$SETTINGS".tmp "$SETTINGS"; }
 
       case "''${1:-}" in
+        preview)
+          # A one-off visual demo, not a settings/override change, so it must
+          # NOT fall through to the trailing `--ramp` re-apply below (that would
+          # snap the screen back the instant the fade started). exec replaces
+          # this process so the tail-call never runs.
+          exec ${lib.getExe hyprSunsetApply} --preview
+          ;;
         toggle)
           # See the note in hypr-sunset-apply: `// true` would swallow false.
           cur="$(jq -r 'if .enabled == false then "false" else "true" end' "$OVERRIDE")"
@@ -455,7 +515,7 @@
           write_setting ".$key = $val"
           ;;
         *)
-          echo "usage: hypr-sunset-ctl {toggle|enable|disable <seconds>|sunrise|set <key> <value>}" >&2
+          echo "usage: hypr-sunset-ctl {toggle|enable|disable <seconds>|sunrise|set <key> <value>|preview}" >&2
           exit 2
           ;;
       esac

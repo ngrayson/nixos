@@ -22,6 +22,16 @@ Item {
 	readonly property int transitionMin: root.state?.transitionMin ?? 45
 	readonly property bool suppressed: (root.state?.phase ?? "") === "off"
 
+	// Preview: `hypr-sunset-ctl preview` fades to night, holds, fades back over
+	// a fixed 5s/5s/5s. The button below runs a client-side animation on the
+	// same clock so it reads as a progress bar. These two constants MUST match
+	// previewFadeSec/previewHoldSec in home/services/hyprsunset.nix -- there is
+	// no shared source of truth; they are kept in sync by hand.
+	readonly property int previewFadeMs: 5000
+	readonly property int previewHoldMs: 5000
+	property bool previewing: false
+	property real previewProgress: 0
+
 	function run(args: var): void {
 		if (ctlProc.running)
 			ctlProc.running = false;
@@ -268,6 +278,84 @@ Item {
 						root.run(["toggle"]);
 						root.dismissed();
 					}
+				}
+			}
+
+			// Preview: play the whole night fade now (to night, hold, back) so
+			// the effect is visible without waiting for dusk. The button's own
+			// fill tracks the same 5s/5s/5s clock, doubling as a progress bar
+			// for how long is left. Unlike the disable/toggle buttons it does
+			// NOT dismiss the modal -- the point is to stay and watch.
+			Rectangle {
+				id: previewButton
+				width: parent.width
+				implicitHeight: 30
+				radius: 6
+				color: (previewHover.containsMouse && !root.previewing) ? Theme.surface : Theme.chrome
+				border.width: 1
+				border.color: root.previewing ? Theme.accent : Theme.border
+				clip: true
+
+				// Grows to full during the fade-to-night, holds, then drains
+				// back to empty as the screen returns -- mirroring the actual
+				// warmth level so "done" is when the bar empties.
+				Rectangle {
+					anchors.left: parent.left
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+					width: parent.width * root.previewProgress
+					radius: 6
+					color: Theme.selection
+					visible: root.previewing
+				}
+
+				Text {
+					id: previewLabel
+					anchors.centerIn: parent
+					text: root.previewing ? "Previewing…" : "Preview night"
+					color: root.previewing ? Theme.bright : Theme.text
+					font.pixelSize: 12
+				}
+
+				MouseArea {
+					id: previewHover
+					anchors.fill: parent
+					hoverEnabled: true
+					enabled: !root.previewing
+					cursorShape: Qt.PointingHandCursor
+					onClicked: {
+						if (root.previewing)
+							return;
+						root.run(["preview"]);
+						root.previewing = true;
+						previewAnim.restart();
+					}
+				}
+
+				// Client-side clock, decoupled from the backend process (the
+				// ctl call returns almost immediately; the fade runs detached).
+				// Both sides use the same fixed durations, so exact frame-sync
+				// is neither required nor attempted.
+				SequentialAnimation {
+					id: previewAnim
+					NumberAnimation {
+						target: root
+						property: "previewProgress"
+						from: 0
+						to: 1
+						duration: root.previewFadeMs
+					}
+					PauseAnimation {
+						duration: root.previewHoldMs
+					}
+					NumberAnimation {
+						target: root
+						property: "previewProgress"
+						from: 1
+						to: 0
+						duration: root.previewFadeMs
+					}
+					onStopped: root.previewing = false
 				}
 			}
 		}
