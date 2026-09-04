@@ -4,19 +4,15 @@
   lib,
   pkgs,
 }: let
+  # Fallback contents for ~/.config/quickshell. Copy the ENTIRE quickshell/
+  # tree (every *.qml, qmldir, and pam/) rather than a hand-listed subset, so
+  # the bundle can never drift out of sync with the source tree as new
+  # components land. Three files had already drifted out of the old hand list:
+  # CenterOutput.qml, BarHoverArea.qml, and lock.qml (the last is launched from
+  # qs_live_dir below, so the fallback must be able to start the lock too).
   quickshellBundled = pkgs.runCommand "quickshell-hm-config" {} ''
-    mkdir -p $out/pam
-    cp ${../../quickshell/shell.qml} $out/shell.qml
-    cp ${../../quickshell/CenterOutput.qml} $out/CenterOutput.qml
-    cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
-    cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
-    cp ${../../quickshell/PowerMenu.qml} $out/PowerMenu.qml
-    cp ${../../quickshell/SunsetMenu.qml} $out/SunsetMenu.qml
-    cp ${../../quickshell/MediaPopup.qml} $out/MediaPopup.qml
-    cp ${../../quickshell/CalendarPopup.qml} $out/CalendarPopup.qml
-    cp ${../../quickshell/Theme.qml} $out/Theme.qml
-    cp ${../../quickshell/qmldir} $out/qmldir
-    cp ${../../quickshell/pam/password.conf} $out/pam/password.conf
+    mkdir -p $out
+    cp -r ${../../quickshell}/. $out/
   '';
 
   quickshellConfigDir = "${config.home.homeDirectory}/.config/quickshell";
