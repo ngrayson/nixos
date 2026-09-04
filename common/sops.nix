@@ -32,13 +32,16 @@ in {
       group = "users";
       mode = "0400";
     };
-    # Google Calendar "secret iCal address" (Calendar settings -> Integrate
-    # calendar -> Secret address in iCal format) -- a read-only .ics URL. Nick
-    # encrypts locally (`sops secrets/desktop-calendar-ics.yaml`, key `url`).
-    # The Quickshell calendar popup's sync timer reads it (owner wiz, so the
-    # --user service can). Until the file exists this stays off so hosts still
-    # evaluate; the popup then shows the grid with an empty events list.
-    # Harmless on Hearth (headless, no popup) -- the secret is simply unused.
+    # Google Calendar "secret iCal address"es (Calendar settings -> Integrate
+    # calendar -> Secret address in iCal format) -- read-only .ics URLs. The
+    # `url` value is ONE address per line (a YAML block scalar, `url: |`); the
+    # sync script fetches and merges them all, so several calendars are added by
+    # listing more lines. A single-line value still works. Nick encrypts locally
+    # (`sops secrets/desktop-calendar-ics.yaml`, key `url`). The Quickshell
+    # calendar popup's sync timer reads it (owner wiz, so the --user service
+    # can). Until the file exists this stays off so hosts still evaluate; the
+    # popup then shows the grid with an empty events list. Harmless on Hearth
+    # (headless, no popup) -- the secret is simply unused.
     secrets.desktop-calendar-ics = lib.mkIf (builtins.pathExists calendarIcs) {
       sopsFile = calendarIcs;
       key = "url";
