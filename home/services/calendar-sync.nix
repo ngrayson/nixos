@@ -1,18 +1,24 @@
-# Polls a Google Calendar "secret iCal address" (a read-only .ics URL) on a
-# timer and writes a flat JSON file the Quickshell calendar popup reads. This
-# mirrors the repo's established "small script polls an external source on a
-# timer, writes simplified JSON, the UI just reads it" shape (see the Hearth
-# dashboard's weather/AQI pollers) -- but locally, as a systemd --user unit.
+# Polls one or more Google Calendar "secret iCal addresses" (read-only .ics
+# URLs, ONE PER LINE in the secret) on a timer and writes a flat JSON file the
+# Quickshell calendar popup reads. Google's secret addresses are per-calendar
+# -- there is no combined feed -- so several calendars are supported by listing
+# each URL on its own line and merging their events here. This mirrors the
+# repo's established "small script polls an external source on a timer, writes
+# simplified JSON, the UI just reads it" shape (see the Hearth dashboard's
+# weather/AQI pollers) -- but locally, as a systemd --user unit.
 #
 # Why a script instead of parsing ICS in QML: recurring events (RRULE) are a
 # real parsing problem. This uses icalendar + recurring-ical-events to expand
 # them, so the QML never sees an RRULE -- only concrete dated occurrences.
 #
-# The ICS URL is a secret (it grants read access to the calendar). It is read
-# at RUNTIME from the sops secret path; nothing here logs or embeds it, and the
-# whole thing degrades to an empty events list when the secret is absent, so
-# the calendar grid still works before Nick provisions it. See
-# common/sops.nix (secret `desktop-calendar-ics`).
+# The ICS URLs are secrets (each grants read access to a calendar). They are
+# read at RUNTIME from the sops secret path; nothing here logs or embeds a URL
+# -- only a per-source index and the exception class. Each calendar is fetched
+# independently, so one failing (bad URL, network) skips just that calendar
+# rather than blanking everything; the file degrades to an empty events list
+# only when the secret is absent or every calendar failed, so the grid still
+# works before Nick provisions it. See common/sops.nix (secret
+# `desktop-calendar-ics`), whose `url` value is a newline-separated list.
 {
   lib,
   pkgs,
@@ -66,77 +72,100 @@
 
       now = int(datetime.now(timezone.utc).timestamp())
 
-      # No secret yet: write an empty-but-valid file so the popup shows the
-      # grid with an empty events list rather than looking broken.
-      url = ""
+      # The secret holds one "secret iCal address" per line. Blank lines and
+      # #-comments are skipped, so a single-line secret keeps working unchanged.
+      # A URL is a secret: it is never logged or written to the JSON.
+      urls = []
       if ics_file:
           try:
-              url = pathlib.Path(ics_file).read_text(encoding="utf-8").strip()
+              for line in pathlib.Path(ics_file).read_text(encoding="utf-8").splitlines():
+                  s = line.strip()
+                  if s and not s.startswith("#"):
+                      urls.append(s)
           except OSError:
-              url = ""
-      if not url:
-          write({"ok": False, "reason": "no-ics-url", "generatedAt": now, "events": []})
+              urls = []
+      if not urls:
+          # No secret yet: write an empty-but-valid file so the popup shows the
+          # grid with an empty events list rather than looking broken.
+          write({"ok": False, "reason": "no-ics-url", "generatedAt": now,
+                 "sources": [], "events": []})
           sys.exit(0)
 
-      try:
-          req = urllib.request.Request(url, headers={"User-Agent": "quickshell-calendar"})
-          with urllib.request.urlopen(req, timeout=30) as resp:
-              raw = resp.read()
-      except Exception as exc:  # noqa: BLE001 -- any fetch failure is non-fatal
-          write({"ok": False, "reason": "fetch-failed:" + type(exc).__name__,
-                 "generatedAt": now, "events": []})
-          sys.exit(0)
+      def convert(v):
+          # Returns (epoch_seconds, is_all_day, "YYYY-MM-DD"). The day string is
+          # the calendar day the UI buckets by, computed here so QML never has to
+          # juggle timezones: all-day events keep their plain date (no tz shift),
+          # timed events use the viewer-local day (this runs on the same host as
+          # the bar).
+          if isinstance(v, datetime):
+              if v.tzinfo is None:
+                  v = v.replace(tzinfo=timezone.utc)
+              epoch = int(v.timestamp())
+              day = datetime.fromtimestamp(epoch).strftime("%Y-%m-%d")
+              return epoch, False, day
+          if isinstance(v, date):
+              dt = datetime(v.year, v.month, v.day, tzinfo=timezone.utc)
+              return int(dt.timestamp()), True, v.strftime("%Y-%m-%d")
+          return None, False, ""
 
-      try:
-          import icalendar
-          import recurring_ical_events
+      def load(url, index):
+          # Fetch + RRULE-expand ONE calendar. Returns (events, error_or_None);
+          # any failure is non-fatal and skips just this calendar. Each event
+          # carries its source index as "cal" so the popup can tell calendars
+          # apart if it wants to.
+          try:
+              req = urllib.request.Request(url, headers={"User-Agent": "quickshell-calendar"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  raw = resp.read()
+          except Exception as exc:  # noqa: BLE001 -- any fetch failure is non-fatal
+              return [], "fetch-failed:" + type(exc).__name__
+          try:
+              import icalendar
+              import recurring_ical_events
 
-          cal = icalendar.Calendar.from_ical(raw)
-          start = date.today() - timedelta(days=past_days)
-          end = date.today() + timedelta(days=future_days)
-          occurrences = recurring_ical_events.of(cal).between(start, end)
+              cal = icalendar.Calendar.from_ical(raw)
+              start = date.today() - timedelta(days=past_days)
+              end = date.today() + timedelta(days=future_days)
+              occurrences = recurring_ical_events.of(cal).between(start, end)
 
-          def convert(v):
-              # Returns (epoch_seconds, is_all_day, "YYYY-MM-DD"). The day string
-              # is the calendar day the UI buckets by, computed here so QML never
-              # has to juggle timezones: all-day events keep their plain date
-              # (no tz shift), timed events use the viewer-local day (this runs
-              # on the same host as the bar).
-              if isinstance(v, datetime):
-                  if v.tzinfo is None:
-                      v = v.replace(tzinfo=timezone.utc)
-                  epoch = int(v.timestamp())
-                  day = datetime.fromtimestamp(epoch).strftime("%Y-%m-%d")
-                  return epoch, False, day
-              if isinstance(v, date):
-                  dt = datetime(v.year, v.month, v.day, tzinfo=timezone.utc)
-                  return int(dt.timestamp()), True, v.strftime("%Y-%m-%d")
-              return None, False, ""
+              events = []
+              for comp in occurrences:
+                  dtstart = comp.get("DTSTART")
+                  if dtstart is None:
+                      continue
+                  s_epoch, all_day, day = convert(dtstart.dt)
+                  if s_epoch is None:
+                      continue
+                  dtend = comp.get("DTEND")
+                  e_epoch = s_epoch
+                  if dtend is not None:
+                      ee, _, _ = convert(dtend.dt)
+                      if ee is not None:
+                          e_epoch = ee
+                  title = str(comp.get("SUMMARY", "") or "").strip() or "(untitled)"
+                  events.append({"title": title, "start": s_epoch, "end": e_epoch,
+                                 "allDay": all_day, "day": day, "cal": index})
+              return events, None
+          except Exception as exc:  # noqa: BLE001 -- parse failure must not crash the timer
+              return [], "parse-failed:" + type(exc).__name__
 
-          events = []
-          for comp in occurrences:
-              dtstart = comp.get("DTSTART")
-              if dtstart is None:
-                  continue
-              s_epoch, all_day, day = convert(dtstart.dt)
-              if s_epoch is None:
-                  continue
-              dtend = comp.get("DTEND")
-              e_epoch = s_epoch
-              if dtend is not None:
-                  ee, _, _ = convert(dtend.dt)
-                  if ee is not None:
-                      e_epoch = ee
-              title = str(comp.get("SUMMARY", "") or "").strip() or "(untitled)"
-              events.append({"title": title, "start": s_epoch, "end": e_epoch,
-                             "allDay": all_day, "day": day})
+      # Fetch every calendar independently and merge into one sorted list. The
+      # file is ok as long as at least one calendar succeeded; `sources` records
+      # the per-calendar outcome (index + ok/reason, never the URL).
+      all_events = []
+      sources = []
+      for i, u in enumerate(urls):
+          evs, err = load(u, i)
+          if err is None:
+              sources.append({"cal": i, "ok": True})
+              all_events.extend(evs)
+          else:
+              sources.append({"cal": i, "ok": False, "reason": err})
 
-          events.sort(key=lambda e: e["start"])
-          write({"ok": True, "generatedAt": now, "events": events})
-      except Exception as exc:  # noqa: BLE001 -- parse failure must not crash the timer
-          write({"ok": False, "reason": "parse-failed:" + type(exc).__name__,
-                 "generatedAt": now, "events": []})
-          sys.exit(0)
+      any_ok = any(s["ok"] for s in sources)
+      all_events.sort(key=lambda e: e["start"])
+      write({"ok": any_ok, "reason": None if any_ok else "all-failed",
+             "generatedAt": now, "sources": sources, "events": all_events})
       PY
     '';
   };
