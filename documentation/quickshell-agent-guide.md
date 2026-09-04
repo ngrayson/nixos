@@ -6,11 +6,16 @@ The Hyprland session bar and lock live in `quickshell/` (`shell.qml`, `PowerMenu
 
 **Clear your own lock tests.** Never leave a preview or a lock on screen for someone else to dismiss:
 
-- `qs-quickshell-ipc call lock cancelPreview` — clears the preview overlay. This is the *only* way out of a stuck preview; there is no `deactivate` for a real lock, by design.
+- `qs-quickshell-ipc call lock cancelPreview` — clears the preview overlay from anywhere, including over SSH. Reach for this first if a preview is stuck. There is no `deactivate` for a real lock, by design.
 - `hyprctl dispatch dpms on` — re-lights every monitor `blankSideMonitors()` turned off.
 - Confirm you are clean: `hyprctl layers | grep qs-lock-preview` returns nothing, and `hyprctl monitors -j | jq '.[] | select(.dpmsStatus == false)'` returns nothing.
 
-This matters more than it sounds. Both the lock and the preview draw their password box and wire their Esc handler on a single output chosen by `centerOutputScreen()` geometry, so from any other monitor there is no visible way out at all. On 2026-09-02 that stranded a Tawa session mid-task. Three cards are open against the underlying bug; until they land, assume a lock you start is a lock someone may not be able to end.
+This matters more than it sounds. Both the lock and the preview used to draw their password box and wire their Esc handler on a single output chosen by centre-output geometry, so from any other monitor there was no visible way out at all. On 2026-09-02 that stranded a Tawa session mid-task.
+
+Most of that is now fixed. The real lock draws its prompt on **every** output (PR #166), and the preview accepts Esc on every output and clears itself after two minutes. Two things are still worth knowing:
+
+- **Esc is not a guarantee, the timeout is.** A layer-shell surface only receives keys once the compositor has given it focus, so on an output the user never clicked, Esc may not arrive. The preview's two-minute self-clear is the unconditional escape; `cancelPreview` is the immediate one.
+- **The real lock has neither**, deliberately. It holds an `ext-session-lock`, so no keypress and no timer dismisses it — only the correct password. Assume a lock you start is a lock only the password ends.
 
 Before locking on a remote or headless-ish host, have a second way in (an SSH session already open) — a mistake here costs a TTY.
 

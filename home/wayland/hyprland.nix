@@ -87,6 +87,29 @@ in {
       # Needed so notification default-actions (Discord, etc.) can raise their window.
       misc = {
         focus_on_activate = true;
+        # Let a replacement client adopt an orphaned ext-session-lock.
+        #
+        # The lock is a WlSessionLock living inside Quickshell's own process
+        # (quickshell/shell.qml), so anything that kills the bar kills the lock
+        # client -- and `ext-session-lock-v1` deliberately keeps the session
+        # LOCKED when a client dies without unlock_and_destroy. With this
+        # false (the upstream default) that state is unrecoverable: no client
+        # may take over, so there is no way to draw a password prompt.
+        #
+        # That is not hypothetical. On 2026-09-03 a Quickshell reload on a
+        # locked Tawa left the machine unenterable, and recovery needed
+        # `hyprctl keyword misc:allow_session_lock_restore true` by hand --
+        # from an agent session that happened to still be running. getty@tty1
+        # is disabled here (SDDM owns tty1), so the fallback is thin.
+        #
+        # The tradeoff, stated honestly: restore is also a surface someone
+        # with local code execution could use to attach their own lock UI.
+        # Against a machine that can become unenterable, availability wins.
+        #
+        # Runtime `hyprctl keyword` does NOT survive: the Home Manager
+        # activation hook below runs `hyprctl reload`, which resets this to
+        # the config value on every switch. It has to live here.
+        allow_session_lock_restore = true;
       };
       bind =
         [
@@ -253,5 +276,42 @@ in {
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
     hs.hyprResizeMoveToggle
+    hs.hyprCavaViz
   ];
+
+  # `os-rebuild switch` swaps the hyprland.conf symlink, and Hyprland picks the
+  # new file up on its own MOST of the time -- but not always, and when it does
+  # not there is no error: the binds keep working, they are just the previous
+  # generation's. A change verified by hand right after a switch then gets
+  # reported as broken, which has already cost a debugging round. The
+  # intermittency is NOT understood -- a watch race across the symlink
+  # replacement is the standing hypothesis, unconfirmed, and an earlier
+  # "home-manager never triggers the auto-reload" theory was falsified by a
+  # switch that took effect unaided. Reloading unconditionally sidesteps the
+  # question for a few milliseconds of activation time; it is not a fix for the
+  # underlying race, and does not claim to be.
+  #
+  # `hyprctl reload` drops runtime `keyword` state. That state is ephemeral by
+  # design, and its only consumer is hypr-resize-move-toggle's runtime mouse
+  # binds -- where losing them is the safe direction to fail: the resize-move
+  # mode ends, rather than sticking on with bare clicks dragging windows.
+  #
+  # Instances are enumerated rather than read from HYPRLAND_INSTANCE_SIGNATURE
+  # because activation runs outside the compositor's environment. No compositor
+  # -- a headless boot, or a switch run before the session starts -- means zero
+  # instances and a clean no-op. Verified no-op under `set -eu` with the
+  # runtime dir empty, with it unset, and with a stale socket dir left by a
+  # dead compositor. Nothing here may fail the switch.
+  #
+  # This module is workstation-only (Tawa, Theseus); Hearth and Go3 import
+  # ../hypr/scripts.nix directly and never get this hook.
+  home.activation.hyprlandReload = lib.hm.dag.entryAfter ["linkGeneration"] ''
+    hyprlandInstances=$(${pkgs.hyprland}/bin/hyprctl -j instances 2>/dev/null \
+      | ${lib.getExe pkgs.jq} -r '.[].instance' 2>/dev/null || true)
+    for sig in $hyprlandInstances; do
+      # -q rather than a >/dev/null redirect: the redirect would also swallow
+      # the $DRY_RUN_CMD echo, leaving `dry-activate` silent about this step.
+      $DRY_RUN_CMD ${pkgs.hyprland}/bin/hyprctl -q -i "$sig" reload 2>/dev/null || true
+    done
+  '';
 }

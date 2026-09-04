@@ -213,7 +213,8 @@ them).
 **Layout (right side):** media pill | tray pill | **one status cluster** |
 clock. Cluster order: updates (rebuild wrench, flake-input count, origin
 commits to pull), qs-reload (only if `quickshell/*.qml` changed since last
-start), wifi, bluetooth, brightness, battery, resize-move (only while that
+start), wifi, bluetooth, screen-warmth (only once the scheduler has a location
+fix), brightness, battery, resize-move (only while that
 mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is
@@ -224,11 +225,62 @@ modal (`showOsd`), not a percent on the pill. Audio IPC:
 `qs-quickshell-ipc call audio notifyChange` (follows the live bar after
 reload).
 
+**Screen warmth (f.lux replacement):** `home/services/hyprsunset.nix`.
+hyprsunset is the gamma backend and **must be the only colour-transform-matrix
+writer** — a second writer (gammastep, wlsunset, a stray `hyprctl hyprsunset`
+call) makes the screen flicker between them. gammastep is not an option
+regardless: wlr-gamma is dead on Tawa's outputs ("Zero outputs support gamma
+adjustment", see PR #173/#174).
+
+hyprsunset runs with `--identity` and **no** `profile` entries; all timing is
+`hypr-sunset-apply`, a 30s idempotent tick that recomputes the target from the
+clock and pushes only on change. That shape is what buys smoothing, geolocation
+and suspend-recovery — hyprsunset's built-in profiles are fixed wall-clock
+cutovers that cannot ramp and do not re-apply after a resume. The ramp is a
+smoothstep over the `transitionMin` window ending at sunrise/sunset; sun times
+come from `sunwait`, coordinates once from geoclue into
+`$XDG_RUNTIME_DIR/hypr-sunset/location.json` (**personal data — never commit
+them**; a hand-written `~/.config/hypr-sunset/location.json` overrides and
+skips geoclue entirely).
+
+Discrete changes — toggle, pause, a settings edit — ease over
+`discreteRampSec` (default 10s) via `hypr-sunset-apply --ramp`, using the same
+smoothstep, one step every `rampStepMs` (default 500ms). **Duration and step
+interval are deliberately separate settings**: duration is how the ease feels,
+interval is what it costs, and welding them together (the original
+`steps = sec * 4`) meant a longer ease could only be bought with more pushes
+per second. The ramp also skips any push whose eased integer has not moved —
+measured 10 of 20 gamma pushes in a full sweep are byte-identical, and
+hyprsunset does not skip them for you. Two rules make that safe, and both were bugs before they were
+rules: a ramp registers a PID in `ramp.pid` and the 30s tick **skips entirely
+while one is live** (the tick's value IS the ramp's endpoint, so a tick landing
+mid-ramp snaps to the end) — but the lock is honoured only when `kill -0`
+confirms the PID, because a stale file would otherwise freeze the screen at one
+colour forever. The ramp's `TERM`/`INT` traps must `exit`; a trap that only
+cleans up leaves the loop running, so the disarm is swallowed and two ramps
+interleave. `publish_state` writes a per-PID temp file for the same reason.
+
+The bar reads `$XDG_RUNTIME_DIR/hypr-sunset/state.json` and never calls
+`hyprctl hyprsunset` — every action goes through `hypr-sunset-ctl`
+(`toggle` / `disable <seconds>|sunrise` / `set <key> <value>`), preserving the
+single-writer rule. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
+`HYPR_SUNSET_CONFIG_DIR`, `HYPR_SUNSET_NOW` and `HYPR_SUNSET_HYPRCTL`, so the
+whole schedule can be exercised at an arbitrary clock against a scratch tree
+with no compositor. Use that rather than waiting for real dusk.
+
+Reading a boolean out of the override file uses `if .enabled == false`, never
+`.enabled // true` — jq's `//` treats `false` as empty, which silently breaks
+the toggle.
+
 **Resize-move pill:** state is pushed by `hypr-resize-move-toggle`
 (`qs-quickshell-ipc call resizemove enter <seconds>` / `… leave`), never
-polled — that script is the only thing that enters or leaves the mode. Its
-IPC calls are best-effort, so the mode still works with the bar dead; the
-pill can go stale, the compositor state cannot.
+polled — that script is the only thing that enters or leaves the mode. The
+mode's deadline is idle-based, so `enter` is re-sent every second with the
+seconds left against whichever deadline binds first, and the number climbs
+back up whenever the cursor moves. The bar must therefore never run its own
+countdown; it clears the pill only when the pushes go stale (~3s). The IPC
+calls are best-effort, so the mode still works with the bar dead; the pill
+can go stale, the compositor state cannot.
 
 **Tooltips:** `barWindow.armTip(item, kind)` / `disarmTip()`. One
 `PopupWindow` on the `PanelWindow`, never nested inside a pill (that
@@ -243,10 +295,79 @@ must be `''${`.
 reload both use `-p ~/.config/nixos/quickshell`. `~/.config/quickshell` is
 the Home Manager copy (fallback only).
 
-**Locking is a user-confirmed action:** ask before `qs-quickshell-ipc call
-lock activate` **or** `call lock preview`. Locking seizes every monitor, not
+**Dead `pid: -1` layer surfaces can accumulate, so never count bar layers
+without filtering.** When a Quickshell instance exits, its layer surfaces can
+be left in Hyprland's list with `pid: -1`, one per output. A run that shows
+dozens reads as "the bar is running many times" and is not. Count only live
+ones:
+
+```sh
+hyprctl -j layers | jq -r 'to_entries[] | "\(.key): live=\([.value.levels[][]? | select(.namespace=="quickshell") | select(.pid != -1)] | length) stale=\([.value.levels[][]? | select(.namespace=="quickshell") | select(.pid == -1)] | length)"'
+```
+
+**The condition is DPMS, not the lock.** A Quickshell instance that dies while
+an output is **DPMS-off** leaves a stale surface on that output, and it is
+reclaimed when the output is lit again. Measured on Tawa 2026-09-03 by
+reloading the bar during a session lock, which blanks the sides and keeps the
+main output lit:
+
+| | DP-1 (blanked) | DP-3 (blanked) | HDMI-A-1 (lit) |
+|---|---|---|---|
+| before reload | S0 | S0 | S0 |
+| after reload | **S1** | **S1** | **S0** |
+| after unlock, outputs relit | S0 | S0 | S0 |
+
+A control reload with everything lit and unlocked leaks nothing. Two earlier
+write-ups of this were wrong: "every reload leaks" (it does not), and then "a
+held `ext-session-lock` is the trigger" (it is not). The overnight case that
+produced 27 per output only looked lock-shaped because hypridle had
+DPMS-blanked all three outputs an hour earlier.
+
+Cost while they exist: about **11 kB each** (Hyprland RSS grew 508 kB over 45
+of them), no exclusive zone (`reserved` stays `[0,32,0,0]` at any count), and
+no measurable effect on IPC latency — and they clear themselves once the
+output comes back. **Do not attribute desktop slowness to them** without
+measuring.
+
+**Locking and blanking are user-confirmed actions:** check whether Nick is
+active and ask before `quickshell-lock` (the real lock — there is no
+`ipc call lock activate` any more; the lock is its own instance, see
+`quickshell/lock.qml`), before `qs-quickshell-ipc call lock preview`, and
+before anything that turns an output off: `hypr-dpms-side-off`,
+`hypr-dpms-all-off`, `hyprctl dispatch dpms off`. He added the blanking half
+on 2026-09-03 after an agent darkened monitors he was working on. Note that
+running `lock.qml` at all blanks the sides as part of its startup, so
+"neutering the lock" is not enough to make it safe to run — neuter every
+display path. Recovery is `hyprctl dispatch dpms on`. Locking seizes every monitor, not
 a window, and `activate` also runs `hypr-dpms-side-off`, which DPMS-blanks
-every output but one. Always clear your own test — `qs-quickshell-ipc call
+every output but one.
+
+**One definition of the main output, and it is deterministic.** The
+`CenterOutput` singleton (`quickshell/CenterOutput.qml`) is the only place that
+decides which output is "main" — always the desktop-midpoint walk, **never**
+whichever output has focus. On Tawa that is HDMI-A-1, the unrotated panel his
+`hypr/monitors.conf` calls "center (HDMI)". Every caller asks it
+(`CenterOutput.screen()` / `CenterOutput.name()`); nothing re-derives it. It is
+a singleton precisely so the bar and the lock screen, which are separate
+Quickshell instances, cannot drift apart.
+
+**Do not restore focus-following.** PR #182 added it and the paragraph below
+still reads as an argument for it; Nick rejected it on 2026-09-03 for the lock,
+the power menu and the sunset modal alike — he wants to know without looking
+where the password box will be. Dropping it also removed a real race: the
+focus-based answer took ~250ms to settle in a fresh instance, during which a
+newly spawned lock screen would blank the monitor the user was actually at.
+The geometry answer is correct at `Component.onCompleted`. It
+passes the keep-lit name to `hypr-dpms-side-off <name>`; that script must
+never derive it again. It used to, from `hyprctl monitors -j`, whose
+`width`/`height` are **pre-transform** where `Quickshell.screens` are
+**post-transform** — so a rotated panel is 2560 wide to one and 1440 to the
+other, and a disagreement would blank the only monitor showing the password
+prompt. Do not "fix" the two APIs to agree; keep one decision.
+`hypr-dpms-side-off` fails open (unknown or empty name blanks nothing), and
+`hypr-dpms-side-on` deliberately restores **every** output rather than
+mirroring the exclusion — refusing to blank is harmless, refusing to restore
+leaves a locked machine dark. Always clear your own test — `qs-quickshell-ipc call
 lock cancelPreview` for the preview, `hyprctl dispatch dpms on` to re-light
 blanked monitors — and confirm you are clean: `hyprctl layers | grep
 qs-lock-preview` returns nothing, and `hyprctl monitors -j | jq '.[] |

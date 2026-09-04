@@ -1,5 +1,9 @@
 singleton Theme 1.0 Theme.qml
+singleton CenterOutput 1.0 CenterOutput.qml
 LockContext 1.0 LockContext.qml
 LockSurface 1.0 LockSurface.qml
 PowerMenu 1.0 PowerMenu.qml
+SunsetMenu 1.0 SunsetMenu.qml
 BarHoverArea 1.0 BarHoverArea.qml
+MediaPopup 1.0 MediaPopup.qml
+CalendarPopup 1.0 CalendarPopup.qml

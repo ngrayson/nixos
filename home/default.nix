@@ -13,14 +13,18 @@
     ./programs/zsh.nix
     ./programs/git.nix
     ./programs/ssh-hearth.nix
+    ./programs/ssh-tawa.nix
+    ./programs/ssh-config.nix
     ./programs/ssh-go3.nix
     ./programs/hearth-tui.nix
     ./wayland/hyprland.nix
     ./services/dunst.nix
     ./services/battery-notify.nix
+    ./services/calendar-sync.nix
     ./services/polkit-agent.nix
     ./services/nm-applet.nix
     ./services/hypridle.nix
+    ./services/hyprsunset.nix
     ./services/spotifyd.nix
     ./activation/plasma-multi-monitor.nix
     ./xdg/config.nix

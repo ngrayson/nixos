@@ -7,9 +7,13 @@
   quickshellBundled = pkgs.runCommand "quickshell-hm-config" {} ''
     mkdir -p $out/pam
     cp ${../../quickshell/shell.qml} $out/shell.qml
+    cp ${../../quickshell/CenterOutput.qml} $out/CenterOutput.qml
     cp ${../../quickshell/LockContext.qml} $out/LockContext.qml
     cp ${../../quickshell/LockSurface.qml} $out/LockSurface.qml
     cp ${../../quickshell/PowerMenu.qml} $out/PowerMenu.qml
+    cp ${../../quickshell/SunsetMenu.qml} $out/SunsetMenu.qml
+    cp ${../../quickshell/MediaPopup.qml} $out/MediaPopup.qml
+    cp ${../../quickshell/CalendarPopup.qml} $out/CalendarPopup.qml
     cp ${../../quickshell/Theme.qml} $out/Theme.qml
     cp ${../../quickshell/qmldir} $out/qmldir
     cp ${../../quickshell/pam/password.conf} $out/pam/password.conf
@@ -31,8 +35,37 @@
       fi
     }
   '';
+
+  # Config for the media popup's audio visualizer (quickshell/MediaPopup.qml).
+  # cava's `raw`/`ascii` output is one line per frame: `bars` semicolon-separated
+  # integers 0..`ascii_max_range`, which the QML parses directly. `bars` MUST
+  # match vizRow.barCount in MediaPopup.qml (26). `method = pulse` works because
+  # the audio stack is PipeWire-via-pulse (same compat layer the pamixer volume
+  # code uses). Verified on Tawa: 27 fields/line (26 values + trailing empty).
+  cavaVizConfig = pkgs.writeText "quickshell-cava.conf" ''
+    [general]
+    bars = 26
+    framerate = 30
+    [input]
+    method = pulse
+    source = auto
+    [output]
+    method = raw
+    raw_target = /dev/stdout
+    data_format = ascii
+    ascii_max_range = 100
+  '';
 in rec {
   inherit quickshellBundled quickshellConfigDir quickshellLiveDir;
+
+  # Real audio-reactive data for the media popup's visualizer: streams cava's
+  # raw output line-by-line on stdout, which MediaPopup.qml reads via a
+  # Quickshell.Io Process + SplitParser. Runs only while the popup is open and a
+  # track is playing (the QML binds `running` to that), so nothing captures
+  # audio in the background.
+  hyprCavaViz = pkgs.writeShellScriptBin "qs-cava-viz" ''
+    exec ${lib.getExe pkgs.cava} -p ${cavaVizConfig}
+  '';
 
   # Super+Shift+S / Print: region capture via hyprshot (clipboard only; spectacle needs KWin on Wayland).
   hyprScreenshotRegion = pkgs.writeShellScriptBin "hypr-screenshot-region" ''
@@ -50,9 +83,42 @@ in rec {
       ${qsBin} ipc -p "$QS" -n "$@"
   '';
 
+  # Spawns the lock instance, then waits until it is actually up.
+  #
+  # Was `qs-quickshell-ipc call lock activate` against the bar. The lock now
+  # lives in its own Quickshell instance (quickshell/lock.qml) so that a bar
+  # reload -- including the automatic one on every os-rebuild switch -- cannot
+  # kill the lock client. When it could, ext-session-lock-v1 kept the session
+  # LOCKED with nothing able to draw a password prompt, and the machine needed
+  # a hand-typed `hyprctl keyword misc:allow_session_lock_restore true` to
+  # recover. Observed on Tawa 2026-09-03.
+  #
+  # Blocking until the instance exists is load-bearing, not politeness:
+  # hypr-before-sleep calls this and then lets systemd suspend. A fire-and-
+  # forget spawn races the suspend, and losing that race means the machine
+  # goes down unlocked and comes back unlocked.
   quickshellLock = pkgs.writeShellScriptBin "quickshell-lock" ''
     set -euo pipefail
-    exec ${lib.getExe hyprQuickshellIpc} call lock activate
+    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+    ${qsLiveDirSnippet}
+    LOCK="$(qs_live_dir)/lock.qml"
+    GREP="${lib.getExe' pkgs.gnugrep "grep"}"
+    SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
+
+    # -n makes an already-running lock instance a no-op instead of a second
+    # lock attempt. Already locked is success here, not an error.
+    env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+      ${qsBin} -d -n -p "$LOCK" || true
+
+    n=0
+    until ${qsBin} list -p "$LOCK" --any-display 2>/dev/null | "$GREP" -q "^Instance "; do
+      n=$((n + 1))
+      if [ "$n" -ge 50 ]; then
+        echo "quickshell-lock: lock instance did not come up within 5s" >&2
+        exit 1
+      fi
+      "$SLEEP" 0.1
+    done
   '';
 
   # Overlay preview of the lock UI. Esc dismisses; does not take ext-session-lock.
@@ -103,57 +169,62 @@ in rec {
     done < <("$H" -i 0 monitors -j | "$J" -r '.[].name')
   '';
 
-  # Blank every output except the geometric center panel (same midpoint heuristic as
-  # Quickshell `centerOutputScreen`). Used while the session is locked so side
-  # monitors go dark the way the SDDM greeter does on Tawa.
+  # Blank every output EXCEPT the one named in $1. Used while the session is
+  # locked so side monitors go dark the way the SDDM greeter does on Tawa.
+  #
+  # The keep-lit output is passed in rather than recomputed here. It used to be
+  # derived from a midpoint heuristic over `hyprctl monitors -j`, duplicating
+  # the same maths in Quickshell's centerOutputScreen() -- from a DIFFERENT
+  # geometry source: hyprctl reports pre-transform width/height while
+  # Quickshell.screens reports post-transform, so a rotated panel is 2560 wide
+  # to one and 1440 to the other. The two agreed on Tawa's layout by luck, and
+  # a disagreement would have blanked the only monitor showing the password
+  # prompt. One decision, made in QML, passed down.
+  #
+  # FAIL OPEN: an empty or unrecognised $1 blanks nothing and exits 0. The
+  # alternative failure -- blanking by exclusion against a name that matches
+  # nothing -- turns off every screen on a locked machine.
   hyprDpmsSideOff = pkgs.writeShellScriptBin "hypr-dpms-side-off" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
     J="${lib.getExe pkgs.jq}"
+
+    keep="''${1:-}"
+    [[ -n "$keep" ]] || exit 0
+
     json="$("$H" -i 0 monitors -j 2>/dev/null || true)"
     case "$json" in
       \[*) ;;
       *) exit 0 ;;
     esac
+
+    # Unknown name means the caller's idea of the desktop is stale; blanking
+    # by exclusion against it would darken everything.
+    if ! "$J" -e --arg keep "$keep" 'any(.[]; .name == $keep)' <<<"$json" >/dev/null; then
+      exit 0
+    fi
+
     while IFS= read -r name; do
       [[ -n "$name" ]] || continue
       "$H" -i 0 dispatch dpms off "$name" || true
-    done < <("$J" -r '
-      if length <= 1 then empty
-      else
-        (map(.x) | min) as $minX
-        | (map(.x + .width) | max) as $maxX
-        | (($minX + $maxX) / 2) as $mid
-        | (sort_by((.x + (.width / 2) - $mid) | fabs) | .[0].name) as $center
-        | .[] | select(.name != $center) | .name
-      end
-    ' <<<"$json")
+    done < <("$J" -r --arg keep "$keep" '.[] | select(.name != $keep) | .name' <<<"$json")
   '';
 
+  # Restore after hypr-dpms-side-off. Deliberately NOT the mirror image of it:
+  # this turns on EVERY output, including the one that was kept lit.
+  #
+  # The two directions have asymmetric failure modes. Refusing to blank leaves
+  # a monitor awake, which is harmless. Refusing to restore leaves a monitor
+  # dark with no way for the user to see what is happening -- so the wake path
+  # must never depend on correctly identifying which output to skip. Turning on
+  # an already-on monitor is a no-op, which makes "restore everything" strictly
+  # safer and behaviourally identical.
+  #
+  # This also retires the third copy of the old midpoint heuristic.
   hyprDpmsSideOn = pkgs.writeShellScriptBin "hypr-dpms-side-on" ''
-    set -euo pipefail
-    : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    H="${pkgs.hyprland}/bin/hyprctl"
-    J="${lib.getExe pkgs.jq}"
-    json="$("$H" -i 0 monitors -j 2>/dev/null || true)"
-    case "$json" in
-      \[*) ;;
-      *) exit 0 ;;
-    esac
-    while IFS= read -r name; do
-      [[ -n "$name" ]] || continue
-      "$H" -i 0 dispatch dpms on "$name" || true
-    done < <("$J" -r '
-      if length <= 1 then empty
-      else
-        (map(.x) | min) as $minX
-        | (map(.x + .width) | max) as $maxX
-        | (($minX + $maxX) / 2) as $mid
-        | (sort_by((.x + (.width / 2) - $mid) | fabs) | .[0].name) as $center
-        | .[] | select(.name != $center) | .name
-      end
-    ' <<<"$json")
+    set -uo pipefail
+    exec ${lib.getExe hyprDpmsAllOn}
   '';
 
   # SUPER+A toggle for the resize-move mode. Submaps do not apply to mouse
@@ -168,11 +239,16 @@ in rec {
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     H="${pkgs.hyprland}/bin/hyprctl"
 
-    # Dead-man timeout, seconds. While the mode is on a bare left-click drags
-    # windows -- inside applications too -- so a forgotten mode must
-    # self-heal. 30s is deliberate: an arranging pass that outlives it is
-    # one SUPER+A from re-entry.
-    TIMEOUT=30
+    # Dead-man deadline. While the mode is on a bare left-click drags windows
+    # -- inside applications too -- so a forgotten mode must self-heal. The
+    # deadline is idle-based rather than fixed: the mode is dangerous when
+    # forgotten, not while it is being used, and a fixed timer ejected you
+    # mid-arrangement.
+    IDLE_TIMEOUT=5    # exit after this many seconds with no cursor movement
+    # Absolute cap. An idle timeout alone never rescues someone who is busy at
+    # the machine and has not noticed the mode is still on, which is exactly
+    # what the old fixed timer did cover.
+    MAX_DURATION=120
     PIDFILE="$XDG_RUNTIME_DIR/hypr-resize-move-timeout.pid"
 
     # Bar indicator. Best-effort on purpose: the mode must work with Quickshell
@@ -180,7 +256,7 @@ in rec {
     # never asked -- this script is the only thing that enters or leaves the
     # mode, so there is nothing for the bar to poll.
     IPC="${lib.getExe hyprQuickshellIpc}"
-    notify_on() { "$IPC" call resizemove enter "$TIMEOUT" >/dev/null 2>&1 || true; }
+    notify_on() { "$IPC" call resizemove enter "$1" >/dev/null 2>&1 || true; }
     notify_off() { "$IPC" call resizemove leave >/dev/null 2>&1 || true; }
 
     disarm() {
@@ -198,24 +274,56 @@ in rec {
       notify_off
     }
 
+    # Runs backgrounded for as long as the mode is on. Polls the cursor once a
+    # second, because hyprctl cursorpos is the only activity source reachable
+    # from here. Deliberately NOT the Wayland idle-notify protocol: Quickshell's
+    # keep-awake pill holds an IdleInhibitor, and while that is on the
+    # compositor reports the session as never idle -- which would silently
+    # disable this dead-man switch exactly when it is least expected.
+    watchdog() {
+      local start=$SECONDS last_move=$SECONDS
+      local prev now idle total idle_rem cap_rem remaining
+      prev="$("$H" cursorpos 2>/dev/null || echo "")"
+      while :; do
+        sleep 1
+        now="$("$H" cursorpos 2>/dev/null || echo "")"
+        if [[ "$now" != "$prev" ]]; then
+          prev="$now"
+          last_move=$SECONDS
+        fi
+        idle=$((SECONDS - last_move))
+        total=$((SECONDS - start))
+        # Count down against whichever deadline binds first, so the bar never
+        # shows a comfortable 5s while the absolute cap is about to fire.
+        idle_rem=$((IDLE_TIMEOUT - idle))
+        cap_rem=$((MAX_DURATION - total))
+        remaining=$((idle_rem < cap_rem ? idle_rem : cap_rem))
+        if [[ $remaining -lt 0 ]]; then
+          remaining=0
+        fi
+        notify_on "$remaining"
+        if [[ $idle -ge $IDLE_TIMEOUT || $total -ge $MAX_DURATION ]]; then
+          break
+        fi
+      done
+      # Reached only if never disarmed. Same end state as a manual exit:
+      # zero modifier-less global mouse binds, submap back to default,
+      # indicator cleared.
+      rm -f "$PIDFILE"
+      "$H" keyword unbind ,mouse:272 >/dev/null || true
+      "$H" keyword unbind ,mouse:273 >/dev/null || true
+      "$H" dispatch submap reset >/dev/null || true
+      notify_off
+    }
+
     enter() {
       # A stale timer from a previous entry must never fire into this one.
       disarm
       "$H" keyword bindm ,mouse:272,movewindow >/dev/null
       "$H" keyword bindm ,mouse:273,resizewindow >/dev/null
       "$H" dispatch submap resize-move >/dev/null
-      notify_on
-      (
-        sleep "$TIMEOUT"
-        # Reached only if never disarmed. Same end state as a manual exit:
-        # zero modifier-less global mouse binds, submap back to default,
-        # indicator cleared.
-        rm -f "$PIDFILE"
-        "$H" keyword unbind ,mouse:272 >/dev/null || true
-        "$H" keyword unbind ,mouse:273 >/dev/null || true
-        "$H" dispatch submap reset >/dev/null || true
-        notify_off
-      ) &
+      notify_on "$IDLE_TIMEOUT"
+      watchdog &
       echo $! >"$PIDFILE"
     }
 
@@ -269,14 +377,16 @@ in rec {
     exec ${lib.getExe' pkgs.systemd "systemctl"} suspend-then-hibernate
   '';
 
-  # Lock, then re-enable outputs before systemd suspends (quickshell-lock uses exec and
-  # cannot be chained). Suspending while the 600s idle listener has DPMS off leaves this
+  # Lock, then re-enable outputs before systemd suspends. Suspending while the 600s idle listener has DPMS off leaves this
   # eDP panel dark on resume: `dispatch dpms on` then returns ok without lighting it.
   # Cost of waking outputs first is a brief flash before the machine goes down.
   hyprBeforeSleep = pkgs.writeShellScriptBin "hypr-before-sleep" ''
     set -euo pipefail
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
-    ${lib.getExe hyprQuickshellIpc} call lock activate
+    # quickshell-lock now blocks until the lock is really up, so this is a
+    # proper ordering rather than a hope. `|| true` so a failed lock still
+    # re-lights the outputs below -- it prints to stderr and the journal.
+    ${lib.getExe quickshellLock} || true
     ${lib.getExe' pkgs.coreutils "sleep"} 1
     ${lib.getExe hyprDpmsAllOn} || true
   '';
@@ -955,7 +1065,6 @@ in rec {
     SRC="${quickshellLiveDir}"
     SETSID="${lib.getExe' pkgs.util-linux "setsid"}"
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
-    PKILL="${lib.getExe' pkgs.procps "pkill"}"
     PGREP="${lib.getExe' pkgs.procps "pgrep"}"
     GREP="${lib.getExe' pkgs.gnugrep "grep"}"
 
@@ -973,13 +1082,65 @@ in rec {
       "$SLEEP" 0.05
     done
 
-    # Fallback: match cmdline `-p <live dir>` (comm name is not "quickshell").
-    "$PKILL" -TERM -f -- "-p $SRC" || true
+    # Fallback for an instance that ignored `quickshell kill` above. The comm
+    # name is not "quickshell" (Nix wrapper), so candidates still have to be
+    # found by cmdline -- but every candidate is then CHECKED before it is
+    # signalled.
+    #
+    # This used to be a bare `pkill -f -- "-p $SRC"`, which signals any
+    # process whose argv merely CONTAINS that path. It killed two unrelated
+    # shells whose only crime was searching for Quickshell with that string on
+    # their own command line. os-rebuild now runs this on every switch, so the
+    # blast radius reaches anything running alongside a rebuild -- and the
+    # loop escalates to KILL, so a mismatched process gets no clean shutdown.
+    #
+    # Checked via argv[0], NOT /proc/pid/exe: the Nix wrapper makes exe
+    # resolve to `.quickshell-wrapped`, and after a rebuild the running
+    # instance is the OLD store path -- which is the entire reason this script
+    # exists, so comparing against "$QS" would miss exactly the case that
+    # matters.
+    qs_pids() {
+      local pid i
+      local -a argv
+      for pid in $("$PGREP" -f -- "-p $SRC" 2>/dev/null || true); do
+        [ "$pid" = "$$" ] && continue
+        [ -r "/proc/$pid/cmdline" ] || continue
+        # NUL-delimited argv, so a path containing spaces cannot split.
+        # `-d ""` is bash's NUL delimiter. Double quotes, not the usual empty
+        # single-quoted form: a bare pair of single quotes anywhere in this
+        # block -- comments included -- closes the Nix indented string.
+        mapfile -d "" -t argv <"/proc/$pid/cmdline" 2>/dev/null || continue
+        [ "''${#argv[@]}" -gt 0 ] || continue
+        case "''${argv[0]##*/}" in
+          quickshell | .quickshell-wrapped) ;;
+          *) continue ;;
+        esac
+        # The value after -p must equal $SRC EXACTLY. pgrep -f above only
+        # narrows candidates; it matches substrings, and "$SRC" is a prefix of
+        # "$SRC/lock.qml" -- a separate config (the lock screen) that must
+        # survive a bar reload. Killing it would drop an active session lock,
+        # which is the whole failure this precision exists to prevent.
+        for ((i = 1; i < ''${#argv[@]}; i++)); do
+          if [ "''${argv[i]}" = "-p" ] && [ "''${argv[i + 1]:-}" = "$SRC" ]; then
+            printf '%s\n' "$pid"
+            break
+          fi
+        done
+      done
+    }
+
+    pids="$(qs_pids)"
+    if [ -n "$pids" ]; then
+      # Word splitting is deliberate: one signal for every matched pid.
+      # shellcheck disable=SC2086
+      kill -TERM $pids 2>/dev/null || true
+    fi
     n=0
-    while "$PGREP" -f -- "-p $SRC" >/dev/null 2>&1; do
+    while pids="$(qs_pids)"; [ -n "$pids" ]; do
       n=$((n + 1))
       if [ "$n" -ge 25 ]; then
-        "$PKILL" -KILL -f -- "-p $SRC" || true
+        # shellcheck disable=SC2086
+        kill -KILL $pids 2>/dev/null || true
         break
       fi
       "$SLEEP" 0.1

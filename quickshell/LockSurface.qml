@@ -526,8 +526,12 @@ Item {
 		}
 	}
 
+	// Live on EVERY preview surface, not just the one drawing the chrome.
+	// showUi means "render the password box"; it must not also decide whether
+	// Esc works, or the outputs without chrome become inescapable.
+	// Preview only -- the real lock must never be dismissable with a keypress.
 	Shortcut {
-		enabled: root.preview && root.showUi
+		enabled: root.preview
 		sequence: "Esc"
 		onActivated: root.dismissRequested()
 	}

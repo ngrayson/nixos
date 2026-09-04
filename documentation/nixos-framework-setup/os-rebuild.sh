@@ -908,6 +908,24 @@ main() {
 
   if [[ "$ACTION" == "switch" || "$ACTION" == "test" ]]; then
     notify_status_bar
+    # Quickshell is started once by Hyprland's exec-once, not as a systemd
+    # user service, so Home Manager activation cannot restart it -- a rebuild
+    # that changes the bar's package or its QML leaves the OLD process running
+    # until someone remembers `qs-quickshell-reload` by hand.
+    #
+    # Ordered after notify_status_bar deliberately: that writes the cache the
+    # bar reads at startup, so restarting first would bring the new bar up
+    # against stale contents.
+    #
+    # `command_exists` rather than a host check, mirroring the notify-send
+    # idiom below: Hearth/Go3/Gcp never have this binary in their closure, so
+    # the guard makes it inert there with no host-name special-casing. The
+    # reload script re-execs itself under `setsid -f`, so it returns
+    # immediately and the relaunched bar does not die with this script.
+    if command_exists qs-quickshell-reload; then
+      info "Restarting Quickshell to pick up the new generation."
+      qs-quickshell-reload || warn "Quickshell restart failed; run qs-quickshell-reload by hand."
+    fi
   fi
 
   command_exists notify-send &&

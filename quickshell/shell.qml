@@ -1,8 +1,9 @@
 //@ pragma UseQApplication
 // Required for system tray context menus (QsMenuAnchor.open needs QApplication mode).
-// Quickshell: top bar (Hyprland workspaces + clock) + WlSessionLock (PAM password).
+// Quickshell: top bar (Hyprland workspaces + clock). The session lock is a
+// SEPARATE instance -- see lock.qml.
 // One bar per output via `Variants` + `Quickshell.screens` (not follow-focus on a single PanelWindow).
-// Lock: `quickshell ipc -p <live config> -n call lock activate` (see `quickshell-lock`).
+// Lock: `quickshell-lock`, which spawns lock.qml as its own instance.
 // Preview (not a session lock, Esc dismisses): `ipc call lock preview` (see `quickshell-lock-preview`).
 // Debug: `quickshell ipc -p ~/.config/quickshell show` (subcommand is `ipc`, not a bare `show` flag).
 // Audio debug overlay: `quickshell ipc -p ~/.config/quickshell call audio toggleDebug`
@@ -181,9 +182,103 @@ ShellRoot {
 	property bool resizeMoveActive: false
 	property int resizeMoveRemaining: 0
 
+	// Screen warmth. Published by hypr-sunset-apply once per tick; the bar only
+	// ever displays it and shells out to hypr-sunset-ctl to change it. The
+	// scheduler is the single writer of the colour transform matrix -- see
+	// home/services/hyprsunset.nix.
+	property var sunsetState: ({})
+	property bool sunsetMenuVisible: false
+
+	// Right-clicking the now-playing bar widget opens the media popup
+	// (MediaPopup.qml). Left-click on the bar stays play/pause.
+	property bool mediaPopupVisible: false
+
+	// Clicking the clock opens the calendar popup (CalendarPopup.qml). Events
+	// come from home/services/calendar-sync.nix via the JSON cache below.
+	property bool calendarPopupVisible: false
+	readonly property var calendarEvents: calData.events || []
+	readonly property bool calendarOk: calData.ok
+
+	readonly property string sunsetRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr-sunset`
+
+	function sunsetOk(): bool {
+		return (shellRoot.sunsetState?.ok ?? false) === true;
+	}
+
+	function sunsetPhase(): string {
+		return shellRoot.sunsetState?.phase ?? "";
+	}
+
+	function sunsetIcon(): string {
+		const phase = shellRoot.sunsetPhase();
+		// A discrete change (toggle, pause, settings edit) eases over a few
+		// seconds; show it moving rather than sitting on the destination icon.
+		if (shellRoot.sunsetState?.ramping === true)
+			return String.fromCodePoint(0xF059A); // nf-md-weather_sunset
+		if (phase === "off")
+			return String.fromCodePoint(0xF14E4); // nf-md-weather_sunny_off
+		if (phase === "night")
+			return String.fromCodePoint(0xF0594); // nf-md-weather_night
+		if (phase === "to-night")
+			return String.fromCodePoint(0xF059B); // nf-md-weather_sunset_down
+		if (phase === "to-day")
+			return String.fromCodePoint(0xF059C); // nf-md-weather_sunset_up
+		return String.fromCodePoint(0xF0599); // nf-md-weather_sunny
+	}
+
+	function sunsetColor(): string {
+		const phase = shellRoot.sunsetPhase();
+		if (phase === "off")
+			return Theme.muted;
+		if (phase === "to-night" || phase === "to-day")
+			return Theme.accent;
+		return Theme.text;
+	}
+
+	function sunsetClock(epoch): string {
+		if (!epoch)
+			return "--:--";
+		return Qt.formatTime(new Date(epoch * 1000), "HH:mm");
+	}
+
+	function sunsetUntilText(): string {
+		const st = shellRoot.sunsetState;
+		const next = st?.nextEvent ?? 0;
+		const now = st?.now ?? 0;
+		if (!next || !now)
+			return "";
+		const mins = Math.max(0, Math.round((next - now) / 60));
+		const h = Math.floor(mins / 60);
+		const m = mins % 60;
+		const span = h > 0 ? (h + "h " + m + "m") : (m + "m");
+		return span + " to " + (st?.nextKind ?? "sunset");
+	}
+
+	function sunsetTooltipText(): string {
+		const st = shellRoot.sunsetState;
+		if (!shellRoot.sunsetOk()) {
+			const reason = st?.reason ?? "starting up";
+			return "Screen warmth idle · " + (reason === "no-location" ? "waiting on a location fix" : reason);
+		}
+		const lines = [];
+		if (shellRoot.sunsetPhase() === "off") {
+			const until = st?.disabledUntil ?? 0;
+			lines.push(until > 0 ? ("Screen warmth paused until " + shellRoot.sunsetClock(until)) : "Screen warmth off");
+		} else {
+			lines.push("Screen warmth " + (st?.temp ?? "--") + "K · gamma " + (st?.gamma ?? "--") + "%");
+		}
+		lines.push("Night " + (st?.nightTemp ?? "--") + "K · gamma " + (st?.nightGamma ?? "--") + "%");
+		lines.push("Sunrise " + shellRoot.sunsetClock(st?.sunrise ?? 0) + " · sunset " + shellRoot.sunsetClock(st?.sunset ?? 0));
+		const until = shellRoot.sunsetUntilText();
+		if (until)
+			lines.push(until + " · ramp " + (st?.transitionMin ?? "--") + " min");
+		lines.push("Left-click pauses/resumes · right-click for options");
+		return lines.join("\n");
+	}
+
 	function resizeMoveTooltipText(): string {
 		return "Resize/move mode on · bare left-drag moves, right-drag resizes"
-			+ "\nExits in " + resizeMoveRemaining + "s, or on Escape / Super+A";
+			+ "\nExits " + resizeMoveRemaining + "s after you stop moving, or on Escape / Super+A";
 	}
 
 	// Tray icons hidden behind a chevron; the pill keeps the chevron + item count.
@@ -398,6 +493,8 @@ ShellRoot {
 			return idleTooltipText();
 		if (kind === "resizemove")
 			return resizeMoveTooltipText();
+		if (kind === "sunset")
+			return sunsetTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -648,167 +745,53 @@ ShellRoot {
 		return Theme.accent;
 	}
 
-	// Monitor whose horizontal center is nearest the combined desktop midpoint (typical "center" panel).
-	function centerOutputScreen(): var {
-		const screens = Quickshell.screens;
-		const n = screens.length;
-		if (n === 0)
-			return null;
-		if (n === 1)
-			return screens[0];
-
-		let minX = screens[0].x;
-		let maxX = screens[0].x + screens[0].width;
-		for (let i = 1; i < n; ++i) {
-			const s = screens[i];
-			minX = Math.min(minX, s.x);
-			maxX = Math.max(maxX, s.x + s.width);
-		}
-
-		const mid = (minX + maxX) / 2;
-		let best = screens[0];
-		let bestDist = Math.abs(best.x + best.width / 2 - mid);
-		for (let i = 1; i < n; ++i) {
-			const s = screens[i];
-			const d = Math.abs(s.x + s.width / 2 - mid);
-			if (d < bestDist) {
-				bestDist = d;
-				best = s;
-			}
-		}
-		return best;
-	}
-
+	// Kept for the PREVIEW only. The real session lock lives in its own
+	// Quickshell instance now (quickshell/lock.qml), which owns its own
+	// LockContext, its own side-blanking and its own unlock path -- so nothing
+	// the bar does, crashes doing, or is reloaded out from under can drop a
+	// live lock. The bar deliberately has no idea whether the session is
+	// locked; that is no longer its business.
 	LockContext {
 		id: lockContext
 
 		onUnlocked: {
 			lockContext.currentText = "";
-			if (shellRoot.lockPreview)
-				shellRoot.lockPreview = false;
-			else {
-				sessionLock.locked = false;
-				shellRoot.restoreSideMonitors();
-			}
+			shellRoot.lockPreview = false;
 		}
 	}
 
-	Process {
-		id: sideDpmsOff
-		running: false
-		command: ["hypr-dpms-side-off"]
-	}
 
-	Process {
-		id: sideDpmsOn
-		running: false
-		command: ["hypr-dpms-side-on"]
-	}
-
-	function blankSideMonitors(): void {
-		if (sideDpmsOff.running)
-			sideDpmsOff.running = false;
-		sideDpmsOff.running = true;
-	}
-
-	function restoreSideMonitors(): void {
-		if (sideDpmsOn.running)
-			sideDpmsOn.running = false;
-		sideDpmsOn.running = true;
-	}
-
-	WlSessionLock {
-		id: sessionLock
-		locked: false
-
-		WlSessionLockSurface {
-			id: lockSessionSurface
-			// Chrome on EVERY output, not just the center one. activate() below
-			// DPMS-blanks the sides, so a prompt on the geometric centre alone
-			// means any monitor the user wakes by hand shows bare wallpaper with
-			// no way to type a password — observed on Tawa 2026-09-02, where
-			// recovery was `hyprctl dispatch dpms on` from another machine.
-			//
-			// This is cheap because lockContext is a single shared object: every
-			// surface already mirrors the same typed text and the same failure
-			// shake through LockSurface's Connections on context.currentText.
-			// Keyboard focus still lands on exactly one surface — `primary`.
-			readonly property bool isPrimaryOutput: {
-				const c = shellRoot.centerOutputScreen();
-				return c && screen && c.name === screen.name;
-			}
-
-			color: Theme.bg
-
-			LockSurface {
-				anchors.fill: parent
-				context: lockContext
-				preview: false
-				showUi: true
-				primary: lockSessionSurface.isPrimaryOutput
-			}
-		}
-	}
-
-	// Not a session lock: Overlay layer-shell. Esc (and a correct password) dismisses.
-	Variants {
-		model: Quickshell.screens
-
-		PanelWindow {
-			id: previewWin
-			required property var modelData
-			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
-				return c && modelData && c.name === modelData.name;
-			}
-			readonly property bool previewOpen: shellRoot.lockPreview && !sessionLock.locked
-
-			screen: modelData
-			visible: previewOpen
-			color: Theme.bg
-			exclusionMode: ExclusionMode.Ignore
-			focusable: previewOpen && isCenterScreen
-
-			WlrLayershell.layer: WlrLayer.Overlay
-			WlrLayershell.namespace: "qs-lock-preview-" + modelData.name
-			WlrLayershell.keyboardFocus: (previewOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-
-			anchors.top: true
-			anchors.bottom: true
-			anchors.left: true
-			anchors.right: true
-
-			LockSurface {
-				anchors.fill: parent
-				context: lockContext
-				preview: true
-				showUi: previewWin.previewOpen && previewWin.isCenterScreen
-				// Explicit rather than defaulted: `primary` defaults to true, and
-				// the preview's focus used to ride on showUi. Pinning it to the
-				// same center test keeps the preview exactly as it was — its
-				// single-output Esc gate is a separate card's problem, not a
-				// regression to introduce here.
-				primary: previewWin.isCenterScreen
-				onDismissRequested: shellRoot.lockPreview = false
-			}
-		}
+	// Backstop: the preview clears itself after two minutes. Esc widened to
+	// every output above is the intended exit, but a layer-shell surface only
+	// receives keys once the compositor has given it focus, so "press Esc" is
+	// not a guarantee on an output the user never clicked. This is, and it is
+	// why the card asked for both.
+	//
+	// Bound to `running` rather than started and stopped inside preview() /
+	// cancelPreview() / onUnlocked: every path that clears lockPreview --
+	// including onDismissRequested and activate() -- stops it for free, and a
+	// fresh preview restarts the full interval. Three manual call sites would
+	// be three chances to miss one.
+	//
+	// The preview holds no ext-session-lock and protects nothing, so a timeout
+	// here is not a security property. Never give the real WlSessionLock one.
+	Timer {
+		interval: 120000
+		repeat: false
+		running: shellRoot.lockPreview
+		onTriggered: shellRoot.lockPreview = false
 	}
 
 	IpcHandler {
 		target: "lock"
 
-		// Return type required or quickshell will not register this for `ipc call lock activate`.
-		function activate(): void {
-			shellRoot.lockPreview = false;
-			lockContext.currentText = "";
-			sessionLock.locked = true;
-			// Match the SDDM greeter: keep the center panel lit, blank the sides.
-			shellRoot.blankSideMonitors();
-		}
-
+		// No `activate` here any more. Locking is `quickshell-lock`, which
+		// spawns quickshell/lock.qml as its own instance. Routing it through
+		// the bar is what made a bar reload able to drop a live session lock.
+		//
+		// Return type required or quickshell will not register these for
+		// `ipc call lock preview`.
 		function preview(): void {
-			if (sessionLock.locked)
-				return;
 			lockContext.currentText = "";
 			shellRoot.lockPreview = true;
 		}
@@ -827,36 +810,37 @@ ShellRoot {
 
 		// Return type required or quickshell will not register this for
 		// `ipc call resizemove enter`.
+		// Called once per second while the mode is on, not once at entry: the
+		// deadline is idle-based, so the number resets upward whenever the
+		// cursor moves. The script owns all timing; the bar only displays.
 		function enter(seconds: string): void {
 			const parsed = parseInt(seconds, 10);
 			shellRoot.resizeMoveRemaining = isNaN(parsed) ? 0 : parsed;
 			shellRoot.resizeMoveActive = true;
+			resizeMoveStaleTimer.restart();
 		}
 
 		function leave(): void {
+			resizeMoveStaleTimer.stop();
 			shellRoot.resizeMoveActive = false;
 			shellRoot.resizeMoveRemaining = 0;
 		}
 	}
 
-	// Counts the pill's label down while the mode is on. This is a display of
-	// the script's timer, not a second timer that can act -- only the script
-	// ever leaves the mode, so the two cannot disagree about compositor state.
+	// Staleness watchdog, not a countdown. The bar must never decrement on its
+	// own: the deadline is idle-based, so the pushed value climbs back up every
+	// time the cursor moves, and a local decrement would fight it -- worse, a
+	// self-clear at zero would hide a mode that is genuinely still on. This
+	// fires only when the pushes stop without a `leave` arriving (script
+	// killed, socket hiccup), where a pill that vanishes a beat early beats one
+	// stuck forever claiming a mode that is not active.
 	Timer {
-		running: shellRoot.resizeMoveActive && shellRoot.resizeMoveRemaining > 0
-		interval: 1000
-		repeat: true
+		id: resizeMoveStaleTimer
+		interval: 3000
+		repeat: false
 		onTriggered: {
-			shellRoot.resizeMoveRemaining = Math.max(0, shellRoot.resizeMoveRemaining - 1);
-			// Self-clear at zero rather than waiting for the script's `leave`.
-			// The script's own timer fires at this same moment, so the normal
-			// path is unchanged -- but if that IPC call is ever lost (bar
-			// restarting, socket hiccup) the pill would otherwise sit at "0s"
-			// forever, claiming a mode that is not on. Erring toward hiding a
-			// live mode for a fraction of a second beats a permanently stuck
-			// indicator that nothing can clear.
-			if (shellRoot.resizeMoveRemaining === 0)
-				shellRoot.resizeMoveActive = false;
+			shellRoot.resizeMoveActive = false;
+			shellRoot.resizeMoveRemaining = 0;
 		}
 	}
 
@@ -865,8 +849,6 @@ ShellRoot {
 
 		// Return type required or quickshell will not register this for `ipc call power toggle`.
 		function toggle(): void {
-			if (sessionLock.locked)
-				return;
 			shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
 		}
 	}
@@ -1025,6 +1007,20 @@ ShellRoot {
 	}
 
 	FileView {
+		path: `${shellRoot.qsSourceDir}/lock.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/CenterOutput.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
 		path: `${shellRoot.qsSourceDir}/LockContext.qml`
 		watchChanges: true
 		printErrors: false
@@ -1043,6 +1039,71 @@ ShellRoot {
 		watchChanges: true
 		printErrors: false
 		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/SunsetMenu.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/MediaPopup.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	FileView {
+		path: `${shellRoot.qsSourceDir}/CalendarPopup.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
+	// Calendar events, written by home/services/calendar-sync.nix's timer.
+	// Absent/malformed is normal before the ICS secret is provisioned: the
+	// JsonAdapter keeps its defaults (ok=false, empty events) and the popup
+	// still shows the month grid.
+	FileView {
+		path: `${Quickshell.env("HOME")}/.cache/quickshell-calendar.json`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: reload()
+
+		JsonAdapter {
+			id: calData
+			property bool ok: false
+			property var events: []
+		}
+	}
+
+	// The scheduler rewrites this once per tick (atomically, via rename), so
+	// watching it is cheaper and more accurate than polling hyprsunset. Absent
+	// or malformed is normal at login before the first tick: leave the previous
+	// value rather than blanking the pill.
+	FileView {
+		id: sunsetStateFile
+		path: `${shellRoot.sunsetRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		// Named parseState, not reload: FileView already has a reload() and
+		// shadowing it here would recurse.
+		function parseState(): void {
+			const raw = sunsetStateFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.sunsetState = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next tick brings a whole file.
+			}
+		}
+
+		onLoaded: sunsetStateFile.parseState()
+		onFileChanged: sunsetStateFile.reload()
 	}
 
 	Timer {
@@ -1149,6 +1210,14 @@ ShellRoot {
 			property var tipTray: null
 			property bool tipOn: false
 
+			// Whether THIS per-screen bar is the one on the main monitor. The
+			// anchored media dropdown below uses it so the popup always drops
+			// from the main-monitor bar's pill, matching PowerMenu/SunsetMenu.
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+
 			function armTip(item, kind: string, trayItem): void {
 				tipItem = item;
 				tipKind = kind;
@@ -1244,6 +1313,7 @@ ShellRoot {
 				}
 
 				Rectangle {
+					id: mediaPill
 					visible: shellRoot.mediaPresent
 					radius: 8
 					color: Theme.surface
@@ -1283,8 +1353,11 @@ ShellRoot {
 								return;
 							if (mouse.button === Qt.LeftButton && p.canTogglePlaying)
 								p.togglePlaying();
-							else if (mouse.button === Qt.RightButton && p.canGoNext)
-								p.next();
+							// Right-click opens the media popup (Nick's choice,
+							// 2026-09-04) rather than skipping to next -- next
+							// now lives inside the popup.
+							else if (mouse.button === Qt.RightButton)
+								shellRoot.mediaPopupVisible = !shellRoot.mediaPopupVisible;
 							else if (mouse.button === Qt.MiddleButton && p.canGoPrevious)
 								p.previous();
 						}
@@ -1628,6 +1701,31 @@ ShellRoot {
 						}
 
 						StatusPill {
+							id: sunsetPill
+							// Hidden until the scheduler has published a real
+							// state, so a machine with no location fix shows
+							// nothing rather than a pill that does nothing.
+							visible: shellRoot.sunsetOk()
+							tipKind: "sunset"
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									Hyprland.dispatch("exec hypr-sunset-ctl toggle");
+								else if (mouse.button === Qt.RightButton)
+									shellRoot.sunsetMenuVisible = !shellRoot.sunsetMenuVisible;
+							}
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.sunsetColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.sunsetIcon()
+							}
+						}
+
+						StatusPill {
 							id: brightnessPill
 							visible: shellRoot.brightnessPresent
 							tipKind: "brightness"
@@ -1813,19 +1911,31 @@ ShellRoot {
 					}
 				}
 
-				Text {
-					id: clockLabel
-					color: Theme.text
-					font.pixelSize: 14
+				// Clock, click to open the calendar popup. BarHoverArea is
+				// transparent when idle, so the clock looks unchanged until
+				// hovered.
+				BarHoverArea {
+					id: clockArea
+					radius: 8
+					implicitWidth: clockLabel.implicitWidth + 14
+					implicitHeight: 24
+					onClicked: shellRoot.calendarPopupVisible = !shellRoot.calendarPopupVisible
 
-					Timer {
-						running: true
-						repeat: true
-						interval: 30000
-						onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+					Text {
+						id: clockLabel
+						anchors.centerIn: parent
+						color: Theme.text
+						font.pixelSize: 14
+
+						Timer {
+							running: true
+							repeat: true
+							interval: 30000
+							onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+						}
+
+						Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 					}
-
-					Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 				}
 
 				Timer {
@@ -1879,6 +1989,33 @@ ShellRoot {
 					}
 				}
 			}
+
+			// Media controls dropdown, anchored just below the now-playing pill
+			// (right-click opens it). Uses the same xdg-popup anchoring as the
+			// hover tooltip above rather than a full-screen overlay, and is
+			// pinned to the main-monitor bar (barWindow.isCenterScreen) so it
+			// always drops from that pill -- matching PowerMenu/SunsetMenu --
+			// even if a different screen's pill was the one clicked.
+			PopupWindow {
+				id: mediaDropdown
+				visible: barWindow.isCenterScreen && shellRoot.mediaPopupVisible && shellRoot.mediaPresent
+				grabFocus: true
+				color: "transparent"
+				implicitWidth: mediaDropdownContent.contentWidth
+				implicitHeight: mediaDropdownContent.contentHeight
+				anchor.window: barWindow
+				anchor.item: mediaPill
+				anchor.edges: Edges.Bottom
+				anchor.gravity: Edges.Bottom
+
+				MediaPopup {
+					id: mediaDropdownContent
+					anchors.fill: parent
+					active: mediaDropdown.visible
+					player: shellRoot.mediaPlayer
+					onDismissed: shellRoot.mediaPopupVisible = false
+				}
+			}
 		}
 	}
 
@@ -1896,7 +2033,7 @@ ShellRoot {
 			id: powerMenuWin
 			required property var modelData
 			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
 				return c && modelData && c.name === modelData.name;
 			}
 			readonly property bool menuOpen: shellRoot.powerMenuVisible
@@ -1928,9 +2065,82 @@ ShellRoot {
 		model: Quickshell.screens
 
 		PanelWindow {
+			id: sunsetMenuWin
 			required property var modelData
 			readonly property bool isCenterScreen: {
-				const c = shellRoot.centerOutputScreen();
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool menuOpen: shellRoot.sunsetMenuVisible
+
+			screen: modelData
+			visible: menuOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: menuOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-sunset-menu-" + modelData.name
+			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			SunsetMenu {
+				anchors.fill: parent
+				active: sunsetMenuWin.menuOpen && sunsetMenuWin.isCenterScreen
+				state: shellRoot.sunsetState
+				onDismissed: shellRoot.sunsetMenuVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: calendarPopupWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool menuOpen: shellRoot.calendarPopupVisible
+
+			screen: modelData
+			visible: menuOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: menuOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-calendar-popup-" + modelData.name
+			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			CalendarPopup {
+				anchors.fill: parent
+				active: calendarPopupWin.menuOpen && calendarPopupWin.isCenterScreen
+				events: shellRoot.calendarEvents
+				eventsOk: shellRoot.calendarOk
+				onDismissed: shellRoot.calendarPopupVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
 				return c && modelData && c.name === modelData.name;
 			}
 

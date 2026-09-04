@@ -10,5 +10,6 @@
     ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
+    ./remote-access.nix
   ];
 }

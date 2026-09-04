@@ -7,6 +7,11 @@
   imports = [
     ./programs/zsh.nix
     ./programs/git.nix
+    # `ssh Tawa` from the always-on recovery origin. Hearth's slim HM does not
+    # import home/default.nix, so these are wired explicitly rather than
+    # inherited.
+    ./programs/ssh-tawa.nix
+    ./programs/ssh-config.nix
   ];
 
   home.stateVersion = "25.11";
