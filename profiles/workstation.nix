@@ -241,7 +241,8 @@ in {
       topgrade
       # Albert: from overlay (unstable); extensions — home/programs/albert.nix + ~/.config/albert/config.
       pkgs.albert
-      pkgs.vscode
+      # VS Code is installed by Home Manager's `programs.vscode` (home/theme/apps.nix),
+      # which also registers the generated "Izar" theme extension — single owner.
       # Claude Code CLI — Conveyor member token (`claude setup-token`) and local agents.
       pkgs.claude-code
       nix-search-cli
