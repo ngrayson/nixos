@@ -13,6 +13,7 @@
     cp ${../../quickshell/PowerMenu.qml} $out/PowerMenu.qml
     cp ${../../quickshell/SunsetMenu.qml} $out/SunsetMenu.qml
     cp ${../../quickshell/MediaPopup.qml} $out/MediaPopup.qml
+    cp ${../../quickshell/CalendarPopup.qml} $out/CalendarPopup.qml
     cp ${../../quickshell/Theme.qml} $out/Theme.qml
     cp ${../../quickshell/qmldir} $out/qmldir
     cp ${../../quickshell/pam/password.conf} $out/pam/password.conf

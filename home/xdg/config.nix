@@ -35,6 +35,10 @@ in {
         source = "${hs.quickshellBundled}/MediaPopup.qml";
         force = true;
       };
+      "quickshell/CalendarPopup.qml" = {
+        source = "${hs.quickshellBundled}/CalendarPopup.qml";
+        force = true;
+      };
       "quickshell/Theme.qml" = {
         source = "${hs.quickshellBundled}/Theme.qml";
         force = true;

@@ -20,6 +20,7 @@
     ./wayland/hyprland.nix
     ./services/dunst.nix
     ./services/battery-notify.nix
+    ./services/calendar-sync.nix
     ./services/polkit-agent.nix
     ./services/nm-applet.nix
     ./services/hypridle.nix
