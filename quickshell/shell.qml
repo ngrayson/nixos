@@ -189,6 +189,10 @@ ShellRoot {
 	property var sunsetState: ({})
 	property bool sunsetMenuVisible: false
 
+	// Right-clicking the now-playing bar widget opens the media popup
+	// (MediaPopup.qml). Left-click on the bar stays play/pause.
+	property bool mediaPopupVisible: false
+
 	readonly property string sunsetRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr-sunset`
 
 	function sunsetOk(): bool {
@@ -1038,6 +1042,13 @@ ShellRoot {
 		onFileChanged: shellRoot.markQsReloadPending()
 	}
 
+	FileView {
+		path: `${shellRoot.qsSourceDir}/MediaPopup.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
 	// The scheduler rewrites this once per tick (atomically, via rename), so
 	// watching it is cheaper and more accurate than polling hyprsunset. Absent
 	// or malformed is normal at login before the first tick: leave the previous
@@ -1303,8 +1314,11 @@ ShellRoot {
 								return;
 							if (mouse.button === Qt.LeftButton && p.canTogglePlaying)
 								p.togglePlaying();
-							else if (mouse.button === Qt.RightButton && p.canGoNext)
-								p.next();
+							// Right-click opens the media popup (Nick's choice,
+							// 2026-09-04) rather than skipping to next -- next
+							// now lives inside the popup.
+							else if (mouse.button === Qt.RightButton)
+								shellRoot.mediaPopupVisible = !shellRoot.mediaPopupVisible;
 							else if (mouse.button === Qt.MiddleButton && p.canGoPrevious)
 								p.previous();
 						}
@@ -2001,6 +2015,45 @@ ShellRoot {
 				active: sunsetMenuWin.menuOpen && sunsetMenuWin.isCenterScreen
 				state: shellRoot.sunsetState
 				onDismissed: shellRoot.sunsetMenuVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: mediaPopupWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+			// Closes on its own if the player disappears while open, so a
+			// popup can never outlive the media it controls.
+			readonly property bool menuOpen: shellRoot.mediaPopupVisible && shellRoot.mediaPresent
+
+			screen: modelData
+			visible: menuOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: menuOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-media-popup-" + modelData.name
+			WlrLayershell.keyboardFocus: (menuOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			MediaPopup {
+				anchors.fill: parent
+				active: mediaPopupWin.menuOpen && mediaPopupWin.isCenterScreen
+				player: shellRoot.mediaPlayer
+				audioLevel: shellRoot.audioPercent
+				onDismissed: shellRoot.mediaPopupVisible = false
 			}
 		}
 	}
