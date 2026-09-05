@@ -362,7 +362,10 @@ exit including Ctrl-C. Run it yourself with a game-like workload — nothing
 triggers it automatically. It **aborts with a non-zero exit** (writing no
 `summary.json`) if a pass captured no MangoHud CSV, rather than recording a
 `null` pass that looks finished; each pass's `<pass>/vkcube.log` holds the
-vkcube/Vulkan-loader output for diagnosing a capture that failed.
+vkcube/Vulkan-loader output for diagnosing a capture that failed. Its first
+verdict — that the `render:ctm_animation` fade, not the CTM commit, is what
+hitches games at a warmth push — is written up in
+[`documentation/hyprsunset-lag-diagnosis.md`](documentation/hyprsunset-lag-diagnosis.md).
 
 Reading a boolean out of the override file uses `if .enabled == false`, never
 `.enabled // true` — jq's `//` treats `false` as empty, which silently breaks
