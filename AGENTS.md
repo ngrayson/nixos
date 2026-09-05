@@ -175,6 +175,53 @@ Safely adding or modifying NixOS hosts, shared modules, and profiles.
 
 Scope: `flake.nix`, `hosts/**/*.nix`, `common/**/*.nix`, `profiles/**/*.nix`.
 
+## Network exposure
+
+The LAN sits behind a landlord-controlled apartment AP that cannot be
+replaced, so "on the local network" is not "our devices only". Every inbound
+port is exposure until shown otherwise.
+
+- **`openFirewall` defaults to `true` on many NixOS service modules**
+  (`services.openssh`, `services.jellyfin`, `programs.steam.*`, and others),
+  which silently adds ports to `networking.firewall.allowed*Ports` on *every*
+  interface. For anything only ever reached over the tailnet, set the service's
+  `openFirewall = false` explicitly and rely on
+  `networking.firewall.trustedInterfaces = ["tailscale0"]` (set once in
+  `common/tailscale.nix` — do not re-declare it per host, or the interface
+  lands in the list twice). This is why `services.openssh.openFirewall = false`
+  is spelled out on Tawa (`hosts/Tawa/remote-access.nix`) and why Go3 carries
+  no `allowedTCPPorts` at all.
+- **Audit what is actually open** by evaluating the built firewall per host
+  rather than reading module defaults:
+
+  ```sh
+  for h in Tawa Theseus Go3 Hearth; do
+    echo "== $h =="
+    nix eval --raw ".#nixosConfigurations.$h.config.networking.firewall.allowedTCPPorts" --apply builtins.toString
+    nix eval --raw ".#nixosConfigurations.$h.config.networking.firewall.allowedUDPPorts" --apply builtins.toString
+  done
+  ```
+
+  To trace *where* a surprising port comes from, ask the option system for the
+  source file of each definition:
+
+  ```sh
+  nix eval --json ".#nixosConfigurations.Tawa.options.networking.firewall.allowedUDPPorts.definitionsWithLocations" \
+    --apply 'ds: map (d: { inherit (d) file value; }) ds'
+  ```
+
+- **A deliberately-open LAN port gets a one-line comment saying why**, next to
+  the option that opens it, so the next audit does not re-litigate it (see the
+  Jellyfin/Syncthing/Steam comments for the pattern).
+- **Never lock yourself out of a remote host.** Gcp and Hearth are managed only
+  over the network you are changing; verify the replacement path works *before*
+  removing the existing one, and never change two remotely-managed hosts in the
+  same switch. Leave Tailscale's UDP `41641` open everywhere — it is how direct
+  peer connections traverse NAT.
+
+Scope: `hosts/**/remote-access.nix`, `common/tailscale.nix`, service modules
+that set `openFirewall`.
+
 ## os-rebuild
 
 `documentation/nixos-framework-setup/os-rebuild.sh` (zsh alias

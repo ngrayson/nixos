@@ -192,6 +192,14 @@ in {
 
   programs.steam = {
     enable = true;
+    # These three openFirewall toggles are the sole source of the LAN gaming
+    # ports on Tawa and Theseus: 27015/27036/27037/27040 tcp and
+    # 27015/27036/10400/10401 udp. Audited 2026-09-05 by tracing
+    # networking.firewall.allowed*Ports.definitionsWithLocations back to
+    # nixpkgs programs/steam.nix — every one resolves here, none are stray, and
+    # in particular 10400/10401 are Steam's (Remote Play), not Slippi's; Slippi
+    # netplay opens no inbound port. Deliberately kept: Steam Remote Play,
+    # in-home streaming and LAN game transfers are core LAN-by-design uses.
     remotePlay.openFirewall = true;
     dedicatedServer.openFirewall = true;
     localNetworkGameTransfers.openFirewall = true;
