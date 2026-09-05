@@ -61,12 +61,14 @@ function syncCommon(material, gl, time) {
   material.uniforms.iTime.value = time;
 }
 
-function SinglePass({ source, colors }) {
+function SinglePass({ source, colors, timeRef }) {
   const material = useMemo(() => makeMaterial(source, 0), [source]);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => syncTheme(material, colors), [material, colors]);
-  useFrame(({ clock, gl }) => {
-    syncCommon(material, gl, clock.elapsedTime);
+  // iTime comes from the shared rate-scaled virtual clock (Atmosphere), not
+  // clock.elapsedTime, so the toy slows and freezes with the wake-greet ramp.
+  useFrame(({ gl }) => {
+    syncCommon(material, gl, timeRef.current);
   });
   return (
     <mesh frustumCulled={false} renderOrder={-1}>
@@ -85,7 +87,7 @@ function makeTarget(width, height) {
   return target;
 }
 
-function Ldc3z4Pass({ colors }) {
+function Ldc3z4Pass({ colors, timeRef }) {
   const { gl } = useThree();
   const mats = useMemo(
     () => ({
@@ -133,10 +135,10 @@ function Ldc3z4Pass({ colors }) {
     };
   }, [gl, mats, quads]);
 
-  useFrame(({ clock, gl: renderer }) => {
+  useFrame(({ gl: renderer }) => {
     const pack = targets.current;
     if (!pack) return;
-    const time = clock.elapsedTime;
+    const time = timeRef.current;
     const w = renderer.domElement.width;
     const h = renderer.domElement.height;
     if (pack.a.width !== w || pack.a.height !== h) {
@@ -174,12 +176,12 @@ function Ldc3z4Pass({ colors }) {
   );
 }
 
-export default function ShadertoyLayer({ shaderId, colors }) {
-  if (shaderId === "7fyXRh") return <SinglePass source={src7fy} colors={colors} />;
-  if (shaderId === "ltXczj") return <SinglePass source={srcLtx} colors={colors} />;
-  if (shaderId === "ldc3z4") return <Ldc3z4Pass colors={colors} />;
-  if (shaderId === "pixel-galaxy") return <SinglePass source={srcPixelGalaxy} colors={colors} />;
-  if (shaderId === "precious-egg") return <SinglePass source={srcPreciousEgg} colors={colors} />;
-  if (shaderId === "starfield-gleam") return <SinglePass source={srcStarfieldGleam} colors={colors} />;
+export default function ShadertoyLayer({ shaderId, colors, timeRef }) {
+  if (shaderId === "7fyXRh") return <SinglePass source={src7fy} colors={colors} timeRef={timeRef} />;
+  if (shaderId === "ltXczj") return <SinglePass source={srcLtx} colors={colors} timeRef={timeRef} />;
+  if (shaderId === "ldc3z4") return <Ldc3z4Pass colors={colors} timeRef={timeRef} />;
+  if (shaderId === "pixel-galaxy") return <SinglePass source={srcPixelGalaxy} colors={colors} timeRef={timeRef} />;
+  if (shaderId === "precious-egg") return <SinglePass source={srcPreciousEgg} colors={colors} timeRef={timeRef} />;
+  if (shaderId === "starfield-gleam") return <SinglePass source={srcStarfieldGleam} colors={colors} timeRef={timeRef} />;
   return null;
 }
