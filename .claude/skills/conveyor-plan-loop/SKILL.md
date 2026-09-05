@@ -16,7 +16,7 @@ model to discover that nothing changed. The split is deliberate:
   and nothing else does.
 
 This skill only selects and delegates. The card itself is planned by
-[conveyor-plan](../conveyor-plan/SKILL.md), loaded inside the subagent.
+the `conveyor-plan` skill, loaded inside the subagent.
 
 ## Setup (the caller does this once)
 
