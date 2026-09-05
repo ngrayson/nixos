@@ -74,6 +74,32 @@ quickshell -d -p ~/.config/nixos/quickshell
 os-rebuild switch
 ```
 
+## Claude skills
+
+Nick's custom Conveyor skills and the upstream `@rallycry/conveyor-skills` are
+surfaced to every Claude Code session on Tawa/Theseus through `~/.claude/skills`,
+assembled by Home Manager (`home/programs/claude-skills.nix`).
+
+- **Custom skills** live in this repo under `.claude/skills/` and are the source
+  of truth: `convey-her`, `conveyor-plan-loop`, and the WizOs forks
+  `conveyor-local-loop` / `conveyor-local-pack` / `conveyor-local-task`. The HM
+  tree links them in as absolute symlinks to the checkout, so an edit is live in
+  the next session with no rebuild.
+- **Upstream skills** come from the npm registry tarball via `pkgs.fetchzip`;
+  the repo no longer carries byte-copies of them. Personal scope
+  (`~/.claude/skills`) overrides a project's own skill of the same name, so the
+  WizOs `conveyor-local-loop` wins over upstream's everywhere on the machine.
+- **Bump upstream** with `conveyor-skills-update` (`--check` compares without
+  editing), then `os-rebuild switch`. It rewrites the pinned `version`/`hash`
+  lines in `claude-skills.nix`.
+- **A new custom skill** must be appended to `customSkills` in
+  `claude-skills.nix` to surface outside this repo; inside this repo project
+  scope serves it immediately. A skills dir that first appears mid-session needs
+  a CLI restart to load.
+
+Scope: `home/programs/claude-skills.nix`, `.claude/skills/`,
+`scripts/conveyor-skills-update.sh`.
+
 ## Hearth deploy
 
 `scripts/hearth-deploy.sh`, exposed as `hearth-deploy` via `~/.local/bin`
