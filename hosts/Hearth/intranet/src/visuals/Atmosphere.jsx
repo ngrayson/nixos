@@ -70,6 +70,11 @@ function useAtmosphereGate() {
   return { wrapRef, reduce, play: visible && onScreen && !reduce };
 }
 
+// How long the frozen mode animates on mount and on each theme/shader switch
+// before re-freezing. Long enough to read as a greeting of motion and to settle
+// the frame past its t=0 pose; short enough that the steady-state stays frozen.
+const BURST_MS = 800;
+
 export default function Atmosphere({ shaderId = "geometry", themeId, animate = true }) {
   const { wrapRef, reduce, play } = useAtmosphereGate();
   // Recomputed whenever the picker changes the theme. This used to be state set
@@ -78,19 +83,34 @@ export default function Atmosphere({ shaderId = "geometry", themeId, animate = t
   const colors = useMemo(() => themeVisualColors(themeId), [themeId]);
   const toy = shaderId !== "geometry";
 
+  // In the frozen ("Animate background: Off") mode a frameloop="never" Canvas
+  // renders exactly once and never repaints on prop changes — so switching the
+  // theme or shader recomputed `colors` but drew no new frame, stranding the
+  // old palette until you toggled animation (the reported bug). Instead, run a
+  // short live burst on mount and on every themeId/shaderId change, then
+  // re-freeze: the burst repaints in the now-current palette AND greets a
+  // passer-by with a moment of motion. The timeout is reset on each change so
+  // the last switch wins and rapid switches can't strand `bursting` true.
+  const [bursting, setBursting] = useState(true);
+  useEffect(() => {
+    setBursting(true);
+    const t = setTimeout(() => setBursting(false), BURST_MS);
+    return () => clearTimeout(t);
+  }, [themeId, shaderId]);
+
   if (reduce) return null;
 
-  // "Animate background: Off" mounts this but freezes it: frameloop="never"
-  // renders the shader ONCE and never drives requestAnimationFrame again, so
-  // it becomes an inert bitmap the compositor just re-presents. Measured on Go3
-  // as ~11% CPU / 41C, identical to the old flat-colour fallback (PR #204) —
-  // the per-vsync redraw is the whole cost of the live mode, and this has none.
-  // When On, the existing visibility gate governs (never redraw while the tab
-  // is hidden or the canvas is off-screen).
+  // On: the visibility gate governs (never redraw while the tab is hidden or the
+  // canvas is off-screen). Off: frozen — "never" except during a burst, so the
+  // steady state keeps the ~11% CPU / 41C frozen cost measured in PR #204 (the
+  // per-vsync redraw is the whole cost of the live mode) and only the brief
+  // burst spends GPU. The burst still honours `play` so a hidden/off-screen tab
+  // never animates.
+  const frameloop = animate ? (play ? "always" : "never") : (bursting && play ? "always" : "never");
   return (
     <div ref={wrapRef} className="atmosphere" aria-hidden="true">
       <Canvas
-        frameloop={animate ? (play ? "always" : "never") : "never"}
+        frameloop={frameloop}
         dpr={[1, 1.5]}
         gl={{ antialias: false, alpha: true, powerPreference: "low-power" }}
         camera={{ position: [0, 0, 3.6], fov: 48 }}
