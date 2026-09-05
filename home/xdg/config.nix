@@ -11,44 +11,14 @@
 in {
   xdg.configFile =
     {
-      "quickshell/shell.qml" = {
-        source = "${hs.quickshellBundled}/shell.qml";
-        force = true;
-      };
-      "quickshell/LockContext.qml" = {
-        source = "${hs.quickshellBundled}/LockContext.qml";
-        force = true;
-      };
-      "quickshell/LockSurface.qml" = {
-        source = "${hs.quickshellBundled}/LockSurface.qml";
-        force = true;
-      };
-      "quickshell/PowerMenu.qml" = {
-        source = "${hs.quickshellBundled}/PowerMenu.qml";
-        force = true;
-      };
-      "quickshell/SunsetMenu.qml" = {
-        source = "${hs.quickshellBundled}/SunsetMenu.qml";
-        force = true;
-      };
-      "quickshell/MediaPopup.qml" = {
-        source = "${hs.quickshellBundled}/MediaPopup.qml";
-        force = true;
-      };
-      "quickshell/CalendarPopup.qml" = {
-        source = "${hs.quickshellBundled}/CalendarPopup.qml";
-        force = true;
-      };
-      "quickshell/Theme.qml" = {
-        source = "${hs.quickshellBundled}/Theme.qml";
-        force = true;
-      };
-      "quickshell/qmldir" = {
-        source = "${hs.quickshellBundled}/qmldir";
-        force = true;
-      };
-      "quickshell/pam/password.conf" = {
-        source = "${hs.quickshellBundled}/pam/password.conf";
+      # Link the whole fallback tree file-by-file (recursive) rather than
+      # enumerating each entry, so it can never drift out of sync with the
+      # bundle as components are added (see home/hypr/scripts.nix). recursive
+      # keeps per-file symlinks — quickshell may drop its own state into this
+      # dir — while force lets them clobber anything already present.
+      "quickshell" = {
+        source = hs.quickshellBundled;
+        recursive = true;
         force = true;
       };
       "kitty/kitty.conf" = {
