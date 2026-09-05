@@ -333,7 +333,10 @@ operator-run frame-time benchmark (MangoHud + vkcube) that A/Bs
 `render:ctm_animation`; it stops the timer, is the sole gamma writer for its
 run, and restores temperature / gamma / `ctm_animation` / the timer on every
 exit including Ctrl-C. Run it yourself with a game-like workload — nothing
-triggers it automatically.
+triggers it automatically. It **aborts with a non-zero exit** (writing no
+`summary.json`) if a pass captured no MangoHud CSV, rather than recording a
+`null` pass that looks finished; each pass's `<pass>/vkcube.log` holds the
+vkcube/Vulkan-loader output for diagnosing a capture that failed.
 
 Reading a boolean out of the override file uses `if .enabled == false`, never
 `.enabled // true` — jq's `//` treats `false` as empty, which silently breaks
