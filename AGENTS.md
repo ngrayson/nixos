@@ -31,6 +31,11 @@ host), **Go3** (Surface Go 3 kiosk), **Gcp**.
   about to do and ask first. Restore whatever you took over — cursor
   position, monitor power, anything left on screen — and crop screenshots to
   the region under test rather than grabbing whole outputs.
+- **File a bug as a Conveyor card the moment you notice it**, not in a PR body,
+  a chat message, or a summary — those lose it. Carry the symptom, the evidence
+  it is real, and the suspected cause; file rather than fix inline, which keeps
+  the current work's scope honest. Full rule in
+  `.claude/skills/convey-her/SKILL.md`.
 - **Hearth** is built on Tawa and activated with `hearth-deploy`
   (`scripts/hearth-deploy.sh`) from **Tawa's current branch**. Do not
   `os-rebuild switch --host Hearth` on Tawa, and do not routine-switch Hearth
@@ -81,14 +86,18 @@ surfaced to every Claude Code session on Tawa/Theseus through `~/.claude/skills`
 assembled by Home Manager (`home/programs/claude-skills.nix`).
 
 - **Custom skills** live in this repo under `.claude/skills/` and are the source
-  of truth: `convey-her`, `conveyor-plan-loop`, and the WizOs forks
-  `conveyor-local-loop` / `conveyor-local-pack` / `conveyor-local-task`. The HM
-  tree links them in as absolute symlinks to the checkout, so an edit is live in
-  the next session with no rebuild.
+  of truth: `convey-her` (the WizOs loop — a thin overlay over stock upstream
+  `conveyor-local-loop` + `conveyor-build`, carrying every WizOs rule as an
+  explicit amendment) and `conveyor-plan-loop`. The HM tree links them in as
+  absolute symlinks to the checkout, so an edit is live in the next session with
+  no rebuild.
 - **Upstream skills** come from the npm registry tarball via `pkgs.fetchzip`;
-  the repo no longer carries byte-copies of them. Personal scope
-  (`~/.claude/skills`) overrides a project's own skill of the same name, so the
-  WizOs `conveyor-local-loop` wins over upstream's everywhere on the machine.
+  the repo no longer carries byte-copies of them. The three former WizOs loop
+  forks are gone: `/conveyor-local-loop` and `/conveyor-build` are now stock
+  upstream everywhere on the machine, the WizOs rules live only in `convey-her`,
+  and an upstream bump never needs a hand re-fork. Personal scope
+  (`~/.claude/skills`) still overrides a project's own skill of the same name,
+  but no custom skill currently clashes with an upstream name.
 - **Bump upstream** with `conveyor-skills-update` (`--check` compares without
   editing), then `os-rebuild switch`. It rewrites the pinned `version`/`hash`
   lines in `claude-skills.nix`.
