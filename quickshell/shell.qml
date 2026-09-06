@@ -173,6 +173,12 @@ ShellRoot {
 	// Esc and click-outside dismiss. `$mod, Tab` keeps its old blind cyclenext.
 	property bool windowSwitcherVisible: false
 
+	// Routed to the active WindowSwitcher instance; see the Variants block that
+	// hosts it. Repeated Alt+Tab presses arrive over IPC rather than as keys,
+	// because Hyprland consumes a matched `exec` bind before the overlay's
+	// exclusive-focus surface sees anything.
+	signal windowSwitcherStep(int delta)
+
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
 	// moves windows and a bare right-drag resizes them, so knowing it is on is
 	// not cosmetic -- ordinary clicking behaves differently everywhere.
@@ -865,6 +871,23 @@ ShellRoot {
 		// Return type required or quickshell will not register this for `ipc call switcher toggle`.
 		function toggle(): void {
 			shellRoot.windowSwitcherVisible = !shellRoot.windowSwitcherVisible;
+		}
+
+		// Alt+Tab: open, or advance if already open. The step is emitted BEFORE
+		// the visible flip so a fresh open banks it via WindowSwitcher.request()
+		// and the rebuild that follows applies it.
+		function next(): void {
+			shellRoot.windowSwitcherStep(1);
+			if (!shellRoot.windowSwitcherVisible)
+				shellRoot.windowSwitcherVisible = true;
+		}
+
+		// Alt+Shift+Tab: open on the least-recently-focused window, or step back
+		// if already open.
+		function prev(): void {
+			shellRoot.windowSwitcherStep(-1);
+			if (!shellRoot.windowSwitcherVisible)
+				shellRoot.windowSwitcherVisible = true;
 		}
 	}
 
@@ -2106,9 +2129,24 @@ ShellRoot {
 			anchors.right: true
 
 			WindowSwitcher {
+				id: switcher
+
 				anchors.fill: parent
 				active: windowSwitcherWin.switcherOpen && windowSwitcherWin.isCenterScreen
 				onDismissed: shellRoot.windowSwitcherVisible = false
+
+				// Guard on isCenterScreen rather than `active`: the bank has to
+				// be fillable BEFORE the overlay becomes visible, and the
+				// non-center instances must not accumulate a counter they will
+				// never use.
+				Connections {
+					target: shellRoot
+
+					function onWindowSwitcherStep(delta: int): void {
+						if (windowSwitcherWin.isCenterScreen)
+							switcher.request(delta);
+					}
+				}
 			}
 		}
 	}

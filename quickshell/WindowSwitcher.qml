@@ -31,6 +31,12 @@ Item {
 	property var windows: []
 	property int currentIndex: 0
 
+	// Steps requested by the Alt+Tab bind while there is nothing to step
+	// through yet -- the overlay is not active, or the async population above
+	// has not landed. Banked here and applied by rebuild() so a fast second
+	// press right after opening is never silently dropped.
+	property int pendingSteps: 0
+
 	// Warm the Hyprland connection at startup so the first Alt+Tab of a
 	// session has data ready rather than an empty card.
 	Component.onCompleted: Hyprland.refreshToplevels()
@@ -45,10 +51,13 @@ Item {
 	}
 
 	onActiveChanged: {
-		if (root.active)
+		if (root.active) {
 			root.rebuild();
-		else
+		} else {
 			root.windows = [];
+			// Never let a step banked against this open leak into the next one.
+			root.pendingSteps = 0;
+		}
 	}
 
 	// Quickshell reports HyprlandToplevel.address WITHOUT the `0x` prefix
@@ -127,10 +136,21 @@ Item {
 			return;
 		}
 
-		// Opening fresh: start on the PREVIOUS window, not the current one.
-		// Entry 0 is the window already focused, so selecting it would make
-		// Return a no-op.
-		root.currentIndex = list.length > 1 ? 1 : 0;
+		// Opening fresh. Entry 0 is the window already focused, so counting
+		// from it is what makes Alt+Tab land on the PREVIOUS window and keeps
+		// Return from being a no-op.
+		//
+		// An empty rebuild must NOT consume the bank: the first rebuild after
+		// an open frequently sees zero windows (async population, see above),
+		// and eating the step there would drop the press that opened us.
+		const n = list.length;
+		if (n === 0) {
+			root.currentIndex = 0;
+			return;
+		}
+		const steps = root.pendingSteps === 0 ? 1 : root.pendingSteps;
+		root.pendingSteps = 0;
+		root.currentIndex = n > 1 ? ((steps % n) + n) % n : 0;
 	}
 
 	function step(delta: int): void {
@@ -138,6 +158,17 @@ Item {
 		if (n === 0)
 			return;
 		root.currentIndex = ((root.currentIndex + delta) % n + n) % n;
+	}
+
+	// Entry point for the Hyprland bind. Hyprland consumes a matched `exec`
+	// bind before the overlay's exclusive-focus surface ever sees the key, so
+	// repeated Alt+Tab presses arrive here over IPC rather than through the
+	// Shortcut blocks below -- those only fire when Alt is NOT held.
+	function request(delta: int): void {
+		if (root.active && root.windows.length > 0)
+			root.step(delta);
+		else
+			root.pendingSteps += delta;
 	}
 
 	function activateCurrent(): void {
