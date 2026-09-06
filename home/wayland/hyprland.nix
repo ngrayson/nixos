@@ -181,6 +181,10 @@ in {
           "$mod, bracketright, workspace, m+1"
           "$mod, Tab, cyclenext"
           "$mod SHIFT, Tab, cyclenext, prev"
+          # Alt-tab picker: lists every window, focuses the chosen one. The two
+          # $mod cycles above are deliberately kept -- they are a working blind
+          # switcher, so a broken picker can never leave the session stuck.
+          "ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher toggle"
           ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
           ", XF86AudioRaiseVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -i 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"

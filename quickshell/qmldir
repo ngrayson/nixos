@@ -7,3 +7,4 @@ SunsetMenu 1.0 SunsetMenu.qml
 BarHoverArea 1.0 BarHoverArea.qml
 MediaPopup 1.0 MediaPopup.qml
 CalendarPopup 1.0 CalendarPopup.qml
+WindowSwitcher 1.0 WindowSwitcher.qml
