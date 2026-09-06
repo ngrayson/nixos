@@ -169,6 +169,10 @@ ShellRoot {
 	// Centered power menu (sleep / hibernate / restart / shutdown). Esc dismisses.
 	property bool powerMenuVisible: false
 
+	// Alt-tab window switcher: lists every open window and focuses the chosen one.
+	// Esc and click-outside dismiss. `$mod, Tab` keeps its old blind cyclenext.
+	property bool windowSwitcherVisible: false
+
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
 	// moves windows and a bare right-drag resizes them, so knowing it is on is
 	// not cosmetic -- ordinary clicking behaves differently everywhere.
@@ -852,6 +856,15 @@ ShellRoot {
 		// Return type required or quickshell will not register this for `ipc call power toggle`.
 		function toggle(): void {
 			shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
+		}
+	}
+
+	IpcHandler {
+		target: "switcher"
+
+		// Return type required or quickshell will not register this for `ipc call switcher toggle`.
+		function toggle(): void {
+			shellRoot.windowSwitcherVisible = !shellRoot.windowSwitcherVisible;
 		}
 	}
 
@@ -2059,6 +2072,43 @@ ShellRoot {
 				anchors.fill: parent
 				active: powerMenuWin.menuOpen && powerMenuWin.isCenterScreen
 				onDismissed: shellRoot.powerMenuVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: windowSwitcherWin
+			required property var modelData
+			// CenterOutput is THE definition of which output is main; never
+			// re-derive it here (its header explains why).
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool switcherOpen: shellRoot.windowSwitcherVisible
+
+			screen: modelData
+			visible: switcherOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: switcherOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-window-switcher-" + modelData.name
+			WlrLayershell.keyboardFocus: (switcherOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			WindowSwitcher {
+				anchors.fill: parent
+				active: windowSwitcherWin.switcherOpen && windowSwitcherWin.isCenterScreen
+				onDismissed: shellRoot.windowSwitcherVisible = false
 			}
 		}
 	}
