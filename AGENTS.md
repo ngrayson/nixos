@@ -296,7 +296,10 @@ them).
 clock. Cluster order: updates (rebuild wrench, flake-input count, origin
 commits to pull), qs-reload (only if `quickshell/*.qml` changed since last
 start), wifi, bluetooth, screen-warmth (only once the scheduler has a location
-fix), brightness, battery, resize-move (only while that
+fix), claude (usage on hover, left-click new agent, right-click menu; usage
+comes from `home/services/claude-usage.nix`, which reads Claude Code's
+`~/.claude/.credentials.json` READ-ONLY and never refreshes it -- only Claude
+Code may write that file), brightness, battery, resize-move (only while that
 mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is
