@@ -11,6 +11,7 @@
     ./programs/albert.nix
     ./programs/slippi.nix
     ./programs/zsh.nix
+    ./programs/claude-skills.nix
     ./programs/git.nix
     ./programs/ssh-hearth.nix
     ./programs/ssh-tawa.nix

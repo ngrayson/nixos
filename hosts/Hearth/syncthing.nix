@@ -175,7 +175,9 @@ in {
 
     # Opens 22000/tcp+udp and 21027/udp — the sync protocol and local
     # discovery, which DO need to reach the internet for the Ultra leg. This
-    # option does not open the GUI port.
+    # option does not open the GUI port. Audited 2026-09-05: kept open because
+    # of that internet leg, and acceptable on the LAN side because Hearth now
+    # sits on the ancientglade network rather than the landlord's GiGstreem LAN.
     openDefaultPorts = true;
 
     # The device and folders are applied at runtime from sops, so the module

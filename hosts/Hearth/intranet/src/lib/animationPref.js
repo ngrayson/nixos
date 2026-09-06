@@ -1,37 +1,51 @@
 export const ANIMATION_KEY = "hearth.animateBackground";
 
-// Default on. Every viewer that is not the kiosk — phones, laptops — keeps
-// today's behaviour until someone actively turns it off.
-const DEFAULT_ANIMATE = true;
+// Three background animation modes:
+//   always — live render (today's "On")
+//   wake   — frozen at rest, but animates for a moment each time the Go3 panel
+//            wakes from screen-off, then eases back to frozen
+//   off    — frozen shader frame (PR #205)
+export const ANIMATION_MODES = ["always", "wake", "off"];
 
-// Stored as "1"/"0" rather than JSON: the value is a single bit and this keeps
-// a corrupt or foreign value falling back to the default instead of throwing.
-export function readAnimationPref() {
+// Default live. Every viewer that is not the kiosk — phones, laptops — keeps
+// today's behaviour until someone actively changes it.
+const DEFAULT_MODE = "always";
+
+// The value used to be a single "1"/"0" bit. Migrate it so a viewer who set the
+// old On/Off pref before the three-way mode existed keeps their choice: true
+// (On) → "always", false (Off) → "off". A corrupt or foreign value falls back
+// to the default rather than throwing.
+function normalizeMode(stored) {
+  if (stored === "always" || stored === "wake" || stored === "off") return stored;
+  if (stored === "1") return "always";
+  if (stored === "0") return "off";
+  return null;
+}
+
+export function readAnimationMode() {
   try {
-    const stored = localStorage.getItem(ANIMATION_KEY);
-    if (stored === "0") return false;
-    if (stored === "1") return true;
+    return normalizeMode(localStorage.getItem(ANIMATION_KEY)) ?? DEFAULT_MODE;
   } catch {
     /* private mode */
   }
-  return DEFAULT_ANIMATE;
+  return DEFAULT_MODE;
 }
 
-export function writeAnimationPref(value) {
+export function writeAnimationMode(mode) {
   try {
-    localStorage.setItem(ANIMATION_KEY, value ? "1" : "0");
+    localStorage.setItem(ANIMATION_KEY, ANIMATION_MODES.includes(mode) ? mode : DEFAULT_MODE);
   } catch {
     /* private mode */
   }
 }
 
-// Whether this browser has ever decided. Go3's kiosk URL seeds the preference
-// off on a first load only, so a later Settings change on the panel itself
-// sticks instead of being re-forced by the query string on every reload.
-export function animationPrefIsSet() {
+// Whether this browser has ever decided (in either the legacy or the mode
+// encoding). Go3's kiosk URL seeds the preference on a first load only, so a
+// later Settings change on the panel itself sticks instead of being re-forced
+// by the query string on every reload.
+export function animationModeIsSet() {
   try {
-    const stored = localStorage.getItem(ANIMATION_KEY);
-    return stored === "0" || stored === "1";
+    return normalizeMode(localStorage.getItem(ANIMATION_KEY)) !== null;
   } catch {
     return false;
   }

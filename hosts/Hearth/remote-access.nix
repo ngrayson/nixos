@@ -26,6 +26,15 @@
 
   services.openssh = {
     enable = true;
+    # Deliberately open on the LAN as well as the tailnet, so it is set
+    # explicitly (openFirewall defaults to true, but the near-miss that
+    # prompted this audit was relying on that default silently). Hearth now
+    # lives on the ancientglade network, not the landlord-controlled GiGstreem
+    # LAN, so a LAN-side port 22 is exposed only to Nick's own trusted network
+    # — and it is the deploy escape hatch when the tailnet path is down (the
+    # --ssh note above), unlike Go3 where the LAN path times out. This is the
+    # only source of 22 now; the redundant `allowedTCPPorts = [22]` is gone.
+    openFirewall = true;
     settings = {
       KbdInteractiveAuthentication = false;
       PasswordAuthentication = false;
@@ -35,10 +44,9 @@
 
   services.tailscale.enable = true;
 
-  networking.firewall = {
-    allowedTCPPorts = [22];
-    trustedInterfaces = ["tailscale0"];
-  };
+  # No networking.firewall block: sshd opens its own port (above), and
+  # trustedInterfaces is not re-declared here — common/tailscale.nix already
+  # sets tailscale0, and repeating it produced a duplicate `tailscale0` entry.
 
   nix.settings.trusted-users = ["@wheel"];
   security.sudo.wheelNeedsPassword = false;

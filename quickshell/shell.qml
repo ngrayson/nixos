@@ -261,6 +261,8 @@ ShellRoot {
 			return "Screen warmth idle · " + (reason === "no-location" ? "waiting on a location fix" : reason);
 		}
 		const lines = [];
+		if (st?.held === true)
+			lines.push("Screen warmth held · game running");
 		if (shellRoot.sunsetPhase() === "off") {
 			const until = st?.disabledUntil ?? 0;
 			lines.push(until > 0 ? ("Screen warmth paused until " + shellRoot.sunsetClock(until)) : "Screen warmth off");

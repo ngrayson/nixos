@@ -87,7 +87,7 @@
 
   hyprSunsetApply = pkgs.writeShellApplication {
     name = "hypr-sunset-apply";
-    runtimeInputs = [pkgs.coreutils pkgs.jq pkgs.sunwait pkgs.gawk pkgs.hyprland];
+    runtimeInputs = [pkgs.coreutils pkgs.jq pkgs.sunwait pkgs.gawk pkgs.hyprland pkgs.systemd];
     text = ''
       set -euo pipefail
 
@@ -99,6 +99,19 @@
       # clock, without a compositor and without touching the real screen.
       NOW="''${HYPR_SUNSET_NOW:-$(date +%s)}"
       HYPRCTL="''${HYPR_SUNSET_HYPRCTL:-${pkgs.hyprland}/bin/hyprctl}"
+
+      # gamemoded is a long-lived user service and can outlive a Hyprland
+      # restart, so its `resume` hook may inherit a STALE
+      # HYPRLAND_INSTANCE_SIGNATURE and every hyprctl call would miss the live
+      # compositor. If the signature we have does not resolve to a socket dir,
+      # re-read it from the user manager's environment. Guarded: the flake-check
+      # sandbox has no user manager, and a normal timer tick already has a valid
+      # signature so this fork never runs there.
+      if [ -z "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] \
+        || [ ! -e "''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/''${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        sig="$(systemctl --user show-environment 2>/dev/null | awk -F= '/^HYPRLAND_INSTANCE_SIGNATURE=/{print $2; exit}' || true)"
+        [ -n "$sig" ] && export HYPRLAND_INSTANCE_SIGNATURE="$sig"
+      fi
 
       # --- push log (correlation) -----------------------------------------
       # One line per REAL hyprsunset write: `epoch temp gamma <tick|ramp|
@@ -319,6 +332,11 @@
       # reads a disabled state back as enabled and the toggle never works.
       ENABLED="$(jq -r 'if .enabled == false then "false" else "true" end' "$OVERRIDE")"
       DISABLED_UNTIL="$(jq -r '.disabledUntil // 0' "$OVERRIDE")"
+      # gamemode hold: freeze the screen at its current value for the duration of
+      # a match (set by hosts/Tawa/host.nix via `hypr-sunset-ctl pause`). Read
+      # with the same `== true` form as enabled -- `.hold // false` would misread
+      # a genuine false back as the default.
+      HOLD="$(jq -r 'if .hold == true then "true" else "false" end' "$OVERRIDE")"
 
       SUPPRESSED=0
       if [ "$ENABLED" != "true" ]; then
@@ -397,6 +415,7 @@
           --argjson nextEvent "$NEXT_EVENT" \
           --arg nextKind "$NEXT_KIND" \
           --argjson enabled "$([ "$ENABLED" = "true" ] && echo true || echo false)" \
+          --argjson held "$([ "$HOLD" = "true" ] && echo true || echo false)" \
           --argjson disabledUntil "$DISABLED_UNTIL" \
           --argjson now "$NOW" \
           '{ok: $ok, phase: $phase, temp: $temp, gamma: $gamma, ramping: $ramping,
@@ -405,7 +424,7 @@
             transitionMin: $transitionMin,
             sunrise: $sunrise, sunset: $sunset,
             nextEvent: $nextEvent, nextKind: $nextKind,
-            enabled: $enabled, disabledUntil: $disabledUntil, now: $now}' \
+            enabled: $enabled, held: $held, disabledUntil: $disabledUntil, now: $now}' \
           >"$tmp"
         mv "$tmp" "$STATE"
       }
@@ -415,6 +434,16 @@
       # daily CTM rewrites. A failed read means "unknown", which pushes.
       CUR_TEMP="$("$HYPRCTL" hyprsunset temperature 2>/dev/null | tr -dc '0-9' || true)"
       CUR_GAMMA="$("$HYPRCTL" hyprsunset gamma 2>/dev/null | awk -F. '{print $1}' | tr -dc '0-9' || true)"
+
+      # gamemode hold: freeze whatever is on screen. Kill any in-flight ramp or
+      # preview so nothing pushes mid-match, publish the live value with
+      # held=true so the pill is honest, and push nothing. This gates ticks AND
+      # --ramp, so `hypr-sunset-ctl pause`'s trailing re-apply is a no-op.
+      if [ "$HOLD" = "true" ]; then
+        disarm_ramp
+        publish_state "''${CUR_TEMP:-$TEMP}" "''${CUR_GAMMA:-$GAMMA}" false
+        exit 0
+      fi
 
       if [ "$RAMP_MODE" -eq 1 ]; then
         disarm_ramp
@@ -501,11 +530,13 @@
           if [ "$cur" = "true" ]; then
             write_override '.enabled = false | .disabledUntil = 0'
           else
-            write_override '.enabled = true | .disabledUntil = 0'
+            write_override '.enabled = true | .disabledUntil = 0 | .hold = false'
           fi
           ;;
         enable)
-          write_override '.enabled = true | .disabledUntil = 0'
+          # Also clears a gamemode hold: a manual "turn back on" is the escape
+          # hatch if an `end` hook never fires (a game crash + gamemoded restart).
+          write_override '.enabled = true | .disabledUntil = 0 | .hold = false'
           ;;
         disable)
           # `disable <seconds>` for a timed pause, or `disable sunrise`.
@@ -525,6 +556,18 @@
             echo "usage: hypr-sunset-ctl disable <seconds>|sunrise" >&2
             exit 2
           fi
+          ;;
+        pause)
+          # gamemode start (hosts/Tawa/host.nix): freeze the screen at its
+          # current warmth. The apply hold gate does the freezing; the trailing
+          # --ramp below hits that gate and pushes nothing. Distinct from
+          # `disable`, which resets to daylight.
+          write_override '.hold = true'
+          ;;
+        resume)
+          # gamemode end: release the hold; the trailing --ramp eases the screen
+          # back to the current schedule.
+          write_override '.hold = false'
           ;;
         set)
           key="''${2:-}"
@@ -547,7 +590,7 @@
           write_setting ".$key = $val"
           ;;
         *)
-          echo "usage: hypr-sunset-ctl {toggle|enable|disable <seconds>|sunrise|set <key> <value>|preview}" >&2
+          echo "usage: hypr-sunset-ctl {toggle|enable|disable <seconds>|sunrise|pause|resume|set <key> <value>|preview}" >&2
           exit 2
           ;;
       esac
@@ -591,9 +634,22 @@
       OUT="$BENCH_DIR/$RUN_TS"
       mkdir -p "$OUT"
 
-      # vkcube frames per pass. ~3000 at 60fps is ~50s, enough for a 5s
-      # baseline plus the scripted push sequence.
+      # vkcube frames per pass. ~3000 at 60fps is ~50s -- it must outlast
+      # LOG_SECONDS below (MangoHud only flushes the CSV when the log duration
+      # elapses, not when vkcube exits), and cover the 5s baseline + push
+      # sequence. run_pass kills vkcube once the CSV lands, so a larger count is
+      # only a safety margin, never wasted wall time.
       FRAMES="''${1:-3000}"
+
+      # MangoHud logging window per pass. Long enough for the 5s baseline plus
+      # the ~20s push sequence, and SHORTER than the vkcube run so the duration
+      # elapses mid-run and MangoHud writes the CSV (it does not flush an
+      # in-progress log when the app exits).
+      LOG_SECONDS=28
+      # autostart_log delays logging this many seconds after vkcube launches, so
+      # MangoHud elapsed=0 lands ~AUTOSTART_SEC after the vk-start mark. analyze
+      # subtracts it when mapping push marks onto the frame log.
+      AUTOSTART_SEC=1
 
       cat <<EOF
       hypr-sunset-bench: this will VISIBLY change screen warmth for ~30s and
@@ -642,8 +698,9 @@
       # --ramp ease. Timestamps go to the per-pass marks file so the analysis
       # can line each push up against the frame-time log.
       push_sequence() {
+        # Appends to $marks; run_pass truncates it and writes the vk-start
+        # anchor first, so the anchor is never clobbered here.
         local marks="$1" t
-        : >"$marks"
         t=6500; hyprctl hyprsunset temperature "$t" >/dev/null 2>&1 || true
         printf '%s temp %s\n' "$(date +%s.%N)" "$t" >>"$marks"; sleep 3
         hyprctl hyprsunset gamma 90 >/dev/null 2>&1 || true
@@ -658,61 +715,162 @@
         printf '%s ramp-end\n' "$(date +%s.%N)" >>"$marks"
       }
 
-      # Parse a MangoHud CSV (its data rows have a `frametime` column, in ms)
-      # and print p50/p99/max. MangoHud writes a metadata line, then a header
-      # row containing the column names, then data.
-      summarize_csv() {
-        local csv="$1" label="$2"
+      # Parse a MangoHud CSV (frametime column in ms, elapsed column in ns since
+      # the log started) plus the per-pass marks file, and print one pass's JSON:
+      # overall p50/p99/max, the first-5s baseline p99, and a `pushes` array
+      # correlating each scripted push against the frame log -- the max frametime
+      # inside the push window and how many frames there exceeded 2x the baseline
+      # p99. Hard-fails with exit 2 when no CSV or no frametime rows were
+      # captured, so summary.json can never carry a null pass again.
+      #
+      # MangoHud writes two metadata lines, then a header row naming the columns,
+      # then data. The header is located by name, not by position.
+      analyze_pass() {
+        local csv="$1" marks="$2" label="$3" dir="$4" json
         if [ -z "$csv" ] || [ ! -f "$csv" ]; then
-          echo "  $label: no MangoHud CSV (is MangoHud active in the vkcube env?)" >&2
-          echo "null"
-          return 0
+          echo "hypr-sunset-bench: $label captured no MangoHud CSV under $dir" >&2
+          echo "  the MangoHud Vulkan layer never loaded into vkcube; see $dir/vkcube.log" >&2
+          exit 2
         fi
-        gawk -F, '
-          # Locate the frametime column from the first row that names it.
-          !ft {
+        # A `local json="$(...)"` on one line would mask the command's exit
+        # status (local always returns 0); declare first, assign separately, so
+        # the `|| exit 2` below actually fires when gawk reports no rows.
+        json="$(gawk -F, -v marksfile="$marks" -v autostart="$AUTOSTART_SEC" '
+          BEGIN {
+            # Marks are "<epoch> <name> [value]". vk-start is the t0 anchor that
+            # maps MangoHud elapsed (ns from log start) onto push wall-clock.
+            while ((getline line < marksfile) > 0) {
+              split(line, a, " ")
+              if (a[2] == "vk-start")  { t0 = a[1]; continue }
+              if (a[2] == "ramp-start") rs = a[1]
+              if (a[2] == "ramp-end")   re = a[1]
+              nm++; mname[nm] = a[2]; mts[nm] = a[1]
+            }
+          }
+          !cols {
             for (i = 1; i <= NF; i++) {
               g = $i; gsub(/[" ]/, "", g)
-              if (g == "frametime") { ft = i }
+              if (g == "frametime") ftc = i
+              if (g == "elapsed")   elc = i
             }
+            if (ftc) cols = 1
             next
           }
-          ft && ($ft + 0) > 0 { n++; v[n] = $ft + 0; s += $ft; if ($ft + 0 > mx) mx = $ft + 0 }
+          ftc && ($ftc + 0) > 0 {
+            fv = $ftc + 0
+            # A frametime over 1s is not a real frame: under a fullscreen game
+            # the vkcube window is intermittently occluded and MangoHud logs the
+            # whole gap-until-next-present as one enormous frametime (~9.4e8 ms
+            # observed). Count and drop these so a single artifact cannot become
+            # max_ms or skew p99/baseline. A real hitch, even a severe stall,
+            # stays well under this cap.
+            if (fv > 1000) { garbage++; next }
+            n++
+            ft[n] = fv
+            el[n] = (elc ? $elc + 0 : 0)
+            v[n] = fv
+            if (fv > mx) mx = fv
+            # Baseline = the quiet stretch before the first push. The first push
+            # (temp) lands ~4s into the log (5s after vk-start, minus autostart),
+            # so 3.5s of log stays clear of it.
+            if (el[n] < 3.5e9) { bn++; bv[bn] = fv }
+          }
           END {
-            if (!n) { print "null"; exit }
+            if (!n) exit 3
             asort(v)
             p50 = v[int(n * 0.50) < 1 ? 1 : int(n * 0.50)]
             p99 = v[int(n * 0.99) < 1 ? 1 : int(n * 0.99)]
-            printf "{\"frames\":%d,\"p50_ms\":%.3f,\"p99_ms\":%.3f,\"max_ms\":%.3f}\n", n, p50, p99, mx
+            bp99 = 0
+            if (bn) { asort(bv); bp99 = bv[int(bn * 0.99) < 1 ? 1 : int(bn * 0.99)] }
+            thr = 2 * bp99
+            pushes = ""
+            for (m = 1; m <= nm; m++) {
+              if (mname[m] == "ramp-end") continue
+              # Map each mark onto log-elapsed: subtract t0 (vk-start) AND the
+              # autostart delay (logging began that much after the anchor). +/-
+              # 300ms absorbs residual skew; pushes are 3s apart, so windows
+              # never overlap, and the ramp is its own start..end span.
+              if (mname[m] == "ramp-start") {
+                lo = (rs - t0 - autostart) * 1e9; hi = (re - t0 - autostart) * 1e9; name = "ramp"
+              } else {
+                c = (mts[m] - t0 - autostart) * 1e9; lo = c - 300e6; hi = c + 300e6; name = mname[m]
+              }
+              wmax = 0; over = 0
+              for (k = 1; k <= n; k++) {
+                if (el[k] >= lo && el[k] <= hi) {
+                  if (ft[k] > wmax) wmax = ft[k]
+                  if (thr > 0 && ft[k] > thr) over++
+                }
+              }
+              if (pushes != "") pushes = pushes ","
+              pushes = pushes sprintf("{\"name\":\"%s\",\"max_ms\":%.3f,\"frames_over_2x_baseline_p99\":%d}", name, wmax, over)
+            }
+            printf "{\"frames\":%d,\"garbage_frames\":%d,\"p50_ms\":%.3f,\"p99_ms\":%.3f,\"max_ms\":%.3f,\"baseline_p99_ms\":%.3f,\"pushes\":[%s]}", n, garbage, p50, p99, mx, bp99, pushes
           }
-        ' "$csv"
+        ' "$csv")" || {
+          echo "hypr-sunset-bench: $label MangoHud CSV ($csv) has no frametime rows; see $dir/vkcube.log" >&2
+          exit 2
+        }
+        printf '%s' "$json"
       }
 
       run_pass() {
         # $1 label, $2 ctm_animation value
-        local label="$1" ctm="$2" dir marks csv
+        local label="$1" ctm="$2" dir marks csv vk
         dir="$OUT/$label"
         marks="$OUT/$label.marks"
         mkdir -p "$dir"
         hyprctl keyword render:ctm_animation "$ctm" >/dev/null 2>&1 || true
 
-        MANGOHUD=1 \
-        MANGOHUD_CONFIG="no_display,output_folder=$dir,log_duration=45,autostart_log=1,log_interval=0" \
-          vkcube --c "$FRAMES" >/dev/null 2>&1 &
-        local vk=$!
+        # Three things the original launch got wrong, each of which alone left
+        # the capture empty (all observed on Tawa 2026-09-05):
+        #   1. bare MANGOHUD=1 does not inject the layer on NixOS -- use the
+        #      mangohud WRAPPER, which puts the manifest on the loader's path.
+        #   2. no_display suppresses the log entirely, not just the overlay -- so
+        #      it is gone; the overlay showing during a manual bench is fine.
+        #   3. MangoHud flushes the CSV when log_duration ELAPSES, not when the
+        #      app exits, so the window (LOG_SECONDS) is shorter than the vkcube
+        #      run and we wait for the file rather than for every frame.
+        # vkcube/loader output goes to vkcube.log so a failed capture is
+        # diagnosable.
+        MANGOHUD_CONFIG="output_folder=$dir,log_duration=$LOG_SECONDS,autostart_log=$AUTOSTART_SEC,log_interval=0" \
+          mangohud vkcube --c "$FRAMES" >"$dir/vkcube.log" 2>&1 &
+        vk=$!
+
+        # Anchor the frame log to wall-clock. Truncate here, not in
+        # push_sequence, so the anchor survives; analyze subtracts AUTOSTART_SEC
+        # (logging starts that long after this mark) when placing the pushes.
+        : >"$marks"
+        printf '%s vk-start\n' "$(date +%s.%N)" >>"$marks"
 
         sleep 5 # baseline before any push
         push_sequence "$marks"
+
+        # MangoHud writes the CSV when its log_duration elapses (~AUTOSTART_SEC +
+        # LOG_SECONDS after launch), so wait for the file, then stop vkcube --
+        # never wait out all FRAMES. Bounded so a capture that never lands still
+        # returns and analyze_pass reports the hard failure. The _summary.csv is
+        # a per-run rollup, not per-frame, so it is excluded.
+        csv=""
+        for _ in $(seq 1 30); do
+          csv="$(find "$dir" -maxdepth 1 -name '*.csv' ! -name '*_summary.csv' -type f 2>/dev/null | sort | tail -n1)"
+          [ -n "$csv" ] && break
+          sleep 1
+        done
+        kill "$vk" 2>/dev/null || true
         wait "$vk" 2>/dev/null || true
 
-        csv="$(find "$dir" -maxdepth 1 -name '*.csv' -type f 2>/dev/null | sort | tail -n1)"
-        summarize_csv "$csv" "$label"
+        analyze_pass "$csv" "$marks" "$label" "$dir"
       }
 
+      # A failed pass exits 2 from inside the command substitution; propagate it
+      # (a plain assignment carries the substitution's status, unlike `local`),
+      # so we never fall through and write a summary. The EXIT trap still runs
+      # restore(), so temp/gamma/ctm/timer are put back on this path too.
       echo "Pass 1/2: render:ctm_animation = 1 (fade on)"
-      ON_JSON="$(run_pass ctm-on 1)"
+      ON_JSON="$(run_pass ctm-on 1)" || exit 2
       echo "Pass 2/2: render:ctm_animation = 0 (fade off)"
-      OFF_JSON="$(run_pass ctm-off 0)"
+      OFF_JSON="$(run_pass ctm-off 0)" || exit 2
 
       SUMMARY="$OUT/summary.json"
       jq -n \
@@ -724,14 +882,38 @@
 
       echo
       echo "hypr-sunset-bench results ($RUN_TS)"
-      echo "  pass       p50(ms)  p99(ms)  max(ms)"
+      echo "  pass       p50(ms)  p99(ms)  max(ms)  base-p99  garbage"
       jq -r '
         def row(l; o): "  \(l | . + "        " | .[0:9])"
           + ((o.p50_ms // 0 | tostring | . + "         " | .[0:9]))
           + ((o.p99_ms // 0 | tostring | . + "         " | .[0:9]))
-          + ((o.max_ms // 0 | tostring));
+          + ((o.max_ms // 0 | tostring | . + "         " | .[0:9]))
+          + ((o.baseline_p99_ms // 0 | tostring | . + "         " | .[0:9]))
+          + ((o.garbage_frames // 0 | tostring));
         row("ctm-on"; .ctm_on), row("ctm-off"; .ctm_off)
       ' "$SUMMARY"
+
+      echo
+      echo "  per-push max frametime and frames over 2x baseline p99:"
+      echo "  pass     mark          max(ms)   >2x-base"
+      jq -r '
+        def prows(l; o): (o.pushes // [])[]
+          | "  \(l | . + "        " | .[0:8]) "
+            + "\(.name | . + "            " | .[0:12]) "
+            + "\(.max_ms | tostring | . + "         " | .[0:8]) "
+            + "\(.frames_over_2x_baseline_p99 | tostring)";
+        prows("ctm-on"; .ctm_on), prows("ctm-off"; .ctm_off)
+      ' "$SUMMARY"
+
+      # If MangoHud logged occlusion artifacts, say so: they were dropped from
+      # the numbers, but their presence means vkcube was not presenting cleanly,
+      # so run the game WINDOWED (not fullscreen-exclusive) for a loaded pass.
+      if [ "$(jq '[.ctm_on.garbage_frames, .ctm_off.garbage_frames] | add' "$SUMMARY")" -gt 0 ]; then
+        echo
+        echo "  note: dropped garbage frametimes (vkcube occluded, likely a"
+        echo "        fullscreen game). Numbers above exclude them; run the game"
+        echo "        windowed so vkcube keeps presenting for a clean loaded pass."
+      fi
       echo
       echo "Full JSON + per-pass CSVs and push marks under: $OUT"
     '';

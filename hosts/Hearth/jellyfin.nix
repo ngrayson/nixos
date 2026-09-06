@@ -28,6 +28,12 @@
 
   services.jellyfin = {
     enable = true;
+    # Opens 8096/8920 tcp + 1900/7359 udp on every interface. Deliberate: the
+    # web UI serves devices that are not tailscale clients (a TV, a phone on
+    # Wi-Fi). Audited 2026-09-05 — acceptable because Hearth now lives on the
+    # ancientglade network, not the landlord-controlled GiGstreem LAN, so this
+    # is exposed only to Nick's own trusted network. If Hearth ever returns to
+    # an untrusted LAN, gate this behind the tailnet instead.
     openFirewall = true;
   };
 

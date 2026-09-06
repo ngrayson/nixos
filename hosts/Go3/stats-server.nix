@@ -30,8 +30,23 @@
 
       PORT = ${toString port}
       ORIGIN = "https://home.wizt.org"
+      # idle-blank.nix publishes the panel stage here (awake|dim|off). We only
+      # ever read it; idle-blank stays the sole writer of the state and backlight.
+      STATE_FILE = "/run/go3-display/state"
 
       _prev_cpu = None
+      _prev_stage = None
+      _panel_woke_at = None
+
+
+      def panel_stage():
+          """awake | dim | off, or None if the state file is missing/unreadable."""
+          try:
+              with open(STATE_FILE, encoding="utf-8") as fh:
+                  stage = fh.read().strip()
+          except OSError:
+              return None
+          return stage if stage in ("awake", "dim", "off") else None
 
 
       def cpu_percent():
@@ -107,7 +122,17 @@
 
 
       def payload():
+          global _prev_stage, _panel_woke_at
           pct, status = battery()
+          stage = panel_stage()
+          # A transition INTO awake from dim/off is a wake — record when it
+          # happened so the dashboard's "on wake" mode can greet. The first
+          # observation (prev None) seeds the baseline and is not itself a wake,
+          # so a stats-server restart does not fire a phantom greet.
+          if stage == "awake" and _prev_stage is not None and _prev_stage != "awake":
+              _panel_woke_at = time.time()
+          if stage is not None:
+              _prev_stage = stage
           return {
               "cpu_pct": cpu_percent(),
               "mem_pct": mem_percent(),
@@ -115,6 +140,8 @@
               "battery_status": status,
               "wifi_signal": wifi_signal(),
               "cpu_temp_c": cpu_temp_c(),
+              "panel_stage": stage,
+              "panel_woke_at": _panel_woke_at,
               "generatedAt": int(time.time()),
           }
 

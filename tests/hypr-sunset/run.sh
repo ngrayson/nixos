@@ -275,6 +275,54 @@ stub_seed 3400 90
 run_apply "$NIGHT" # idempotent -> no push
 if [ ! -f "$STATE_DIR/pushes.log" ]; then pass "pushes.log: an idempotent tick logs nothing"; else fail "pushes.log: written for a no-op tick"; fi
 
+# --- (h) gamemode hold: freeze the screen during a match ---------------------
+echo "scenario h: gamemode hold"
+reset_state
+stub_seed 6500 100
+echo '{"hold":true}' >"$OVERRIDE"
+m="$(writes_total)"
+run_apply "$NIGHT" # a night tick, but held -> push nothing
+assert_eq "hold tick: 0 writes" 0 "$(count_writes "$m")"
+assert_eq "hold tick: held=true in state" "true" "$(jq -r '.held' "$STATE")"
+assert_eq "hold tick: phase still reflects the schedule" "night" "$(jq -r '.phase' "$STATE")"
+
+# a hold must disarm any in-flight ramp so nothing pushes mid-match
+reset_state
+stub_seed 6500 100
+echo '{"hold":true}' >"$OVERRIDE"
+sleep 300 &
+echo "$!" >"$STATE_DIR/ramp.pid"
+m="$(writes_total)"
+run_apply "$NIGHT"
+assert_eq "hold with a live ramp: 0 writes" 0 "$(count_writes "$m")"
+if [ ! -f "$STATE_DIR/ramp.pid" ]; then pass "hold disarms the in-flight ramp"; else fail "hold left ramp.pid in place"; fi
+kill %1 2>/dev/null || true
+
+# ctl pause / resume round-trip
+reset_state
+stub_seed 6500 100
+HYPR_SUNSET_NOW="$NIGHT" "$CTL" pause >/dev/null 2>&1 || true
+wait_ramp
+assert_eq "ctl pause: hold=true" "true" "$(jq -r 'if .hold == true then "true" else "false" end' "$OVERRIDE")"
+m="$(writes_total)"
+run_apply "$NIGHT"
+assert_eq "ctl pause then tick: 0 writes" 0 "$(count_writes "$m")"
+m="$(writes_total)"
+HYPR_SUNSET_NOW="$NIGHT" "$CTL" resume >/dev/null 2>&1 || true
+wait_ramp
+assert_eq "ctl resume: hold=false" "false" "$(jq -r 'if .hold == true then "true" else "false" end' "$OVERRIDE")"
+assert_ge "ctl resume: eases back (>=1 write)" 1 "$(count_writes "$m")"
+assert_eq "ctl resume: reaches night temperature" 3400 "$(cat "$STUB_STATE/temp")"
+
+# enable is the manual escape hatch and clears a hold too
+reset_state
+stub_seed 6500 100
+HYPR_SUNSET_NOW="$NIGHT" "$CTL" pause >/dev/null 2>&1 || true
+wait_ramp
+HYPR_SUNSET_NOW="$NIGHT" "$CTL" enable >/dev/null 2>&1 || true
+wait_ramp
+assert_eq "ctl enable: clears the hold" "false" "$(jq -r 'if .hold == true then "true" else "false" end' "$OVERRIDE")"
+
 # --- informational: one tick's execve count (never asserted) -----------------
 if command -v strace >/dev/null 2>&1; then
   reset_state

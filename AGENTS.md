@@ -31,6 +31,11 @@ host), **Go3** (Surface Go 3 kiosk), **Gcp**.
   about to do and ask first. Restore whatever you took over — cursor
   position, monitor power, anything left on screen — and crop screenshots to
   the region under test rather than grabbing whole outputs.
+- **File a bug as a Conveyor card the moment you notice it**, not in a PR body,
+  a chat message, or a summary — those lose it. Carry the symptom, the evidence
+  it is real, and the suspected cause; file rather than fix inline, which keeps
+  the current work's scope honest. Full rule in
+  `.claude/skills/convey-her/SKILL.md`.
 - **Hearth** is built on Tawa and activated with `hearth-deploy`
   (`scripts/hearth-deploy.sh`) from **Tawa's current branch**. Do not
   `os-rebuild switch --host Hearth` on Tawa, and do not routine-switch Hearth
@@ -73,6 +78,36 @@ quickshell -d -p ~/.config/nixos/quickshell
 # ✅ persist (user runs)
 os-rebuild switch
 ```
+
+## Claude skills
+
+Nick's custom Conveyor skills and the upstream `@rallycry/conveyor-skills` are
+surfaced to every Claude Code session on Tawa/Theseus through `~/.claude/skills`,
+assembled by Home Manager (`home/programs/claude-skills.nix`).
+
+- **Custom skills** live in this repo under `.claude/skills/` and are the source
+  of truth: `convey-her` (the WizOs loop — a thin overlay over stock upstream
+  `conveyor-local-loop` + `conveyor-build`, carrying every WizOs rule as an
+  explicit amendment) and `conveyor-plan-loop`. The HM tree links them in as
+  absolute symlinks to the checkout, so an edit is live in the next session with
+  no rebuild.
+- **Upstream skills** come from the npm registry tarball via `pkgs.fetchzip`;
+  the repo no longer carries byte-copies of them. The three former WizOs loop
+  forks are gone: `/conveyor-local-loop` and `/conveyor-build` are now stock
+  upstream everywhere on the machine, the WizOs rules live only in `convey-her`,
+  and an upstream bump never needs a hand re-fork. Personal scope
+  (`~/.claude/skills`) still overrides a project's own skill of the same name,
+  but no custom skill currently clashes with an upstream name.
+- **Bump upstream** with `conveyor-skills-update` (`--check` compares without
+  editing), then `os-rebuild switch`. It rewrites the pinned `version`/`hash`
+  lines in `claude-skills.nix`.
+- **A new custom skill** must be appended to `customSkills` in
+  `claude-skills.nix` to surface outside this repo; inside this repo project
+  scope serves it immediately. A skills dir that first appears mid-session needs
+  a CLI restart to load.
+
+Scope: `home/programs/claude-skills.nix`, `.claude/skills/`,
+`scripts/conveyor-skills-update.sh`.
 
 ## Hearth deploy
 
@@ -175,6 +210,53 @@ Safely adding or modifying NixOS hosts, shared modules, and profiles.
 
 Scope: `flake.nix`, `hosts/**/*.nix`, `common/**/*.nix`, `profiles/**/*.nix`.
 
+## Network exposure
+
+The LAN sits behind a landlord-controlled apartment AP that cannot be
+replaced, so "on the local network" is not "our devices only". Every inbound
+port is exposure until shown otherwise.
+
+- **`openFirewall` defaults to `true` on many NixOS service modules**
+  (`services.openssh`, `services.jellyfin`, `programs.steam.*`, and others),
+  which silently adds ports to `networking.firewall.allowed*Ports` on *every*
+  interface. For anything only ever reached over the tailnet, set the service's
+  `openFirewall = false` explicitly and rely on
+  `networking.firewall.trustedInterfaces = ["tailscale0"]` (set once in
+  `common/tailscale.nix` — do not re-declare it per host, or the interface
+  lands in the list twice). This is why `services.openssh.openFirewall = false`
+  is spelled out on Tawa (`hosts/Tawa/remote-access.nix`) and why Go3 carries
+  no `allowedTCPPorts` at all.
+- **Audit what is actually open** by evaluating the built firewall per host
+  rather than reading module defaults:
+
+  ```sh
+  for h in Tawa Theseus Go3 Hearth; do
+    echo "== $h =="
+    nix eval --raw ".#nixosConfigurations.$h.config.networking.firewall.allowedTCPPorts" --apply builtins.toString
+    nix eval --raw ".#nixosConfigurations.$h.config.networking.firewall.allowedUDPPorts" --apply builtins.toString
+  done
+  ```
+
+  To trace *where* a surprising port comes from, ask the option system for the
+  source file of each definition:
+
+  ```sh
+  nix eval --json ".#nixosConfigurations.Tawa.options.networking.firewall.allowedUDPPorts.definitionsWithLocations" \
+    --apply 'ds: map (d: { inherit (d) file value; }) ds'
+  ```
+
+- **A deliberately-open LAN port gets a one-line comment saying why**, next to
+  the option that opens it, so the next audit does not re-litigate it (see the
+  Jellyfin/Syncthing/Steam comments for the pattern).
+- **Never lock yourself out of a remote host.** Gcp and Hearth are managed only
+  over the network you are changing; verify the replacement path works *before*
+  removing the existing one, and never change two remotely-managed hosts in the
+  same switch. Leave Tailscale's UDP `41641` open everywhere — it is how direct
+  peer connections traverse NAT.
+
+Scope: `hosts/**/remote-access.nix`, `common/tailscale.nix`, service modules
+that set `openFirewall`.
+
 ## os-rebuild
 
 `documentation/nixos-framework-setup/os-rebuild.sh` (zsh alias
@@ -262,8 +344,12 @@ interleave. `publish_state` writes a per-PID temp file for the same reason.
 
 The bar reads `$XDG_RUNTIME_DIR/hypr-sunset/state.json` and never calls
 `hyprctl hyprsunset` — every action goes through `hypr-sunset-ctl`
-(`toggle` / `disable <seconds>|sunrise` / `set <key> <value>`), preserving the
-single-writer rule. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
+(`toggle` / `disable <seconds>|sunrise` / `pause` / `resume` / `set <key>
+<value>`), preserving the single-writer rule. `pause` sets a `hold` override
+that freezes the screen at its current warmth (distinct from `disable`, which
+resets to daylight and ramps there) and `resume` clears it; Feral gamemode
+drives them from `hosts/Tawa/host.nix` so warmth holds steady during a match,
+and `enable` / `toggle` also clear the hold as a manual escape hatch. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
 `HYPR_SUNSET_CONFIG_DIR`, `HYPR_SUNSET_NOW` and `HYPR_SUNSET_HYPRCTL`, so the
 whole schedule can be exercised at an arbitrary clock against a scratch tree
 with no compositor. Use that rather than waiting for real dusk.
@@ -286,7 +372,13 @@ operator-run frame-time benchmark (MangoHud + vkcube) that A/Bs
 `render:ctm_animation`; it stops the timer, is the sole gamma writer for its
 run, and restores temperature / gamma / `ctm_animation` / the timer on every
 exit including Ctrl-C. Run it yourself with a game-like workload — nothing
-triggers it automatically.
+triggers it automatically. It **aborts with a non-zero exit** (writing no
+`summary.json`) if a pass captured no MangoHud CSV, rather than recording a
+`null` pass that looks finished; each pass's `<pass>/vkcube.log` holds the
+vkcube/Vulkan-loader output for diagnosing a capture that failed. Its first
+verdict — that the `render:ctm_animation` fade, not the CTM commit, is what
+hitches games at a warmth push — is written up in
+[`documentation/hyprsunset-lag-diagnosis.md`](documentation/hyprsunset-lag-diagnosis.md).
 
 Reading a boolean out of the override file uses `if .enabled == false`, never
 `.enabled // true` — jq's `//` treats `false` as empty, which silently breaks

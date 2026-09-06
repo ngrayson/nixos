@@ -3,9 +3,9 @@ import Modal from "./components/Modal.jsx";
 import WidgetGrid from "./components/WidgetGrid.jsx";
 import { Fact, ICO, Icon } from "./lib/icons.jsx";
 import {
-  animationPrefIsSet,
-  readAnimationPref,
-  writeAnimationPref,
+  animationModeIsSet,
+  readAnimationMode,
+  writeAnimationMode,
 } from "./lib/animationPref.js";
 import { readShaderPref, SHADER_OPTIONS, writeShaderPref } from "./lib/shaderPref.js";
 import {
@@ -75,7 +75,7 @@ function useBuildReload() {
   }, []);
 }
 
-function AtmosphereGate({ shaderId, themeId, animate }) {
+function AtmosphereGate({ shaderId, themeId, mode, wokeAt }) {
   const [motionOk, setMotionOk] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -86,20 +86,20 @@ function AtmosphereGate({ shaderId, themeId, animate }) {
   }, []);
   // prefers-reduced-motion is an accessibility signal from the OS and always
   // wins: it fully unmounts the Canvas (no WebGL context at all) — the true
-  // minimal-GPU floor. `animate` is the viewer's Settings choice and no longer
-  // gates mounting: Off keeps the Canvas but freezes it (frameloop="never"),
-  // which PR #204 measured at ~11% CPU / 41°C on Go3 — the same as the old flat
-  // fallback, because a render-once context has no per-vsync redraw. The live
-  // 112%/85°C cost (PR #142) was that redraw loop, which Off no longer runs.
+  // minimal-GPU floor. `mode` is the viewer's Settings choice and no longer
+  // gates mounting: Off and On-wake keep the Canvas but rest frozen
+  // (frameloop="never"), which PR #204 measured at ~11% CPU / 41°C on Go3 — the
+  // same as the old flat fallback, because a render-once context has no
+  // per-vsync redraw. On-wake animates only for a moment on each panel wake.
   if (!motionOk) return null;
   return (
     <Suspense fallback={null}>
-      <Atmosphere shaderId={shaderId} themeId={themeId} animate={animate} />
+      <Atmosphere shaderId={shaderId} themeId={themeId} mode={mode} wokeAt={wokeAt} />
     </Suspense>
   );
 }
 
-function SettingsModal({ shaderId, onShader, themeId, onTheme, animate, onAnimate, onClose }) {
+function SettingsModal({ shaderId, onShader, themeId, onTheme, mode, onMode, onClose }) {
   const { pref, setFormat } = useTimeFormat();
   // Empty under `vite dev`, where /themes.js is not generated — no point
   // showing a picker with nothing in it.
@@ -133,18 +133,19 @@ function SettingsModal({ shaderId, onShader, themeId, onTheme, animate, onAnimat
             usable on Go3's panel — the one viewer that most needs it. */}
         <div className="map-provider" role="radiogroup" aria-label="Animate background">
           {[
-            [true, "On"],
-            [false, "Off"],
+            ["always", "Always"],
+            ["wake", "On wake"],
+            ["off", "Off"],
           ].map(([value, label]) => (
             <button
-              key={label}
+              key={value}
               type="button"
               role="radio"
-              aria-checked={animate === value}
-              className={animate === value ? "map-provider-btn is-active" : "map-provider-btn"}
+              aria-checked={mode === value}
+              className={mode === value ? "map-provider-btn is-active" : "map-provider-btn"}
               onClick={() => {
-                writeAnimationPref(value);
-                onAnimate(value);
+                writeAnimationMode(value);
+                onMode(value);
               }}
             >
               {label}
@@ -211,11 +212,11 @@ const showSystemStats = params?.get("showSystemStats") === "1";
 // background back on from Settings on the panel itself sticks, instead of the
 // query string re-forcing it off on the next reload.
 //
-// Runs at module scope, which is before Shell's useState(readAnimationPref)
+// Runs at module scope, which is before Shell's useState(readAnimationMode)
 // on first render, so there is no race between seeding and reading.
 const disableAnimatedBackground = params?.get("disableAnimatedBackground") === "1";
-if (disableAnimatedBackground && !animationPrefIsSet()) {
-  writeAnimationPref(false);
+if (disableAnimatedBackground && !animationModeIsSet()) {
+  writeAnimationMode("off");
 }
 
 // Go3 serves its own CPU/RAM/battery/Wi-Fi/temperature on loopback, because a
@@ -223,6 +224,41 @@ if (disableAnimatedBackground && !animationPrefIsSet()) {
 // Same machine, different origin -- hence the CSP entry in caddy.nix.
 const STATS_URL = "http://127.0.0.1:18090/stats.json";
 const STATS_POLL_MS = 5000;
+// In "on wake" mode the greet must start within a second or two of the panel
+// waking, so the stage is polled faster than the 5s stat-row cadence — but only
+// in that mode, and this poll drives nothing else, so the shared 5s poll for
+// the other widgets is left untouched.
+const WAKE_POLL_MS = 1000;
+
+// The panel wake edge, surfaced from Go3's loopback stats server. Only polls in
+// "on wake" mode and only while the tab is visible; returns the latest
+// panel_woke_at (a wall-clock seconds value that bumps on each wake), or null on
+// any viewer without the stats server — which then simply never greets.
+function usePanelWokeAt(mode) {
+  const [wokeAt, setWokeAt] = useState(null);
+  useEffect(() => {
+    if (mode !== "wake") return undefined;
+    let cancelled = false;
+    function poll() {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetch(STATS_URL)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error("stats"))))
+        .then((data) => {
+          if (cancelled) return;
+          const w = typeof data.panel_woke_at === "number" ? data.panel_woke_at : null;
+          if (w != null) setWokeAt(w);
+        })
+        .catch(() => {});
+    }
+    poll();
+    const id = setInterval(poll, WAKE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [mode]);
+  return wokeAt;
+}
 
 function KioskStats() {
   const [stats, setStats] = useState(null);
@@ -271,7 +307,8 @@ function KioskStats() {
 function Shell() {
   const [shaderId, setShaderId] = useState(readShaderPref);
   const [themeId, setThemeId] = useState(readThemePref);
-  const [animate, setAnimate] = useState(readAnimationPref);
+  const [mode, setMode] = useState(readAnimationMode);
+  const wokeAt = usePanelWokeAt(mode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   useBuildReload();
   // Repaints the eight CSS custom properties style.css declares in :root —
@@ -323,7 +360,7 @@ function Shell() {
 
   return (
     <>
-      <AtmosphereGate shaderId={shaderId} themeId={themeId} animate={animate} />
+      <AtmosphereGate shaderId={shaderId} themeId={themeId} mode={mode} wokeAt={wokeAt} />
       <main>
         <nav className="site-nav" aria-label="Hearth">
           <a
@@ -378,8 +415,8 @@ function Shell() {
           onShader={setShaderId}
           themeId={themeId}
           onTheme={setThemeId}
-          animate={animate}
-          onAnimate={setAnimate}
+          mode={mode}
+          onMode={setMode}
           onClose={() => setSettingsOpen(false)}
         />
       ) : null}

@@ -12,6 +12,13 @@ Included:
 
 The VPC firewall created by the helper allows SSH from `0.0.0.0/0`. Narrow the source range in `scripts/gcp/create-instance.sh` before deployment when a fixed administrative CIDR is available.
 
+## Network exposure (audit 2026-09-05)
+
+Gcp is the only genuinely internet-facing host in the flake: it has a public address and, unlike the LAN machines, no `tailscale0` entry in `trustedInterfaces`, so `profiles/server.nix`'s `allowedTCPPorts = [22]` sits on the public interface. sshd is key-only (`PasswordAuthentication` and `PermitRootLogin` off), so this is not an open door, but it should be gated. Because the host does not exist yet, the decision is staged rather than applied — see the comment in `host.nix`:
+
+- **Preferred, once Gcp is on the tailnet:** mirror Tawa — `services.openssh.openFirewall = false`, drop `22` from `allowedTCPPorts`, and trust `tailscale0`. Only after confirming tailnet reachability, or you lock yourself out with no console to walk to.
+- **Until then:** the GCP VPC firewall is the real control — narrow the SSH source range (above) rather than leaning on the OS firewall alone.
+
 ## Build
 
 The image build uses a temporary VM, so `/dev/kvm` must be available:

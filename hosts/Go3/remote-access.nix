@@ -40,6 +40,17 @@
 
   services.openssh = {
     enable = true;
+    # openFirewall defaults to TRUE, which by itself puts 22 into
+    # allowedTCPPorts on every interface — the explicit list that used to be
+    # here was redundant with it, and removing that list alone left 22 open.
+    # sshd is reached only over the tailnet: go3-deploy connects to
+    # go3.tail6cd822.ts.net (see home/programs/ssh-go3.nix), which lands on
+    # tailscale0, and common/tailscale.nix already trusts that interface. So
+    # sshd needs no firewall hole at all — the old entry only opened 22 on the
+    # apartment LAN, which this kiosk never uses for SSH (the comment above
+    # notes the LAN path to sshd times out). On a landlord-owned LAN that is
+    # exposure with no purpose, so it is closed the same way Tawa does it.
+    openFirewall = false;
     settings = {
       KbdInteractiveAuthentication = false;
       PasswordAuthentication = false;
@@ -47,10 +58,9 @@
     };
   };
 
-  networking.firewall = {
-    allowedTCPPorts = [22];
-    trustedInterfaces = ["tailscale0"];
-  };
+  # No networking.firewall block: with sshd's openFirewall off there is nothing
+  # to open, and trustedInterfaces is not re-declared here — it comes from
+  # common/tailscale.nix, and repeating it produced a duplicate `tailscale0`.
 
   nix.settings.trusted-users = ["@wheel"];
   security.sudo.wheelNeedsPassword = false;
