@@ -73,6 +73,7 @@ That reads as "the bar is dead". It is not — it is running from `~/.config/nix
 - `qs-quickshell-ipc call lock activate` — session lock (`Super+L`). **Confirm with the user first** (see above).
 - `qs-quickshell-ipc call lock preview` / `cancelPreview` — non-locking test overlay. **Confirm first, and always cancel it when done.**
 - `qs-quickshell-ipc call power toggle` — short `XF86PowerOff` (no-op while locked; lock surface has its own power row).
+- `qs-quickshell-ipc call switcher next|prev|commit|dismiss|toggle` — alt-tab picker. `next`/`prev` open it or step the highlight, `commit` focuses the highlighted window and closes, `dismiss` closes without changing focus, `toggle` is the mouse-browse path. The overlay holds **exclusive keyboard focus**, so anything that opens it over IPC must close it again (`dismiss`) before handing the session back.
 - Methods need an explicit `: void` return or Quickshell will not register them.
 - `cancelPreview` is a `void` IPC and returns 0 whether or not a preview was open — its exit code is not evidence that one existed.
 
