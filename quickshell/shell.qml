@@ -179,6 +179,11 @@ ShellRoot {
 	// exclusive-focus surface sees anything.
 	signal windowSwitcherStep(int delta)
 
+	// Routed the same way as the step signal above, and banked by the switcher
+	// until its window list exists -- a quick Alt+Tab tap commits before the
+	// asynchronous population has landed.
+	signal windowSwitcherCommit()
+
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
 	// moves windows and a bare right-drag resizes them, so knowing it is on is
 	// not cosmetic -- ordinary clicking behaves differently everywhere.
@@ -978,6 +983,21 @@ ShellRoot {
 			shellRoot.windowSwitcherStep(-1);
 			if (!shellRoot.windowSwitcherVisible)
 				shellRoot.windowSwitcherVisible = true;
+		}
+
+		// Alt released, or Alt+Return: focus the highlighted window and close.
+		// Only meaningful while open -- a commit that arrives for a closed
+		// overlay (it can overtake `next` on a very fast tap, since they are
+		// two separate processes) is DROPPED rather than banked, so it can
+		// never fire into the next open.
+		function commit(): void {
+			if (shellRoot.windowSwitcherVisible)
+				shellRoot.windowSwitcherCommit();
+		}
+
+		// Alt+Esc: close without changing focus.
+		function dismiss(): void {
+			shellRoot.windowSwitcherVisible = false;
 		}
 	}
 
@@ -2318,6 +2338,11 @@ ShellRoot {
 					function onWindowSwitcherStep(delta: int): void {
 						if (windowSwitcherWin.isCenterScreen)
 							switcher.request(delta);
+					}
+
+					function onWindowSwitcherCommit(): void {
+						if (windowSwitcherWin.isCenterScreen)
+							switcher.requestCommit();
 					}
 				}
 			}

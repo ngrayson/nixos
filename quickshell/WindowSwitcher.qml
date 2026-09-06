@@ -37,6 +37,12 @@ Item {
 	// press right after opening is never silently dropped.
 	property int pendingSteps: 0
 
+	// A commit that arrived while the asynchronous population was still in
+	// flight -- the quick Alt+Tab tap, where Alt is released within a few tens
+	// of milliseconds. Applied by rebuild() AFTER the banked steps, so the tap
+	// lands on the previous window rather than on nothing.
+	property bool pendingCommit: false
+
 	// Warm the Hyprland connection at startup so the first Alt+Tab of a
 	// session has data ready rather than an empty card.
 	Component.onCompleted: Hyprland.refreshToplevels()
@@ -55,8 +61,9 @@ Item {
 			root.rebuild();
 		} else {
 			root.windows = [];
-			// Never let a step banked against this open leak into the next one.
+			// Never let anything banked against this open leak into the next one.
 			root.pendingSteps = 0;
+			root.pendingCommit = false;
 		}
 	}
 
@@ -151,6 +158,14 @@ Item {
 		const steps = root.pendingSteps === 0 ? 1 : root.pendingSteps;
 		root.pendingSteps = 0;
 		root.currentIndex = n > 1 ? ((steps % n) + n) % n : 0;
+
+		// Below the empty-list guard and below the step application on
+		// purpose: an empty rebuild must keep the bank (exactly like
+		// pendingSteps), and the tap has to commit the row the steps chose.
+		if (root.pendingCommit) {
+			root.pendingCommit = false;
+			root.activateCurrent();
+		}
 	}
 
 	function step(delta: int): void {
@@ -163,12 +178,26 @@ Item {
 	// Entry point for the Hyprland bind. Hyprland consumes a matched `exec`
 	// bind before the overlay's exclusive-focus surface ever sees the key, so
 	// repeated Alt+Tab presses arrive here over IPC rather than through the
-	// Shortcut blocks below -- those only fire when Alt is NOT held.
+	// Shortcut blocks below -- those only fire when Alt is NOT held. With Alt
+	// held, Return and Esc arrive through the `switcher` submap instead, as
+	// the commit and dismiss IPC calls.
 	function request(delta: int): void {
 		if (root.active && root.windows.length > 0)
 			root.step(delta);
 		else
 			root.pendingSteps += delta;
+	}
+
+	// Entry point for the Alt-release and Alt+Return binds, over IPC for the
+	// same reason as request(). Banks ONLY while active: an inactive overlay
+	// must never carry a commit into its next open.
+	function requestCommit(): void {
+		if (!root.active)
+			return;
+		if (root.windows.length > 0)
+			root.activateCurrent();
+		else
+			root.pendingCommit = true;
 	}
 
 	function activateCurrent(): void {
