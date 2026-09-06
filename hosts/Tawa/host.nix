@@ -1,5 +1,6 @@
 # Tawa (desktop) — hostname, AMD, SDDM xrandr. Intel desktop, no LUKS.
 {
+  config,
   pkgs,
   lib,
   ...
@@ -38,6 +39,14 @@
     start = "${sunsetCtl} pause";
     end = "${sunsetCtl} resume";
   };
+  # gamemoded is a long-lived user service that reads /etc/gamemode.ini once at
+  # startup, so a switch that rewrites the file leaves the running daemon on the
+  # old config until a reboot or manual restart (the custom hooks above stay
+  # inert). Restart it when — and only when — the generated ini changes, so a
+  # routine switch never touches a daemon that's mid-match holding gamemode.
+  systemd.user.services.gamemoded.restartTriggers = [
+    config.environment.etc."gamemode.ini".source
+  ];
 
   # Plasma 6 sets SDDM to the Wayland greeter (KWin) by default. That path never runs
   # `services.xserver.displayManager.setupCommands`, so xrandr cannot shrink the login to one output.
