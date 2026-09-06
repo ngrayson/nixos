@@ -335,8 +335,12 @@ interleave. `publish_state` writes a per-PID temp file for the same reason.
 
 The bar reads `$XDG_RUNTIME_DIR/hypr-sunset/state.json` and never calls
 `hyprctl hyprsunset` — every action goes through `hypr-sunset-ctl`
-(`toggle` / `disable <seconds>|sunrise` / `set <key> <value>`), preserving the
-single-writer rule. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
+(`toggle` / `disable <seconds>|sunrise` / `pause` / `resume` / `set <key>
+<value>`), preserving the single-writer rule. `pause` sets a `hold` override
+that freezes the screen at its current warmth (distinct from `disable`, which
+resets to daylight and ramps there) and `resume` clears it; Feral gamemode
+drives them from `hosts/Tawa/host.nix` so warmth holds steady during a match,
+and `enable` / `toggle` also clear the hold as a manual escape hatch. Both scripts honour `HYPR_SUNSET_STATE_DIR`,
 `HYPR_SUNSET_CONFIG_DIR`, `HYPR_SUNSET_NOW` and `HYPR_SUNSET_HYPRCTL`, so the
 whole schedule can be exercised at an arbitrary clock against a scratch tree
 with no compositor. Use that rather than waiting for real dusk.

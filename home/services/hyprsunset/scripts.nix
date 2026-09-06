@@ -87,7 +87,7 @@
 
   hyprSunsetApply = pkgs.writeShellApplication {
     name = "hypr-sunset-apply";
-    runtimeInputs = [pkgs.coreutils pkgs.jq pkgs.sunwait pkgs.gawk pkgs.hyprland];
+    runtimeInputs = [pkgs.coreutils pkgs.jq pkgs.sunwait pkgs.gawk pkgs.hyprland pkgs.systemd];
     text = ''
       set -euo pipefail
 
@@ -99,6 +99,19 @@
       # clock, without a compositor and without touching the real screen.
       NOW="''${HYPR_SUNSET_NOW:-$(date +%s)}"
       HYPRCTL="''${HYPR_SUNSET_HYPRCTL:-${pkgs.hyprland}/bin/hyprctl}"
+
+      # gamemoded is a long-lived user service and can outlive a Hyprland
+      # restart, so its `resume` hook may inherit a STALE
+      # HYPRLAND_INSTANCE_SIGNATURE and every hyprctl call would miss the live
+      # compositor. If the signature we have does not resolve to a socket dir,
+      # re-read it from the user manager's environment. Guarded: the flake-check
+      # sandbox has no user manager, and a normal timer tick already has a valid
+      # signature so this fork never runs there.
+      if [ -z "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ] \
+        || [ ! -e "''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/''${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        sig="$(systemctl --user show-environment 2>/dev/null | awk -F= '/^HYPRLAND_INSTANCE_SIGNATURE=/{print $2; exit}' || true)"
+        [ -n "$sig" ] && export HYPRLAND_INSTANCE_SIGNATURE="$sig"
+      fi
 
       # --- push log (correlation) -----------------------------------------
       # One line per REAL hyprsunset write: `epoch temp gamma <tick|ramp|
@@ -319,6 +332,11 @@
       # reads a disabled state back as enabled and the toggle never works.
       ENABLED="$(jq -r 'if .enabled == false then "false" else "true" end' "$OVERRIDE")"
       DISABLED_UNTIL="$(jq -r '.disabledUntil // 0' "$OVERRIDE")"
+      # gamemode hold: freeze the screen at its current value for the duration of
+      # a match (set by hosts/Tawa/host.nix via `hypr-sunset-ctl pause`). Read
+      # with the same `== true` form as enabled -- `.hold // false` would misread
+      # a genuine false back as the default.
+      HOLD="$(jq -r 'if .hold == true then "true" else "false" end' "$OVERRIDE")"
 
       SUPPRESSED=0
       if [ "$ENABLED" != "true" ]; then
@@ -397,6 +415,7 @@
           --argjson nextEvent "$NEXT_EVENT" \
           --arg nextKind "$NEXT_KIND" \
           --argjson enabled "$([ "$ENABLED" = "true" ] && echo true || echo false)" \
+          --argjson held "$([ "$HOLD" = "true" ] && echo true || echo false)" \
           --argjson disabledUntil "$DISABLED_UNTIL" \
           --argjson now "$NOW" \
           '{ok: $ok, phase: $phase, temp: $temp, gamma: $gamma, ramping: $ramping,
@@ -405,7 +424,7 @@
             transitionMin: $transitionMin,
             sunrise: $sunrise, sunset: $sunset,
             nextEvent: $nextEvent, nextKind: $nextKind,
-            enabled: $enabled, disabledUntil: $disabledUntil, now: $now}' \
+            enabled: $enabled, held: $held, disabledUntil: $disabledUntil, now: $now}' \
           >"$tmp"
         mv "$tmp" "$STATE"
       }
@@ -415,6 +434,16 @@
       # daily CTM rewrites. A failed read means "unknown", which pushes.
       CUR_TEMP="$("$HYPRCTL" hyprsunset temperature 2>/dev/null | tr -dc '0-9' || true)"
       CUR_GAMMA="$("$HYPRCTL" hyprsunset gamma 2>/dev/null | awk -F. '{print $1}' | tr -dc '0-9' || true)"
+
+      # gamemode hold: freeze whatever is on screen. Kill any in-flight ramp or
+      # preview so nothing pushes mid-match, publish the live value with
+      # held=true so the pill is honest, and push nothing. This gates ticks AND
+      # --ramp, so `hypr-sunset-ctl pause`'s trailing re-apply is a no-op.
+      if [ "$HOLD" = "true" ]; then
+        disarm_ramp
+        publish_state "''${CUR_TEMP:-$TEMP}" "''${CUR_GAMMA:-$GAMMA}" false
+        exit 0
+      fi
 
       if [ "$RAMP_MODE" -eq 1 ]; then
         disarm_ramp
@@ -501,11 +530,13 @@
           if [ "$cur" = "true" ]; then
             write_override '.enabled = false | .disabledUntil = 0'
           else
-            write_override '.enabled = true | .disabledUntil = 0'
+            write_override '.enabled = true | .disabledUntil = 0 | .hold = false'
           fi
           ;;
         enable)
-          write_override '.enabled = true | .disabledUntil = 0'
+          # Also clears a gamemode hold: a manual "turn back on" is the escape
+          # hatch if an `end` hook never fires (a game crash + gamemoded restart).
+          write_override '.enabled = true | .disabledUntil = 0 | .hold = false'
           ;;
         disable)
           # `disable <seconds>` for a timed pause, or `disable sunrise`.
@@ -525,6 +556,18 @@
             echo "usage: hypr-sunset-ctl disable <seconds>|sunrise" >&2
             exit 2
           fi
+          ;;
+        pause)
+          # gamemode start (hosts/Tawa/host.nix): freeze the screen at its
+          # current warmth. The apply hold gate does the freezing; the trailing
+          # --ramp below hits that gate and pushes nothing. Distinct from
+          # `disable`, which resets to daylight.
+          write_override '.hold = true'
+          ;;
+        resume)
+          # gamemode end: release the hold; the trailing --ramp eases the screen
+          # back to the current schedule.
+          write_override '.hold = false'
           ;;
         set)
           key="''${2:-}"
@@ -547,7 +590,7 @@
           write_setting ".$key = $val"
           ;;
         *)
-          echo "usage: hypr-sunset-ctl {toggle|enable|disable <seconds>|sunrise|set <key> <value>|preview}" >&2
+          echo "usage: hypr-sunset-ctl {toggle|enable|disable <seconds>|sunrise|pause|resume|set <key> <value>|preview}" >&2
           exit 2
           ;;
       esac
