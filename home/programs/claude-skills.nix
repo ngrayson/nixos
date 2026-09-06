@@ -7,8 +7,10 @@
 #     is a Nix flake repo with no package.json / node_modules of its own);
 #   - custom WizOs skills are ABSOLUTE symlinks into the live checkout, so
 #     editing a SKILL.md is picked up by the next session with no rebuild.
-# A custom name overrides an upstream one of the same skill (conveyor-local-loop
-# is Nick's fork of upstream's).
+# A custom name still overrides an upstream one of the same skill (the `ln -sfn`
+# below), but no custom skill currently clashes with an upstream name: the WizOs
+# loop is `convey-her`, a thin overlay over stock upstream conveyor-local-loop +
+# conveyor-build, not a fork of them.
 #
 # Claude Code loads ~/.claude/skills/<name>/SKILL.md for every project and
 # personal scope wins a name clash with a project's own .claude/skills.
@@ -38,9 +40,6 @@
   customSkills = [
     "convey-her"
     "conveyor-plan-loop"
-    "conveyor-local-loop"
-    "conveyor-local-pack"
-    "conveyor-local-task"
   ];
   repoSkills = "${config.home.homeDirectory}/.config/nixos/.claude/skills";
 
