@@ -88,7 +88,7 @@ assembled by Home Manager (`home/programs/claude-skills.nix`).
 - **Custom skills** live in this repo under `.claude/skills/` and are the source
   of truth: `convey-her` (the WizOs loop — a thin overlay over stock upstream
   `conveyor-local-loop` + `conveyor-build`, carrying every WizOs rule as an
-  explicit amendment) and `conveyor-plan-loop`. The HM tree links them in as
+  explicit amendment) and `conveyor-plan-watch`. The HM tree links them in as
   absolute symlinks to the checkout, so an edit is live in the next session with
   no rebuild.
 - **Upstream skills** come from the npm registry tarball via `pkgs.fetchzip`;
