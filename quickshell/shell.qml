@@ -211,6 +211,13 @@ ShellRoot {
 
 	readonly property string sunsetRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr-sunset`
 
+	// Claude usage + action menu. The numbers come from home/services/
+	// claude-usage.nix's timer, which is the only thing that talks to the
+	// network; the bar just reads the JSON it writes.
+	property var claudeUsage: ({})
+	property bool claudeMenuVisible: false
+	readonly property string claudeRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/claude-usage`
+
 	function sunsetOk(): bool {
 		return (shellRoot.sunsetState?.ok ?? false) === true;
 	}
@@ -286,6 +293,87 @@ ShellRoot {
 			lines.push(until + " · ramp " + (st?.transitionMin ?? "--") + " min");
 		lines.push("Left-click pauses/resumes · right-click for options");
 		return lines.join("\n");
+	}
+
+	function claudeOk(): bool {
+		return (shellRoot.claudeUsage?.ok ?? false) === true;
+	}
+
+	// Reset times can be hours or days out, so a bare HH:mm would be
+	// ambiguous; add the weekday once the reset is past today.
+	function claudeClock(epoch): string {
+		if (!epoch)
+			return "--:--";
+		const when = new Date(epoch * 1000);
+		const sameDay = when.toDateString() === new Date().toDateString();
+		return sameDay
+			? Qt.formatTime(when, "HH:mm")
+			: Qt.formatDateTime(when, "ddd HH:mm");
+	}
+
+	function claudeColor(): string {
+		if (!shellRoot.claudeOk())
+			return Theme.muted;
+		const limits = shellRoot.claudeUsage?.limits ?? [];
+		for (let i = 0; i < limits.length; ++i) {
+			const l = limits[i];
+			if ((l.severity && l.severity !== "normal") || (l.percent ?? 0) >= 90)
+				return Theme.error;
+		}
+		return Theme.accent;
+	}
+
+	// The single source of the usage text: the hover tooltip joins these and
+	// ClaudeMenu renders them one per row, so the two can never disagree.
+	function claudeUsageLines(): var {
+		const u = shellRoot.claudeUsage;
+		if (!shellRoot.claudeOk()) {
+			const reason = u?.reason ?? "starting up";
+			if (reason === "auth-expired")
+				return ["Usage unavailable — run claude to refresh sign-in"];
+			if (reason === "no-credentials")
+				return ["Usage unavailable — sign in with claude first"];
+			return ["Usage unavailable (" + reason + ")"];
+		}
+
+		const lines = [];
+		const limits = u?.limits ?? [];
+		for (let i = 0; i < limits.length; ++i) {
+			const l = limits[i];
+			// Every limit is shown. `isActive` is NOT a filter: the endpoint
+			// reports it false for both weekly limits while the session limit
+			// is the one currently binding, and filtering on it hid the weekly
+			// numbers Nick explicitly asked for (observed live: session
+			// is_active=true, weekly_all and weekly_scoped both false).
+			let label;
+			if (l.kind === "session")
+				label = "Session";
+			else if (l.kind === "weekly_all")
+				label = "Weekly";
+			else if (l.kind === "weekly_scoped")
+				label = (l.scope ? l.scope : "Scoped") + " weekly";
+			else
+				label = l.kind ?? "Usage";
+			lines.push(label + " " + Math.round(l.percent ?? 0) + "%"
+				+ (l.resetsAt ? " · resets " + shellRoot.claudeClock(l.resetsAt) : ""));
+		}
+
+		const extra = u?.extraUsage;
+		if (extra?.enabled === true)
+			lines.push("Extra usage " + Math.round(extra?.utilization ?? 0) + "%");
+
+		if (lines.length === 0)
+			lines.push("No active limits reported");
+		return lines;
+	}
+
+	function claudeTooltipText(): string {
+		const plan = shellRoot.claudeUsage?.plan ?? "";
+		const head = "Claude" + (plan ? " · " + plan : "");
+		return [head]
+			.concat(shellRoot.claudeUsageLines())
+			.concat(["Left-click opens a new agent · right-click for options"])
+			.join("\n");
 	}
 
 	function resizeMoveTooltipText(): string {
@@ -507,6 +595,8 @@ ShellRoot {
 			return resizeMoveTooltipText();
 		if (kind === "sunset")
 			return sunsetTooltipText();
+		if (kind === "claude")
+			return claudeTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -1100,6 +1190,13 @@ ShellRoot {
 		onFileChanged: shellRoot.markQsReloadPending()
 	}
 
+	FileView {
+		path: `${shellRoot.qsSourceDir}/ClaudeMenu.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
 	// Calendar events, written by home/services/calendar-sync.nix's timer.
 	// Absent/malformed is normal before the ICS secret is provisioned: the
 	// JsonAdapter keeps its defaults (ok=false, empty events) and the popup
@@ -1142,6 +1239,33 @@ ShellRoot {
 
 		onLoaded: sunsetStateFile.parseState()
 		onFileChanged: sunsetStateFile.reload()
+	}
+
+	// Claude usage, rewritten atomically by qs-claude-usage every five minutes
+	// and again whenever the menu opens. Absent is the normal state before the
+	// first tick after login: the pill stays up (it is a launcher first) and
+	// simply reads as unavailable.
+	FileView {
+		id: claudeStateFile
+		path: `${shellRoot.claudeRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		// Named parseState for the same reason as sunsetStateFile's: FileView
+		// already has a reload(), and shadowing it here would recurse.
+		function parseState(): void {
+			const raw = claudeStateFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.claudeUsage = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next write brings a whole file.
+			}
+		}
+
+		onLoaded: claudeStateFile.parseState()
+		onFileChanged: claudeStateFile.reload()
 	}
 
 	Timer {
@@ -1764,6 +1888,30 @@ ShellRoot {
 						}
 
 						StatusPill {
+							id: claudePill
+							// Always visible, unlike the sunset pill: this is a
+							// launcher first and a usage readout second, so it
+							// stays useful even with no usage data.
+							tipKind: "claude"
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									Quickshell.execDetached(["kitty", "-e", "zsh", "-lic", "agent-new"]);
+								else if (mouse.button === Qt.RightButton)
+									shellRoot.claudeMenuVisible = !shellRoot.claudeMenuVisible;
+							}
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.claudeColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: String.fromCodePoint(0xF0674) // nf-md-creation
+							}
+						}
+
+						StatusPill {
 							id: brightnessPill
 							visible: shellRoot.brightnessPresent
 							tipKind: "brightness"
@@ -2052,6 +2200,31 @@ ShellRoot {
 					active: mediaDropdown.visible
 					player: shellRoot.mediaPlayer
 					onDismissed: shellRoot.mediaPopupVisible = false
+				}
+			}
+
+			// Claude actions dropdown, anchored under the Claude pill and
+			// pinned to the main-monitor bar for the same reason as the media
+			// one above.
+			PopupWindow {
+				id: claudeDropdown
+				visible: barWindow.isCenterScreen && shellRoot.claudeMenuVisible
+				grabFocus: true
+				color: "transparent"
+				implicitWidth: claudeDropdownContent.contentWidth
+				implicitHeight: claudeDropdownContent.contentHeight
+				anchor.window: barWindow
+				anchor.item: claudePill
+				anchor.edges: Edges.Bottom
+				anchor.gravity: Edges.Bottom
+
+				ClaudeMenu {
+					id: claudeDropdownContent
+					anchors.fill: parent
+					active: claudeDropdown.visible
+					lines: shellRoot.claudeUsageLines()
+					plan: shellRoot.claudeUsage?.plan ?? ""
+					onDismissed: shellRoot.claudeMenuVisible = false
 				}
 			}
 		}
