@@ -6,8 +6,18 @@
   lib,
   pkgs,
   slippi-nix-src,
+  nixosConfig ? null,
   ...
 }: let
+  # Activate Feral gamemode while Slippi runs (Tawa), so a match triggers the
+  # hyprsunset warmth hold (the gamemode start/end hooks in hosts/Tawa/host.nix)
+  # and gamemode's tuning. We must NOT use `gamemoderun`: its LD_PRELOAD leaks
+  # into Slippi's bwrap FHS sandbox and aborts sandbox subprocesses on exit
+  # (the coredumps that got #217 reverted in #218). Instead we register over
+  # D-Bus from the wrapper, which runs outside the sandbox. A no-op on hosts
+  # without gamemode (Theseus): no registration, no gamemode closure.
+  useGamemode = nixosConfig != null && (nixosConfig.programs.gamemode.enable or false);
+
   slippi-launcher-base = pkgs.callPackage "${slippi-nix-src}/packages/slippi-launcher.nix" {};
   slippi-netplay = pkgs.callPackage "${slippi-nix-src}/packages/slippi-netplay.nix" {};
   slippi-netplay-beta = pkgs.callPackage "${slippi-nix-src}/packages/slippi-netplay-beta.nix" {};
@@ -55,6 +65,16 @@
       done
       rm -f "$slippi_dir/netplay/Slippi_Online-x86_64.AppImage.zsync" || true
 
+      # Register this process with Feral gamemode over D-Bus -- NOT gamemoderun,
+      # whose LD_PRELOAD would leak into the FHS sandbox below and crash it (#218).
+      # The `exec` keeps this same PID, so gamemode holds for the whole session
+      # and auto-cleans (firing the `end` hook -> warmth resumes) when the
+      # launcher's outer bwrap process exits. Best-effort: never block a launch.
+      ${lib.optionalString useGamemode ''
+        ${pkgs.systemd}/bin/busctl --user call \
+          com.feralinteractive.GameMode /com/feralinteractive/GameMode \
+          com.feralinteractive.GameMode RegisterGame i "$$" >/dev/null 2>&1 || true
+      ''}
       # Avoid unhandled EIO from electron-log console transport when GUI stdio is closed.
       exec ${lib.getExe slippi-launcher-desktop} "$@" >/dev/null 2>&1
     '';
