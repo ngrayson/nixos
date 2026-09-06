@@ -6,16 +6,8 @@
   lib,
   pkgs,
   slippi-nix-src,
-  nixosConfig ? null,
   ...
 }: let
-  # Launch Slippi under gamemode on hosts that run it (Tawa), so playing Melee
-  # activates gamemoded the same way `gamemoderun %command%` does for Steam
-  # games -- which pauses the hyprsunset warmth ramps for the match (the hold
-  # from hosts/Tawa/host.nix) and applies gamemode's own tuning. A no-op on
-  # hosts without gamemode (Theseus): no wrapper, no gamemode closure.
-  useGamemode = nixosConfig != null && (nixosConfig.programs.gamemode.enable or false);
-  gamemodePrefix = lib.optionalString useGamemode "${pkgs.gamemode}/bin/gamemoderun ";
   slippi-launcher-base = pkgs.callPackage "${slippi-nix-src}/packages/slippi-launcher.nix" {};
   slippi-netplay = pkgs.callPackage "${slippi-nix-src}/packages/slippi-netplay.nix" {};
   slippi-netplay-beta = pkgs.callPackage "${slippi-nix-src}/packages/slippi-netplay-beta.nix" {};
@@ -64,8 +56,7 @@
       rm -f "$slippi_dir/netplay/Slippi_Online-x86_64.AppImage.zsync" || true
 
       # Avoid unhandled EIO from electron-log console transport when GUI stdio is closed.
-      # gamemodePrefix is `gamemoderun ` on Tawa (see the let block), empty elsewhere.
-      exec ${gamemodePrefix}${lib.getExe slippi-launcher-desktop} "$@" >/dev/null 2>&1
+      exec ${lib.getExe slippi-launcher-desktop} "$@" >/dev/null 2>&1
     '';
   };
 in {
