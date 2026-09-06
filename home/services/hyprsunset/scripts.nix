@@ -714,15 +714,23 @@
             next
           }
           ftc && ($ftc + 0) > 0 {
+            fv = $ftc + 0
+            # A frametime over 1s is not a real frame: under a fullscreen game
+            # the vkcube window is intermittently occluded and MangoHud logs the
+            # whole gap-until-next-present as one enormous frametime (~9.4e8 ms
+            # observed). Count and drop these so a single artifact cannot become
+            # max_ms or skew p99/baseline. A real hitch, even a severe stall,
+            # stays well under this cap.
+            if (fv > 1000) { garbage++; next }
             n++
-            ft[n] = $ftc + 0
+            ft[n] = fv
             el[n] = (elc ? $elc + 0 : 0)
-            v[n] = $ftc + 0
-            if (v[n] > mx) mx = v[n]
+            v[n] = fv
+            if (fv > mx) mx = fv
             # Baseline = the quiet stretch before the first push. The first push
             # (temp) lands ~4s into the log (5s after vk-start, minus autostart),
             # so 3.5s of log stays clear of it.
-            if (el[n] < 3.5e9) { bn++; bv[bn] = v[n] }
+            if (el[n] < 3.5e9) { bn++; bv[bn] = fv }
           }
           END {
             if (!n) exit 3
@@ -754,7 +762,7 @@
               if (pushes != "") pushes = pushes ","
               pushes = pushes sprintf("{\"name\":\"%s\",\"max_ms\":%.3f,\"frames_over_2x_baseline_p99\":%d}", name, wmax, over)
             }
-            printf "{\"frames\":%d,\"p50_ms\":%.3f,\"p99_ms\":%.3f,\"max_ms\":%.3f,\"baseline_p99_ms\":%.3f,\"pushes\":[%s]}", n, p50, p99, mx, bp99, pushes
+            printf "{\"frames\":%d,\"garbage_frames\":%d,\"p50_ms\":%.3f,\"p99_ms\":%.3f,\"max_ms\":%.3f,\"baseline_p99_ms\":%.3f,\"pushes\":[%s]}", n, garbage, p50, p99, mx, bp99, pushes
           }
         ' "$csv")" || {
           echo "hypr-sunset-bench: $label MangoHud CSV ($csv) has no frametime rows; see $dir/vkcube.log" >&2
@@ -831,13 +839,14 @@
 
       echo
       echo "hypr-sunset-bench results ($RUN_TS)"
-      echo "  pass       p50(ms)  p99(ms)  max(ms)  base-p99(ms)"
+      echo "  pass       p50(ms)  p99(ms)  max(ms)  base-p99  garbage"
       jq -r '
         def row(l; o): "  \(l | . + "        " | .[0:9])"
           + ((o.p50_ms // 0 | tostring | . + "         " | .[0:9]))
           + ((o.p99_ms // 0 | tostring | . + "         " | .[0:9]))
           + ((o.max_ms // 0 | tostring | . + "         " | .[0:9]))
-          + ((o.baseline_p99_ms // 0 | tostring));
+          + ((o.baseline_p99_ms // 0 | tostring | . + "         " | .[0:9]))
+          + ((o.garbage_frames // 0 | tostring));
         row("ctm-on"; .ctm_on), row("ctm-off"; .ctm_off)
       ' "$SUMMARY"
 
@@ -852,6 +861,16 @@
             + "\(.frames_over_2x_baseline_p99 | tostring)";
         prows("ctm-on"; .ctm_on), prows("ctm-off"; .ctm_off)
       ' "$SUMMARY"
+
+      # If MangoHud logged occlusion artifacts, say so: they were dropped from
+      # the numbers, but their presence means vkcube was not presenting cleanly,
+      # so run the game WINDOWED (not fullscreen-exclusive) for a loaded pass.
+      if [ "$(jq '[.ctm_on.garbage_frames, .ctm_off.garbage_frames] | add' "$SUMMARY")" -gt 0 ]; then
+        echo
+        echo "  note: dropped garbage frametimes (vkcube occluded, likely a"
+        echo "        fullscreen game). Numbers above exclude them; run the game"
+        echo "        windowed so vkcube keeps presenting for a clean loaded pass."
+      fi
       echo
       echo "Full JSON + per-pass CSVs and push marks under: $OUT"
     '';
