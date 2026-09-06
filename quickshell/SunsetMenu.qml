@@ -136,6 +136,13 @@ Item {
 					color: Theme.accent
 					font.pixelSize: 13
 				}
+
+				Text {
+					visible: root.state?.held === true
+					text: "Held while a game is running"
+					color: Theme.accent
+					font.pixelSize: 13
+				}
 			}
 
 			Rectangle {

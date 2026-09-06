@@ -24,6 +24,20 @@
   # Discrete AMD (RX 6700 class): explicit X / XWayland DDX; see NixOS Steam wiki / gaming guides.
   services.xserver.videoDrivers = ["amdgpu"];
   programs.gamemode.enable = true;
+  # While a game holds gamemode, freeze the screen warmth instead of letting the
+  # 30s scheduler push mid-match (each CTM push is a frame hitch; see
+  # documentation/hyprsunset-lag-diagnosis.md). `pause` sets a hold override and
+  # `resume` clears it, easing back to the schedule on exit.
+  programs.gamemode.settings.custom = let
+    # The same script the HM module builds; with home-manager.useGlobalPkgs this
+    # is the identical store path as ~/.nix-profile/bin/hypr-sunset-ctl. Absolute
+    # on purpose: nixpkgs mkForces gamemoded.service's PATH to a pkexec-only
+    # linkFarm, so a bare `hypr-sunset-ctl` would silently never run.
+    sunsetCtl = lib.getExe (import ../../home/services/hyprsunset/scripts.nix {inherit pkgs lib;}).ctl;
+  in {
+    start = "${sunsetCtl} pause";
+    end = "${sunsetCtl} resume";
+  };
 
   # Plasma 6 sets SDDM to the Wayland greeter (KWin) by default. That path never runs
   # `services.xserver.displayManager.setupCommands`, so xrandr cannot shrink the login to one output.

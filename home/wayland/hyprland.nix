@@ -111,6 +111,16 @@ in {
         # the config value on every switch. It has to live here.
         allow_session_lock_restore = true;
       };
+      render = {
+        # Every CTM push (a hyprsunset temperature/gamma write) is otherwise
+        # faded across several DRM commits; on AMD (auto = 2 → on) each fade blew
+        # a game frame out to 50-82 ms. Measured with hypr-sunset-bench -- see
+        # documentation/hyprsunset-lag-diagnosis.md. 0 = instant push, no hitch.
+        # The natural sunrise/sunset is unaffected (it moves in 30s clock steps);
+        # only manual --ramp changes read slightly steppier -- accepted. Shared
+        # with Theseus (also AMD), intended.
+        ctm_animation = 0;
+      };
       bind =
         [
           "ALT, h, movefocus, l"
