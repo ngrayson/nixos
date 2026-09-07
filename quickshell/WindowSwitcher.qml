@@ -178,9 +178,16 @@ Item {
 	// Entry point for the Hyprland bind. Hyprland consumes a matched `exec`
 	// bind before the overlay's exclusive-focus surface ever sees the key, so
 	// repeated Alt+Tab presses arrive here over IPC rather than through the
-	// Shortcut blocks below -- those only fire when Alt is NOT held. With Alt
-	// held, Return and Esc arrive through the `switcher` submap instead, as
-	// the commit and dismiss IPC calls.
+	// Shortcut blocks below -- those only fire when Alt is NOT held.
+	//
+	// Committing on Alt RELEASE is not currently possible: Hyprland 0.55.4
+	// does not deliver a release bind for a modifier that took part in
+	// another bind, and Alt+Tab always does. A submap does not rescue it --
+	// a root-map release bind is skipped while a submap is active, and a
+	// submap-scoped one is skipped because Alt was pressed before the submap
+	// existed. Verified on Tawa 2026-09-06; see the card
+	// commit-the-alt-tab-selection-on-alt-rele. requestCommit() below is kept
+	// because `switcher commit` over IPC still works.
 	function request(delta: int): void {
 		if (root.active && root.windows.length > 0)
 			root.step(delta);

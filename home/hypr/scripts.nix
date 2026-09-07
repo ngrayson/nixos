@@ -331,27 +331,6 @@ in rec {
   '';
 
   # Suppress idle lock while Slippi emulation is active.
-  # Root-keymap Alt-release hook for the alt-tab switcher. This fires on EVERY
-  # Alt release on the machine, so it must be cheap and inert unless the
-  # switcher submap is actually up.
-  #
-  # It cannot live inside the submap. Hyprland matches a release bind against
-  # the submap that was active when the key was PRESSED
-  # (KeybindManager.cpp v0.55.4, line 616), and Alt is always down before
-  # ALT+Tab creates the submap -- a bindr registered inside `switcher` would
-  # never fire.
-  #
-  # It is also the recovery path: a submap leaves every $mod bind dead while
-  # it is active, and a dead bar cannot reset it. This can.
-  hyprSwitcherAltRelease = pkgs.writeShellScriptBin "hypr-switcher-alt-release" ''
-    set -uo pipefail
-    H="${pkgs.hyprland}/bin/hyprctl"
-    if [ "$("$H" submap 2>/dev/null || echo default)" = "switcher" ]; then
-      "$H" dispatch submap reset >/dev/null || true
-      exec ${lib.getExe hyprQuickshellIpc} call switcher commit
-    fi
-  '';
-
   quickshellLockGuarded = pkgs.writeShellScriptBin "quickshell-lock-guarded" ''
     set -euo pipefail
     if ${lib.getExe slippiIsEmulating}; then

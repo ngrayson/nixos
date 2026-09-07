@@ -190,13 +190,6 @@ in {
           # never leave the session stuck.
           "ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher next"
           "ALT SHIFT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher prev"
-          # The same press also enters the `switcher` submap, whose lifetime is
-          # the Alt hold -- see the extraConfig block. Order matters: Hyprland
-          # runs every bind matching a key in config order and STOPS at a
-          # `submap` dispatch (KeybindManager.cpp v0.55.4, lines 737-742), so
-          # the exec lines above must come first or the IPC call never runs.
-          "ALT, Tab, submap, switcher"
-          "ALT SHIFT, Tab, submap, switcher"
           ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
           ", XF86AudioRaiseVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -i 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
@@ -286,33 +279,6 @@ in {
         bind = $mod, a, exec, ${lib.getExe hs.hyprResizeMoveToggle}
         submap = reset
 
-        # Alt-tab switcher submap. Entered by the ALT+Tab binds in `settings`
-        # (exec next, then submap), left on Alt release by the root bindr
-        # lines just below. While it is active Hyprland's own ALT binds
-        # (Return = kitty, escape = killactive, h/j/k/l = movefocus, digits =
-        # workspace) are inert, which is the entire point: with the overlay up
-        # and Alt held, Enter must commit and Esc must dismiss, and neither may
-        # reach the root map.
-        #
-        # The release binds are in the ROOT map on purpose. Hyprland matches a
-        # release against the submap active when the key was PRESSED
-        # (KeybindManager.cpp v0.55.4, line 616), and Alt is always down before
-        # ALT+Tab creates the submap, so a bindr inside `switcher` could never
-        # fire. Two modifier variants per key: at release time the mask still
-        # holds ALT, and holds SHIFT as well when Alt+Shift+Tab is let go
-        # Alt-first (lines 702-709 there). The script is a no-op outside the
-        # submap, so a stray Alt tap costs one hyprctl call and nothing else.
-        bindr = ALT, Alt_L, exec, ${lib.getExe hs.hyprSwitcherAltRelease}
-        bindr = ALT SHIFT, Alt_L, exec, ${lib.getExe hs.hyprSwitcherAltRelease}
-        bindr = ALT, Alt_R, exec, ${lib.getExe hs.hyprSwitcherAltRelease}
-        bindr = ALT SHIFT, Alt_R, exec, ${lib.getExe hs.hyprSwitcherAltRelease}
-        submap = switcher
-        bind = ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher next
-        bind = ALT SHIFT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher prev
-        bind = ALT, Return, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher commit
-        bind = ALT, KP_Enter, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher commit
-        bind = ALT, escape, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher dismiss
-        submap = reset
       '';
   };
 
@@ -330,7 +296,6 @@ in {
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
     hs.hyprResizeMoveToggle
-    hs.hyprSwitcherAltRelease
     hs.hyprCavaViz
   ];
 
