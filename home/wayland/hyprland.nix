@@ -187,7 +187,11 @@ in {
           # overlay's exclusive-focus surface sees the key, so repeats have to
           # come back through IPC. The two $mod cycles above are deliberately
           # kept -- they are a working blind switcher, so a broken picker can
-          # never leave the session stuck.
+          # never leave the session stuck. The Alt RELEASE that commits the
+          # selection is detected by the overlay itself
+          # (quickshell/WindowSwitcher.qml), deliberately NOT by a bindr:
+          # Hyprland never delivers a release bind for a modifier that took
+          # part in another bind, and Alt+Tab always is one (PR #228).
           "ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher next"
           "ALT SHIFT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher prev"
           ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"

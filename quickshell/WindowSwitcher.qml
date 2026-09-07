@@ -13,7 +13,17 @@ import Quickshell.Hyprland
 Item {
 	id: root
 
+	// Keys.onReleased below needs ACTIVE focus. The Shortcut blocks never did,
+	// which is why the overlay appeared to "receive keys" without this line --
+	// their working proves nothing about focus.
+	focus: true
+
 	property bool active: false
+
+	// True once an Alt+Tab / Alt+Shift+Tab has arrived over IPC during this
+	// open. Set in request() and nowhere else, so the mouse-browse `toggle`
+	// path never arms and a stray Alt tap while browsing does nothing.
+	property bool armed: false
 
 	signal dismissed()
 
@@ -59,11 +69,13 @@ Item {
 	onActiveChanged: {
 		if (root.active) {
 			root.rebuild();
+			root.forceActiveFocus();
 		} else {
 			root.windows = [];
 			// Never let anything banked against this open leak into the next one.
 			root.pendingSteps = 0;
 			root.pendingCommit = false;
+			root.armed = false;
 		}
 	}
 
@@ -180,24 +192,23 @@ Item {
 	// repeated Alt+Tab presses arrive here over IPC rather than through the
 	// Shortcut blocks below -- those only fire when Alt is NOT held.
 	//
-	// Committing on Alt RELEASE is not currently possible: Hyprland 0.55.4
-	// does not deliver a release bind for a modifier that took part in
-	// another bind, and Alt+Tab always does. A submap does not rescue it --
-	// a root-map release bind is skipped while a submap is active, and a
-	// submap-scoped one is skipped because Alt was pressed before the submap
-	// existed. Verified on Tawa 2026-09-06; see the card
-	// commit-the-alt-tab-selection-on-alt-rele. requestCommit() below is kept
-	// because `switcher commit` over IPC still works.
+	// This is also the ONLY place `armed` is set, which is what makes the
+	// Alt-release commit fire for a real Alt+Tab and stay inert for a
+	// mouse-browse opened with `toggle`.
 	function request(delta: int): void {
+		root.armed = true;
+		console.log("switcher: request delta=" + delta + " active=" + root.active
+			+ " windows=" + root.windows.length + " t=" + Date.now());
 		if (root.active && root.windows.length > 0)
 			root.step(delta);
 		else
 			root.pendingSteps += delta;
 	}
 
-	// Entry point for the Alt-release and Alt+Return binds, over IPC for the
-	// same reason as request(). Banks ONLY while active: an inactive overlay
-	// must never carry a commit into its next open.
+	// Entry point for the QML Alt-release handler above, and for the `commit`
+	// IPC (tooling and tests). Banks ONLY while active: an inactive overlay
+	// must never carry a commit into its next open, and a release that beats
+	// the window list is applied by rebuild() once the list arrives.
 	function requestCommit(): void {
 		if (!root.active)
 			return;
@@ -217,6 +228,40 @@ Item {
 		// shows up in hyprctl logs. HyprlandToplevel itself has no activate()
 		// in Quickshell 0.3.0 -- that method is on HyprlandWorkspace.
 		Hyprland.dispatch("focuswindow address:" + entry.address);
+	}
+
+	// Letting go of Alt commits the highlighted row. Hyprland forwards a key
+	// release iff its press was forwarded (0.55.4 KeybindManager.cpp
+	// onKeyEvent), and a bare Alt press matches no bind, so the Alt key-up
+	// reaches whichever surface holds focus at release time -- this overlay,
+	// once it has exclusive focus. Tab's press IS consumed by the ALT+Tab
+	// bind, so Tab's release never arrives, which is why steps still come
+	// back over IPC.
+	//
+	// A Hyprland `bindr` on Alt cannot do this: measured dead on Tawa
+	// 2026-09-06 in every arrangement (root map, inside a submap, and with no
+	// submap at all) because Alt took part in the Alt+Tab bind. See PR #228.
+	//
+	// Measured here 2026-09-07 across 4 controlled gestures plus 11 earlier
+	// ones: the release arrives with activeFocus=true, at 17 ms after the
+	// keypress for the fastest tap and 1348 ms for a deliberate hold. The
+	// quick-tap gap the plan feared (release beating the surface's focus)
+	// did not occur at 17 ms; if it ever does, the overlay simply stays open
+	// on the correct row and Return, a click, or another Alt+Tab finishes it.
+	//
+	// `armed` is what keeps mouse-browse honest: only request() sets it, so
+	// an Alt tap while browsing via `toggle` is inert (verified: armed=false).
+	Keys.onReleased: event => {
+		if (event.key !== Qt.Key_Alt)
+			return;
+		console.log("switcher: Alt released armed=" + root.armed
+			+ " windows=" + root.windows.length
+			+ " activeFocus=" + root.activeFocus
+			+ " t=" + Date.now());
+		if (!root.armed)
+			return;
+		event.accepted = true;
+		root.requestCommit();
 	}
 
 	Shortcut {
