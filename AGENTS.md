@@ -30,7 +30,11 @@ host), **Go3** (Surface Go 3 kiosk), **Gcp**.
   stays inside the repo; when only a live check will do, say what you are
   about to do and ask first. Restore whatever you took over — cursor
   position, monitor power, anything left on screen — and crop screenshots to
-  the region under test rather than grabbing whole outputs.
+  the region under test rather than grabbing whole outputs. Synthetic
+  **keyboard** input (`wtype`, `ydotool`, any virtual-keyboard client) is not
+  ask-first, it is never: Hyprland resolves a virtual keyboard's keycodes
+  through its own keymap, so injected keys land on the wrong binds
+  (`documentation/quickshell-agent-guide.md`, *Do not*).
 - **File a bug as a Conveyor card the moment you notice it**, not in a PR body,
   a chat message, or a summary — those lose it. Carry the symptom, the evidence
   it is real, and the suspected cause; file rather than fix inline, which keeps
