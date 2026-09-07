@@ -293,7 +293,8 @@ in {
       pkgs.gimp-with-plugins
       pkgs.nodejs_22
       python3
-      godot
+      # godot
+      pkgs.godotPackages_4_7.godot
       prismlauncher
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum
