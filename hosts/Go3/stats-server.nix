@@ -146,11 +146,43 @@
           }
 
 
+      # Monotonic timestamp of the last real stats request. This is the
+      # liveness signal the kiosk watchdog reads: KioskStats in the dashboard
+      # polls /stats.json every 5s unconditionally (it never checks
+      # document.hidden -- only usePanelWokeAt does), so a long silence means
+      # the PAGE is dead, not that the panel is merely blanked.
+      _last_stats_request = None
+
+
       class Handler(BaseHTTPRequestHandler):
           def do_GET(self):
-              if self.path.split("?")[0] not in ("/", "/stats.json"):
+              global _last_stats_request
+              route = self.path.split("?")[0]
+
+              # Deliberately does NOT touch _last_stats_request: the watchdog
+              # asking whether the page is alive must never look like the page.
+              if route == "/health":
+                  since = (
+                      None
+                      if _last_stats_request is None
+                      else round(time.monotonic() - _last_stats_request, 1)
+                  )
+                  hbody = json.dumps({
+                      "seconds_since_stats_request": since,
+                      "generatedAt": int(time.time()),
+                  }).encode("utf-8")
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(hbody)))
+                  self.send_header("Cache-Control", "no-store")
+                  self.end_headers()
+                  self.wfile.write(hbody)
+                  return
+
+              if route not in ("/", "/stats.json"):
                   self.send_error(404)
                   return
+              _last_stats_request = time.monotonic()
               body = json.dumps(payload()).encode("utf-8")
               self.send_response(200)
               self.send_header("Content-Type", "application/json")
