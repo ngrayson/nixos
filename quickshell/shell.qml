@@ -180,8 +180,9 @@ ShellRoot {
 	signal windowSwitcherStep(int delta)
 
 	// Routed the same way as the step signal above, and banked by the switcher
-	// until its window list exists -- a quick Alt+Tab tap commits before the
-	// asynchronous population has landed.
+	// until its window list exists. The Alt-RELEASE gesture is detected inside
+	// WindowSwitcher.qml on its own focused surface, NOT here -- this signal
+	// carries the `commit` IPC, which is the tooling and test entry point.
 	signal windowSwitcherCommit()
 
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
@@ -985,11 +986,11 @@ ShellRoot {
 				shellRoot.windowSwitcherVisible = true;
 		}
 
-		// Alt released, or Alt+Return: focus the highlighted window and close.
-		// Only meaningful while open -- a commit that arrives for a closed
-		// overlay (it can overtake `next` on a very fast tap, since they are
-		// two separate processes) is DROPPED rather than banked, so it can
-		// never fire into the next open.
+		// Focus the highlighted window and close. The Alt-release gesture does
+		// NOT come through here -- WindowSwitcher.qml reads the key-up on its
+		// own focused surface. This is the IPC entry point for tooling and
+		// tests. Only meaningful while open: a commit for a closed overlay is
+		// DROPPED rather than banked, so it can never fire into the next open.
 		function commit(): void {
 			if (shellRoot.windowSwitcherVisible)
 				shellRoot.windowSwitcherCommit();
