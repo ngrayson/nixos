@@ -131,8 +131,8 @@ in {
           "ALT SHIFT, j, movewindow, d"
           "ALT SHIFT, k, movewindow, u"
           "ALT SHIFT, l, movewindow, r"
-          "ALT, Return, exec, ${pkgs.kitty}/bin/kitty"
-          "ALT, escape, killactive,"
+          "ALT, Return, exec, ${lib.getExe hs.hyprAltReturn}"
+          "ALT, escape, exec, ${lib.getExe hs.hyprAltEscape}"
           "ALT SHIFT, Q, killactive,"
           "ALT, Space, exec, ${lib.getExe pkgs.albert} toggle"
           "ALT, 1, workspace, 1"
@@ -192,6 +192,11 @@ in {
           # (quickshell/WindowSwitcher.qml), deliberately NOT by a bindr:
           # Hyprland never delivers a release bind for a modifier that took
           # part in another bind, and Alt+Tab always is one (PR #228).
+          # Return and Esc while Alt is held are the two ALT binds above,
+          # routed through hypr-alt-return / hypr-alt-escape, which ask the
+          # bar whether the overlay is open and fall through to kitty /
+          # killactive when it is not. The overlay never sees those keys
+          # either, for the same reason the repeats come back over IPC.
           "ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher next"
           "ALT SHIFT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher prev"
           ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
@@ -300,6 +305,8 @@ in {
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
     hs.hyprResizeMoveToggle
+    hs.hyprAltReturn
+    hs.hyprAltEscape
     hs.hyprCavaViz
   ];
 
