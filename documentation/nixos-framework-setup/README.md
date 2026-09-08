@@ -15,7 +15,7 @@ This directory contains the active rebuild helper plus archived planning materia
 - Supports `explain`, `check`, `build`, `dry-activate`, `test`, `switch`, and `boot`.
 - Uses the Git-backed flake and validates every output before rebuilding.
 - Explains whether changes affect flake inputs, shared base modules, Home Manager, the selected host, hardware, another host, or only documentation/tooling.
-- Shows `git status` plus the full `git diff HEAD` (stat and patch) before check/build/activation. Tracked dirty files are included in the rebuild. After success, dirty changes are committed by default (`--commit`); pass `--no-commit` to leave the tree dirty. With `--yes`, commits happen without a prompt unless `--no-commit` is set.
+- Shows `git status` plus the full `git diff HEAD` (stat and patch) before check/build/activation. Tracked dirty files are included in the rebuild. After success it *offers* to commit them: interactively it prompts (default yes), `--yes` commits without prompting, and `--no-commit` never commits. **With no terminal attached it does not commit at all** — it leaves the tree dirty and says to pass `--commit`, which is the only way to commit non-interactively. That case is checked before `--yes` on purpose: `--yes` skips the *rebuild* confirmation and is not taken as an answer to the commit question, because a dirty tree is recoverable and an unwanted commit spanning unrelated work is not.
 - Refuses to activate a different host accidentally, refuses placeholder hardware UUIDs, and prompts to stage untracked configuration inputs (a Git flake cannot see them otherwise). `--yes` stages those files without asking.
 - Logs rebuild output under `~/.cache/os-rebuild`.
 
@@ -54,7 +54,7 @@ os-rebuild --edit=flake check
 os-rebuild --edit=hardware --host Theseus build
 ```
 
-Formatting is opt-in with `--format`; validation no longer mutates files automatically. Activation actions default to **No** at the confirmation prompt. `--yes` is intended for deliberate noninteractive use. After a successful rebuild, dirty changes are committed by default; use `--no-commit` to skip.
+Formatting is opt-in with `--format`; validation no longer mutates files automatically. Activation actions default to **No** at the confirmation prompt. `--yes` is intended for deliberate noninteractive use. After a successful rebuild the script offers to commit dirty changes — prompting interactively, skipping with `--no-commit`, and committing non-interactively only with `--commit`. With no terminal attached it leaves the tree dirty rather than committing on your behalf.
 
 ## Archived Framework / Theseus roadmap
 
