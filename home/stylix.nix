@@ -15,31 +15,52 @@
   ...
 }: let
   b = config.theme.base16;
-  base16Yaml = pkgs.writeText "${config.theme.slug}-base16.yaml" ''
-    system: "base16"
-    name: "${config.theme.name}"
-    author: "stellarium home/theme"
-    variant: "${config.theme.polarity}"
-    palette:
-    ${lib.concatMapStrings (k: "  ${k}: \"#${b.${k}}\"\n") [
-      "base00"
-      "base01"
-      "base02"
-      "base03"
-      "base04"
-      "base05"
-      "base06"
-      "base07"
-      "base08"
-      "base09"
-      "base0A"
-      "base0B"
-      "base0C"
-      "base0D"
-      "base0E"
-      "base0F"
-    ]}
-  '';
+  # The 16 slots Stylix needs, listed rather than taken from `b` wholesale, so a
+  # scheme that forgets one fails here instead of quietly theming from 15.
+  base16Slots = [
+    "base00"
+    "base01"
+    "base02"
+    "base03"
+    "base04"
+    "base05"
+    "base06"
+    "base07"
+    "base08"
+    "base09"
+    "base0A"
+    "base0B"
+    "base0C"
+    "base0D"
+    "base0E"
+    "base0F"
+  ];
+  # Passed to Stylix as an attrset, NOT as a generated YAML file.
+  #
+  # This used to be a `pkgs.writeText` whose store path was handed to
+  # `stylix.base16Scheme`. Stylix reads that file during evaluation, so a
+  # derivation had to be realised before the config could evaluate at all --
+  # import-from-derivation. `nix flake check --no-build` (what `os-rebuild
+  # check` runs) evaluates with a READ-ONLY store, so it could not realise it
+  # and died with `path '...-lilac-ash-base16.yaml.drv' is not valid`, while
+  # `os-rebuild build` on the same tree succeeded.
+  #
+  # It failed on Theseus specifically because Tawa is `izar` and Theseus is
+  # `lilac-ash`: nothing Tawa builds keeps Theseus's YAML alive, so `nix-gc`
+  # reaped it and `check` stayed broken from then on.
+  #
+  # `stylix.base16Scheme` accepts `path | lines | attrs`; the attrs branch skips
+  # the YAML parse and its checker derivation entirely, so no store realisation
+  # can be required to evaluate this config.
+  base16Scheme = {
+    system = "base16";
+    name = config.theme.name;
+    author = "stellarium home/theme";
+    variant = config.theme.polarity;
+    # `slug` is deliberately not set: Stylix derives it from `name` exactly as
+    # it did when parsing the YAML, so generated theme filenames do not move.
+    palette = lib.listToAttrs (map (k: lib.nameValuePair k "#${b.${k}}") base16Slots);
+  };
 in {
   imports = [stylixModule];
 
@@ -49,7 +70,7 @@ in {
     autoEnable = false;
 
     polarity = config.theme.polarity;
-    base16Scheme = "${base16Yaml}";
+    inherit base16Scheme;
     image = builtins.path {
       path = config.theme.wallpaper;
       name = config.theme.wallpaperName;
