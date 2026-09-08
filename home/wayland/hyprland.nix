@@ -213,13 +213,44 @@ in {
       bindl = [
         ", XF86PowerOff, exec, ${lib.getExe hs.hyprQuickshellIpc} call power toggle"
       ];
-      # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
+      # Pixel Composer runs on Tawa two ways, and they match differently.
+      #
+      #   AppImage (native Linux, XWayland)  WM_CLASS is EMPTY, so only a title
+      #     matcher can reach it. Main window initial title "Pixel Composer <ver>".
+      #   Steam/Proton (app 2299510)         class `steam_app_2299510` on EVERY
+      #     window, main and popups alike. This is the path in daily use.
+      #
+      # Titles are the trap. Hyprland's title matcher fires on the INITIAL title,
+      # and both builds retitle themselves after mapping: the main window becomes
+      # "<project> - Pixel Composer", and the Steam build's popups map as
+      # "Window" before becoming "dialog" / "Add node". So `^Pixel Composer.*`
+      # catches the main window at map time and nothing afterwards, and it never
+      # catches a popup at all. A rule that must hold for popups matches on the
+      # CLASS (Steam) or on the popup's initial title "Window" -- not on the
+      # title it ends up with.
+      #
+      # Verified live on the Steam build 2026-09-07 (read-only `hyprctl -j
+      # clients`, three windows up at once):
+      #
+      #   main      class=steam_app_2299510  title "Pixel Composer 1.21.9.2"
+      #   splash    class=steam_app_2299510  maps "Window" -> "dialog"    1280x800
+      #   add-node  class=steam_app_2299510  maps "Window" -> "Add node"   600x400
+      #   (a third 242x66 popup stays "Window")
+      #
+      # So the matchers a sibling card should use are:
+      #
+      #   every Steam window   match:class ^steam_app_2299510$
+      #   popups, at map time  match:class ^steam_app_2299510$, match:title ^Window$
+      #
+      # Pair the two: `^Window$` alone would match any application that maps a
+      # window titled "Window". No rule is added here on purpose -- an effect
+      # without a consumer is a behaviour change nobody asked for; the sibling
+      # that needs it brings the effect (see the pixel-composer pack).
       windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
         "match:title ^Pixel Composer.*, float on"
         "match:title ^Select files$, float on"
-        "match:class ^(PixelComposer|pixelcomposer).*, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
         # Since 0.54 `move` reads the pre-`size` width, so `window_w` lands the window wrong
         # (hyprwm/Hyprland#13409); offset by the known width instead.
