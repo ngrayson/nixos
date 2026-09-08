@@ -996,9 +996,33 @@ ShellRoot {
 				shellRoot.windowSwitcherCommit();
 		}
 
-		// Alt+Esc: close without changing focus.
+		// Close without changing focus. This is the tooling and test entry
+		// point; the Alt+Esc KEY goes through dismissIfOpen() below, because
+		// Hyprland consumes a matched bind before the overlay sees the key.
 		function dismiss(): void {
 			shellRoot.windowSwitcherVisible = false;
+		}
+
+		// Alt+Return via hypr-alt-return: commit and report true if the overlay
+		// was open, else report false so the script falls through to kitty.
+		//
+		// One call that checks AND acts, deliberately. A separate isOpen query
+		// would leave a window in which the overlay could close between the
+		// answer and the commit, and it would double the round-trip on a key
+		// path that a human is holding Alt through.
+		function commitIfOpen(): bool {
+			if (!shellRoot.windowSwitcherVisible)
+				return false;
+			shellRoot.windowSwitcherCommit();
+			return true;
+		}
+
+		// Alt+Esc via hypr-alt-escape: same shape, close without changing focus.
+		function dismissIfOpen(): bool {
+			if (!shellRoot.windowSwitcherVisible)
+				return false;
+			shellRoot.windowSwitcherVisible = false;
+			return true;
 		}
 	}
 
