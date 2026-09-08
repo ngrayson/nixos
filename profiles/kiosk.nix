@@ -48,6 +48,27 @@
     "--no-first-run"
     "--disable-session-crashed-bubble"
     "--disable-features=TranslateUI"
+    # Chromium logs NOTHING by default, so `journalctl -u cage-tty1` looked
+    # clean while the dashboard page was dead for ten hours (2026-09-07): an
+    # uncaught exception unmounted the React tree and left a uniform
+    # background painted, with no trace anywhere. These two put the page
+    # console -- uncaught exceptions and console.error included -- into the
+    # journal as CONSOLE(...) lines. An empty journal is only evidence of
+    # health once these are on.
+    #
+    # Read them with `journalctl -t cage` or `journalctl --since -15min |
+    # grep CONSOLE` -- NOT `journalctl -u cage-tty1`, which shows only the
+    # unit's own systemd/pam lines. Chromium's output is attributed to the
+    # `cage` syslog identifier and an app-org.chromium.Chromium-*.scope, so
+    # the per-unit query looks empty even while the console is flowing
+    # (verified on the box 2026-09-07).
+    "--enable-logging=stderr"
+    "--log-level=0"
+    # Loopback-only (Chromium binds 127.0.0.1) and Go3's SSH is tailnet-only,
+    # so this is not reachable from the household Wi-Fi. It is the only way to
+    # inspect a page that has already died: ssh -L 9222:127.0.0.1:9222 go3,
+    # then attach DevTools and read the DOM the screenshot could not explain.
+    "--remote-debugging-port=9222"
     # No --force-prefers-reduced-motion here any more: the animated background
     # is now decided by a Settings toggle, seeded off by kioskUrl's
     # disableAnimatedBackground flag (see the comment there). Forcing the

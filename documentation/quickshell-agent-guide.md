@@ -19,7 +19,7 @@ Most of that is now fixed. The real lock draws its prompt on **every** output (P
 
 Before locking on a remote or headless-ish host, have a second way in (an SSH session already open) — a mistake here costs a TTY.
 
-The same caution applies to anything else that commandeers the live session rather than staying inside the repo: moving the mouse cursor, taking screenshots, restarting the bar. Prefer verification that does not take over the desktop, and say what you are about to do first.
+The same caution applies to anything else that commandeers the live session rather than staying inside the repo: moving the mouse cursor, taking screenshots, restarting the bar. Prefer verification that does not take over the desktop, and say what you are about to do first. Injecting keys is not a caution but a ban — see *Do not* below.
 
 ## After you change QML or binds
 1. Do **not** spawn a second `quickshell`. The old process keeps the layer-shell seats and the new one will fight it.
@@ -73,6 +73,7 @@ That reads as "the bar is dead". It is not — it is running from `~/.config/nix
 - `qs-quickshell-ipc call lock activate` — session lock (`Super+L`). **Confirm with the user first** (see above).
 - `qs-quickshell-ipc call lock preview` / `cancelPreview` — non-locking test overlay. **Confirm first, and always cancel it when done.**
 - `qs-quickshell-ipc call power toggle` — short `XF86PowerOff` (no-op while locked; lock surface has its own power row).
+- `qs-quickshell-ipc call switcher next|prev|commit|dismiss|toggle` — alt-tab picker. `next`/`prev` open it or step the highlight, `commit` focuses the highlighted window and closes, `dismiss` closes without changing focus, `toggle` is the mouse-browse path. **Releasing Alt commits**, detected inside `quickshell/WindowSwitcher.qml` on the overlay's own focused surface — deliberately not by a Hyprland `bindr`, which cannot work for a modifier that took part in another bind (see that file's comment and PR #228). `commit`/`dismiss` remain as IPC entry points for tooling and tests. The overlay holds **exclusive keyboard focus**, so anything that opens it over IPC must close it again (`dismiss`) before handing the session back.
 - Methods need an explicit `: void` return or Quickshell will not register them.
 - `cancelPreview` is a `void` IPC and returns 0 whether or not a preview was open — its exit code is not evidence that one existed.
 
@@ -80,3 +81,4 @@ That reads as "the bar is dead". It is not — it is running from `~/.config/nix
 - Edit `hosts/Theseus/hibernate.nix` or logind lid / `HandlePowerKeyLongPress` for bar work.
 - `sudo` yourself to activate; give the user `os-rebuild switch`.
 - Lock the screen, or open the lock preview, without asking — and never walk away from one you started.
+- Inject keys into the live session with `wtype`, `ydotool`, `wlrctl`, `hyprctl dispatch sendshortcut`, or any other virtual keyboard or synthetic-input tool, for any reason — including via `nix run` / `nix shell` (none of them is installed on Tawa, which is deliberate). Hyprland resolves a virtual keyboard's keycodes through **its own** layout, not the injector's keymap (`input:resolve_binds_by_sym` is 0), so `wtype -k F24` arrives at the bind table as `Escape`, and with ALT held that is `killactive`. It closed the user's focused window on 2026-09-06. Keyboard behaviour is proven by asking the user to press the keys and reading `quickshell -p ~/.config/nixos/quickshell log` or a marker file — never by pressing them for him.

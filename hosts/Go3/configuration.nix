@@ -14,5 +14,6 @@
     ./battery-checkin.nix
     ./scheduled-reboot.nix
     ./camera-wake.nix
+    ./kiosk-watchdog.nix
   ];
 }

@@ -132,6 +132,24 @@ in {
   programs.hyprland.enable = true;
   services.displayManager.defaultSession = "hyprland";
 
+  # drkonqi is KDE's crash dialog, pulled in by plasma6 above. Under Hyprland it
+  # aborts on every coredump it is handed, and its own abort IS a coredump, so it
+  # feeds itself at ~2/s until the user systemd manager starves -- that is what
+  # failed `os-rebuild switch` on Tawa on 2026-09-07 ("Failed to start user unit
+  # sound.target: Remote peer disconnected" -> "user activation for wiz failed").
+  #
+  # This is the system-side unit that ferries each coredump into the user
+  # session (WantedBy=systemd-coredump@.service). Masking it means no drkonqi
+  # launcher ever starts, so there is nothing to race and nothing to starve.
+  # Masked here rather than at the user socket so the crash never crosses the
+  # system/user boundary at all. Trade-off, accepted: no crash dialog in a real
+  # Plasma session either.
+  systemd.services."drkonqi-coredump-processor@".enable = false;
+
+  # coredump.conf defaults to unbounded storage. The loop above left 4.1 GB of
+  # cores behind; cap it so the next runaway cannot fill / unattended.
+  systemd.coredump.settings.Coredump.MaxUse = "1G";
+
   # Prefer Hyprland for screencast/Wayland; GTK + KDE portals stay available (Plasma still installed).
   xdg.portal.config.common.default = ["hyprland" "gtk" "kde"];
 
@@ -275,7 +293,8 @@ in {
       pkgs.gimp-with-plugins
       pkgs.nodejs_22
       python3
-      godot
+      # godot
+      pkgs.godotPackages_4_7.godot
       prismlauncher
       libsForQt5.qtstyleplugin-kvantum
       qt6Packages.qtstyleplugin-kvantum

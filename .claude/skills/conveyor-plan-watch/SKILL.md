@@ -1,16 +1,21 @@
 ---
-name: conveyor-plan-loop
-description: Cheap-poll, expensive-plan Conveyor planning loop for the WizOs repo — one invocation polls the Planning column on the session model and hands each unplanned card to a fable subagent that runs conveyor-plan on it. Run continuously with "/loop /conveyor-plan-loop" (no interval) after putting the session on a cheap model (/model sonnet or haiku); idle ticks then cost the cheap model and only real planning runs on fable. Use when the user says "/conveyor-plan-loop" or wants unplanned cards and suggestions planned automatically without paying the frontier model for idle polling. For one card, in this session, use conveyor-plan.
+name: conveyor-plan-watch
+description: Event-driven Conveyor planning watch for the WizOs repo (formerly conveyor-plan-loop) — arms a persistent conveyor-wait Monitor that wakes the session the moment a card enters Planning, then hands each unplanned card to a fable subagent that runs conveyor-plan on it. Run with "/loop /conveyor-plan-watch" (no interval) after putting the session on a cheap model (/model sonnet or haiku); the session only pays for real wakes and only planning runs on fable. Use when the user says "/conveyor-plan-watch" or wants unplanned cards and suggestions planned automatically as they appear. For one card, in this session, use conveyor-plan.
 ---
 
-# Conveyor Plan Loop
+# Conveyor Plan Watch
+
+Formerly `/conveyor-plan-loop`; renamed on 2026-09-06 when it stopped polling
+on a timer and started waking on Conveyor board events.
 
 Keep the Planning column empty of unplanned cards without paying a frontier
 model to discover that nothing changed. The split is deliberate:
 
-- **Polling runs on the session model.** A `/model` choice is the user's (it
-  is a CLI built-in no agent can call), so the caller sets a cheap one before
-  starting the loop. Roughly forty idle ticks a day is the normal rhythm.
+- **Waiting runs on the session model, and only on board events.** A `/model`
+  choice is the user's (it is a CLI built-in no agent can call), so the caller
+  sets a cheap one before starting the watch. A persistent `conveyor-wait`
+  Monitor wakes the session when a card enters Planning; the timer is a
+  once-an-hour fallback, so idle wakes are rare rather than forty a day.
 - **Planning runs on a fable subagent.** The `Agent` tool takes a `model`
   override, so the one step that needs research quality gets it, per card,
   and nothing else does.
@@ -21,15 +26,16 @@ the `conveyor-plan` skill, loaded inside the subagent.
 ## Setup (the caller does this once)
 
 1. `/model sonnet` (or `haiku`). The loop inherits whatever the session runs.
-2. `/loop /conveyor-plan-loop` — no interval; `/loop`'s dynamic mode paces it
-   and re-invokes this skill each tick.
+2. `/loop /conveyor-plan-watch` — no interval. The Monitor armed in step 5
+   below is the wake signal; `/loop`'s dynamic mode re-invokes this skill on
+   each wake.
 
 A skill directory created mid-session is not visible to `/` autocomplete or
 the Skill tool until the CLI restarts. Restart, then start the loop.
 
 ## One iteration
 
-1. **Poll.** `mcp__conveyor__list_tasks` with `status: "Planning"` and
+1. **Read the board.** `mcp__conveyor__list_tasks` with `status: "Planning"` and
    `typeFilters: ["task", "incident", "suggestion"]`. The type filter is not
    optional: without it incidents and suggestions are silently excluded.
 2. **Skip what is not yours to plan.** From the result, drop cards with
@@ -47,10 +53,36 @@ the Skill tool until the CLI restarts. Restart, then start the loop.
 4. **Relay.** The subagent's report is not shown to the user. Repeat the
    part that matters: card slug, story points and tags identification set,
    whether `agentId` is populated, and any warning the planner left in chat.
-5. **Pace.** Under `/loop`, pass `noop: true` when no card was delegated and
-   `noop: false` when one was. 1500 s is the working cadence; widen to 1800 s
-   after a few quiet ticks. There is no board event to arm a Monitor on for
-   the Planning column, so time is the only wake signal.
+5. **Wake on board events, not on a timer.** Nick asked for this on
+   2026-09-06 after watching idle ticks burn requests. On the first iteration
+   (and on any later one where `TaskList` shows no such monitor running), arm
+   a persistent `Monitor` around `conveyor-wait` — a CLI in
+   `@rallycry/conveyor-mcp` that exits the moment a card ENTERS the filtered
+   state:
+
+   ```bash
+   set -a; source "$HOME/.config/conveyor/env"; set +a
+   while true; do
+     out=$(npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait \
+       --statuses Planning --scope all --types task,incident,suggestion \
+       --timeout 3500 2>/dev/null)
+     rc=$?
+     if [ $rc -ne 0 ]; then echo "conveyor-wait FAILED exit=$rc: $out"; sleep 120; continue; fi
+     case "$out" in *'"reason":"event"'*) echo "$out" ;; esac
+   done
+   ```
+
+   `--statuses Planning` is the lane new tasks, incidents and suggestions land
+   in; `--scope all` because the planner plans regardless of assignee. Only
+   `event` lines are echoed — timeouts re-arm silently. Sourcing
+   `~/.config/conveyor/env` matters: an agent Bash shell never saw the MCP
+   server's environment, and that file is where `scripts/conveyor-mcp.sh`
+   reads credentials too. The event's card is advisory — run steps 1–3 again
+   on wake rather than trusting it, since another agent may have got there.
+
+   Under `/loop`, pass `noop: true` when no card was delegated and
+   `noop: false` when one was. The `ScheduleWakeup` is now only a fallback
+   heartbeat for a silently dead monitor: use 3600 s, never a shorter cadence.
 
 ## The subagent brief
 
@@ -96,7 +128,7 @@ already on the card.
   what the board says.
 - **All Conveyor tools fully-qualified** (`mcp__conveyor__list_tasks`; bare
   names fail).
-- **Never plan in the session itself while the loop runs on a cheap model.**
+- **Never plan in the session itself while the watch runs on a cheap model.**
   If the user asks for a plan directly, they can `/model` up and use
   `/conveyor-plan`; this skill's job is to keep the session cheap.
 - **One planner at a time.** Serial delegation is a feature: two subagents

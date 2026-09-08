@@ -169,6 +169,22 @@ ShellRoot {
 	// Centered power menu (sleep / hibernate / restart / shutdown). Esc dismisses.
 	property bool powerMenuVisible: false
 
+	// Alt-tab window switcher: lists every open window and focuses the chosen one.
+	// Esc and click-outside dismiss. `$mod, Tab` keeps its old blind cyclenext.
+	property bool windowSwitcherVisible: false
+
+	// Routed to the active WindowSwitcher instance; see the Variants block that
+	// hosts it. Repeated Alt+Tab presses arrive over IPC rather than as keys,
+	// because Hyprland consumes a matched `exec` bind before the overlay's
+	// exclusive-focus surface sees anything.
+	signal windowSwitcherStep(int delta)
+
+	// Routed the same way as the step signal above, and banked by the switcher
+	// until its window list exists. The Alt-RELEASE gesture is detected inside
+	// WindowSwitcher.qml on its own focused surface, NOT here -- this signal
+	// carries the `commit` IPC, which is the tooling and test entry point.
+	signal windowSwitcherCommit()
+
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
 	// moves windows and a bare right-drag resizes them, so knowing it is on is
 	// not cosmetic -- ordinary clicking behaves differently everywhere.
@@ -200,6 +216,13 @@ ShellRoot {
 	readonly property bool calendarOk: calData.ok
 
 	readonly property string sunsetRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr-sunset`
+
+	// Claude usage + action menu. The numbers come from home/services/
+	// claude-usage.nix's timer, which is the only thing that talks to the
+	// network; the bar just reads the JSON it writes.
+	property var claudeUsage: ({})
+	property bool claudeMenuVisible: false
+	readonly property string claudeRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/claude-usage`
 
 	function sunsetOk(): bool {
 		return (shellRoot.sunsetState?.ok ?? false) === true;
@@ -276,6 +299,87 @@ ShellRoot {
 			lines.push(until + " · ramp " + (st?.transitionMin ?? "--") + " min");
 		lines.push("Left-click pauses/resumes · right-click for options");
 		return lines.join("\n");
+	}
+
+	function claudeOk(): bool {
+		return (shellRoot.claudeUsage?.ok ?? false) === true;
+	}
+
+	// Reset times can be hours or days out, so a bare HH:mm would be
+	// ambiguous; add the weekday once the reset is past today.
+	function claudeClock(epoch): string {
+		if (!epoch)
+			return "--:--";
+		const when = new Date(epoch * 1000);
+		const sameDay = when.toDateString() === new Date().toDateString();
+		return sameDay
+			? Qt.formatTime(when, "HH:mm")
+			: Qt.formatDateTime(when, "ddd HH:mm");
+	}
+
+	function claudeColor(): string {
+		if (!shellRoot.claudeOk())
+			return Theme.muted;
+		const limits = shellRoot.claudeUsage?.limits ?? [];
+		for (let i = 0; i < limits.length; ++i) {
+			const l = limits[i];
+			if ((l.severity && l.severity !== "normal") || (l.percent ?? 0) >= 90)
+				return Theme.error;
+		}
+		return Theme.accent;
+	}
+
+	// The single source of the usage text: the hover tooltip joins these and
+	// ClaudeMenu renders them one per row, so the two can never disagree.
+	function claudeUsageLines(): var {
+		const u = shellRoot.claudeUsage;
+		if (!shellRoot.claudeOk()) {
+			const reason = u?.reason ?? "starting up";
+			if (reason === "auth-expired")
+				return ["Usage unavailable — run claude to refresh sign-in"];
+			if (reason === "no-credentials")
+				return ["Usage unavailable — sign in with claude first"];
+			return ["Usage unavailable (" + reason + ")"];
+		}
+
+		const lines = [];
+		const limits = u?.limits ?? [];
+		for (let i = 0; i < limits.length; ++i) {
+			const l = limits[i];
+			// Every limit is shown. `isActive` is NOT a filter: the endpoint
+			// reports it false for both weekly limits while the session limit
+			// is the one currently binding, and filtering on it hid the weekly
+			// numbers Nick explicitly asked for (observed live: session
+			// is_active=true, weekly_all and weekly_scoped both false).
+			let label;
+			if (l.kind === "session")
+				label = "Session";
+			else if (l.kind === "weekly_all")
+				label = "Weekly";
+			else if (l.kind === "weekly_scoped")
+				label = (l.scope ? l.scope : "Scoped") + " weekly";
+			else
+				label = l.kind ?? "Usage";
+			lines.push(label + " " + Math.round(l.percent ?? 0) + "%"
+				+ (l.resetsAt ? " · resets " + shellRoot.claudeClock(l.resetsAt) : ""));
+		}
+
+		const extra = u?.extraUsage;
+		if (extra?.enabled === true)
+			lines.push("Extra usage " + Math.round(extra?.utilization ?? 0) + "%");
+
+		if (lines.length === 0)
+			lines.push("No active limits reported");
+		return lines;
+	}
+
+	function claudeTooltipText(): string {
+		const plan = shellRoot.claudeUsage?.plan ?? "";
+		const head = "Claude" + (plan ? " · " + plan : "");
+		return [head]
+			.concat(shellRoot.claudeUsageLines())
+			.concat(["Left-click opens a new agent · right-click for options"])
+			.join("\n");
 	}
 
 	function resizeMoveTooltipText(): string {
@@ -497,6 +601,8 @@ ShellRoot {
 			return resizeMoveTooltipText();
 		if (kind === "sunset")
 			return sunsetTooltipText();
+		if (kind === "claude")
+			return claudeTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -856,6 +962,47 @@ ShellRoot {
 	}
 
 	IpcHandler {
+		target: "switcher"
+
+		// Return type required or quickshell will not register this for `ipc call switcher toggle`.
+		function toggle(): void {
+			shellRoot.windowSwitcherVisible = !shellRoot.windowSwitcherVisible;
+		}
+
+		// Alt+Tab: open, or advance if already open. The step is emitted BEFORE
+		// the visible flip so a fresh open banks it via WindowSwitcher.request()
+		// and the rebuild that follows applies it.
+		function next(): void {
+			shellRoot.windowSwitcherStep(1);
+			if (!shellRoot.windowSwitcherVisible)
+				shellRoot.windowSwitcherVisible = true;
+		}
+
+		// Alt+Shift+Tab: open on the least-recently-focused window, or step back
+		// if already open.
+		function prev(): void {
+			shellRoot.windowSwitcherStep(-1);
+			if (!shellRoot.windowSwitcherVisible)
+				shellRoot.windowSwitcherVisible = true;
+		}
+
+		// Focus the highlighted window and close. The Alt-release gesture does
+		// NOT come through here -- WindowSwitcher.qml reads the key-up on its
+		// own focused surface. This is the IPC entry point for tooling and
+		// tests. Only meaningful while open: a commit for a closed overlay is
+		// DROPPED rather than banked, so it can never fire into the next open.
+		function commit(): void {
+			if (shellRoot.windowSwitcherVisible)
+				shellRoot.windowSwitcherCommit();
+		}
+
+		// Alt+Esc: close without changing focus.
+		function dismiss(): void {
+			shellRoot.windowSwitcherVisible = false;
+		}
+	}
+
+	IpcHandler {
 		target: "audio"
 
 		function notifyChange(): void {
@@ -1064,6 +1211,13 @@ ShellRoot {
 		onFileChanged: shellRoot.markQsReloadPending()
 	}
 
+	FileView {
+		path: `${shellRoot.qsSourceDir}/ClaudeMenu.qml`
+		watchChanges: true
+		printErrors: false
+		onFileChanged: shellRoot.markQsReloadPending()
+	}
+
 	// Calendar events, written by home/services/calendar-sync.nix's timer.
 	// Absent/malformed is normal before the ICS secret is provisioned: the
 	// JsonAdapter keeps its defaults (ok=false, empty events) and the popup
@@ -1106,6 +1260,33 @@ ShellRoot {
 
 		onLoaded: sunsetStateFile.parseState()
 		onFileChanged: sunsetStateFile.reload()
+	}
+
+	// Claude usage, rewritten atomically by qs-claude-usage every five minutes
+	// and again whenever the menu opens. Absent is the normal state before the
+	// first tick after login: the pill stays up (it is a launcher first) and
+	// simply reads as unavailable.
+	FileView {
+		id: claudeStateFile
+		path: `${shellRoot.claudeRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		// Named parseState for the same reason as sunsetStateFile's: FileView
+		// already has a reload(), and shadowing it here would recurse.
+		function parseState(): void {
+			const raw = claudeStateFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.claudeUsage = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next write brings a whole file.
+			}
+		}
+
+		onLoaded: claudeStateFile.parseState()
+		onFileChanged: claudeStateFile.reload()
 	}
 
 	Timer {
@@ -1728,6 +1909,30 @@ ShellRoot {
 						}
 
 						StatusPill {
+							id: claudePill
+							// Always visible, unlike the sunset pill: this is a
+							// launcher first and a usage readout second, so it
+							// stays useful even with no usage data.
+							tipKind: "claude"
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									Quickshell.execDetached(["kitty", "-e", "zsh", "-lic", "agent-new"]);
+								else if (mouse.button === Qt.RightButton)
+									shellRoot.claudeMenuVisible = !shellRoot.claudeMenuVisible;
+							}
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.claudeColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: String.fromCodePoint(0xF0674) // nf-md-creation
+							}
+						}
+
+						StatusPill {
 							id: brightnessPill
 							visible: shellRoot.brightnessPresent
 							tipKind: "brightness"
@@ -2018,6 +2223,31 @@ ShellRoot {
 					onDismissed: shellRoot.mediaPopupVisible = false
 				}
 			}
+
+			// Claude actions dropdown, anchored under the Claude pill and
+			// pinned to the main-monitor bar for the same reason as the media
+			// one above.
+			PopupWindow {
+				id: claudeDropdown
+				visible: barWindow.isCenterScreen && shellRoot.claudeMenuVisible
+				grabFocus: true
+				color: "transparent"
+				implicitWidth: claudeDropdownContent.contentWidth
+				implicitHeight: claudeDropdownContent.contentHeight
+				anchor.window: barWindow
+				anchor.item: claudePill
+				anchor.edges: Edges.Bottom
+				anchor.gravity: Edges.Bottom
+
+				ClaudeMenu {
+					id: claudeDropdownContent
+					anchors.fill: parent
+					active: claudeDropdown.visible
+					lines: shellRoot.claudeUsageLines()
+					plan: shellRoot.claudeUsage?.plan ?? ""
+					onDismissed: shellRoot.claudeMenuVisible = false
+				}
+			}
 		}
 	}
 
@@ -2059,6 +2289,63 @@ ShellRoot {
 				anchors.fill: parent
 				active: powerMenuWin.menuOpen && powerMenuWin.isCenterScreen
 				onDismissed: shellRoot.powerMenuVisible = false
+			}
+		}
+	}
+
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: windowSwitcherWin
+			required property var modelData
+			// CenterOutput is THE definition of which output is main; never
+			// re-derive it here (its header explains why).
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+			readonly property bool switcherOpen: shellRoot.windowSwitcherVisible
+
+			screen: modelData
+			visible: switcherOpen && isCenterScreen
+			color: "transparent"
+			exclusionMode: ExclusionMode.Ignore
+			focusable: switcherOpen && isCenterScreen
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-window-switcher-" + modelData.name
+			WlrLayershell.keyboardFocus: (switcherOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			WindowSwitcher {
+				id: switcher
+
+				anchors.fill: parent
+				active: windowSwitcherWin.switcherOpen && windowSwitcherWin.isCenterScreen
+				onDismissed: shellRoot.windowSwitcherVisible = false
+
+				// Guard on isCenterScreen rather than `active`: the bank has to
+				// be fillable BEFORE the overlay becomes visible, and the
+				// non-center instances must not accumulate a counter they will
+				// never use.
+				Connections {
+					target: shellRoot
+
+					function onWindowSwitcherStep(delta: int): void {
+						if (windowSwitcherWin.isCenterScreen)
+							switcher.request(delta);
+					}
+
+					function onWindowSwitcherCommit(): void {
+						if (windowSwitcherWin.isCenterScreen)
+							switcher.requestCommit();
+					}
+				}
 			}
 		}
 	}

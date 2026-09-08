@@ -30,7 +30,11 @@ host), **Go3** (Surface Go 3 kiosk), **Gcp**.
   stays inside the repo; when only a live check will do, say what you are
   about to do and ask first. Restore whatever you took over — cursor
   position, monitor power, anything left on screen — and crop screenshots to
-  the region under test rather than grabbing whole outputs.
+  the region under test rather than grabbing whole outputs. Synthetic
+  **keyboard** input (`wtype`, `ydotool`, any virtual-keyboard client) is not
+  ask-first, it is never: Hyprland resolves a virtual keyboard's keycodes
+  through its own keymap, so injected keys land on the wrong binds
+  (`documentation/quickshell-agent-guide.md`, *Do not*).
 - **File a bug as a Conveyor card the moment you notice it**, not in a PR body,
   a chat message, or a summary — those lose it. Carry the symptom, the evidence
   it is real, and the suspected cause; file rather than fix inline, which keeps
@@ -88,7 +92,7 @@ assembled by Home Manager (`home/programs/claude-skills.nix`).
 - **Custom skills** live in this repo under `.claude/skills/` and are the source
   of truth: `convey-her` (the WizOs loop — a thin overlay over stock upstream
   `conveyor-local-loop` + `conveyor-build`, carrying every WizOs rule as an
-  explicit amendment) and `conveyor-plan-loop`. The HM tree links them in as
+  explicit amendment) and `conveyor-plan-watch`. The HM tree links them in as
   absolute symlinks to the checkout, so an edit is live in the next session with
   no rebuild.
 - **Upstream skills** come from the npm registry tarball via `pkgs.fetchzip`;
@@ -296,7 +300,10 @@ them).
 clock. Cluster order: updates (rebuild wrench, flake-input count, origin
 commits to pull), qs-reload (only if `quickshell/*.qml` changed since last
 start), wifi, bluetooth, screen-warmth (only once the scheduler has a location
-fix), brightness, battery, resize-move (only while that
+fix), claude (usage on hover, left-click new agent, right-click menu; usage
+comes from `home/services/claude-usage.nix`, which reads Claude Code's
+`~/.claude/.credentials.json` READ-ONLY and never refreshes it -- only Claude
+Code may write that file), brightness, battery, resize-move (only while that
 mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is

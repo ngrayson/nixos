@@ -39,7 +39,7 @@
   # checkout path, so the module is correct there too.
   customSkills = [
     "convey-her"
-    "conveyor-plan-loop"
+    "conveyor-plan-watch"
   ];
   repoSkills = "${config.home.homeDirectory}/.config/nixos/.claude/skills";
 

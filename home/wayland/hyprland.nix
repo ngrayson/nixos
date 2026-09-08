@@ -181,6 +181,19 @@ in {
           "$mod, bracketright, workspace, m+1"
           "$mod, Tab, cyclenext"
           "$mod SHIFT, Tab, cyclenext, prev"
+          # Alt-tab picker: lists every window, focuses the chosen one. Each
+          # press steps the highlight (SHIFT steps back) rather than toggling
+          # the overlay -- Hyprland consumes a matched exec bind before the
+          # overlay's exclusive-focus surface sees the key, so repeats have to
+          # come back through IPC. The two $mod cycles above are deliberately
+          # kept -- they are a working blind switcher, so a broken picker can
+          # never leave the session stuck. The Alt RELEASE that commits the
+          # selection is detected by the overlay itself
+          # (quickshell/WindowSwitcher.qml), deliberately NOT by a bindr:
+          # Hyprland never delivers a release bind for a modifier that took
+          # part in another bind, and Alt+Tab always is one (PR #228).
+          "ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher next"
+          "ALT SHIFT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher prev"
           ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
           ", XF86AudioRaiseVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -i 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
@@ -269,6 +282,7 @@ in {
         bind = , escape, exec, ${lib.getExe hs.hyprResizeMoveToggle}
         bind = $mod, a, exec, ${lib.getExe hs.hyprResizeMoveToggle}
         submap = reset
+
       '';
   };
 
