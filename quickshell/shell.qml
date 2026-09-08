@@ -1928,7 +1928,7 @@ ShellRoot {
 								color: shellRoot.claudeColor()
 								font.pixelSize: 14
 								font.family: "IosevkaTermSlab NF"
-								text: String.fromCodePoint(0xF0674) // nf-md-creation
+								text: String.fromCodePoint(0xF4F5) // nf-oct-north_star
 							}
 						}
 
