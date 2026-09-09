@@ -31,6 +31,7 @@ in {
     ../common/base.nix
     ../common/mime.nix
     ../common/albert-overlay.nix
+    ../common/hyprland-overlay.nix
     # Slippi NixOS module: udev/runtime tuning for official GameCube USB adapter input.
     "${slippi-nix-src}/modules/nixos/gamecube-controller-adapter.nix"
     ../common/vpn-vortix.nix
