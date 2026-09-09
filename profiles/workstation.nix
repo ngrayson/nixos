@@ -235,6 +235,19 @@ in {
     stdenv.cc.cc
     zlib
     openssl
+    # FHS-tarball JDKs (mise's Temurin, pinned by ~/Stellarium/projects/games/
+    # foundation as `java = "temurin-21"`) dlopen lib/libawt_xawt.so, whose
+    # DT_NEEDED X11 libraries live nowhere on NixOS. Without these Paper logs
+    # "You are using a headless JRE distribution" and exits 0 -- a clean exit,
+    # so the supervisor above it reports no error at all and just backs off.
+    xorg.libX11
+    xorg.libXext
+    xorg.libXrender
+    xorg.libXtst
+    xorg.libXi
+    # libjsound.so -- the only other unresolved DT_NEEDED anywhere in the
+    # Temurin tree. Paper does not need it; included so the JDK is fully clean.
+    alsa-lib
   ];
 
   programs.appimage = {
