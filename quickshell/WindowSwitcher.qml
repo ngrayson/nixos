@@ -300,6 +300,21 @@ Item {
 		root.dismissed();
 		if (!entry || !entry.address)
 			return;
+		// An offscreen window is rescued as PART of being selected, never
+		// behind a second keybind. Two reasons, the first found by testing on
+		// 2026-09-09:
+		//
+		// 1. This overlay only exists while Alt is held. Reaching any chord
+		//    means letting go of Alt, which already commits and dismisses --
+		//    and with Alt still down the event carries Alt, so a Shortcut
+		//    declared "Ctrl+Return" does not match it. A secondary bind is
+		//    therefore reachable only via the mouse-browse `toggle` path,
+		//    which is exactly when it is not needed.
+		// 2. Focusing a window that sits outside every monitor without moving
+		//    it is a no-op the user cannot see. Selecting it can only sensibly
+		//    mean "bring it back".
+		if (entry.offscreen)
+			root.rescueTo(entry);
 		// Explicit dispatch rather than the Wayland handle's activate(): this
 		// is the same call path an offscreen-rescue follow-up needs, and it
 		// shows up in hyprctl logs. HyprlandToplevel itself has no activate()
@@ -307,17 +322,15 @@ Item {
 		Hyprland.dispatch("focuswindow address:" + entry.address);
 	}
 
-	// Move an offscreen window back onto the focused monitor, then focus it,
-	// so rescuing and switching to it are one action.
+	// Move an offscreen window onto the focused monitor. Called from
+	// activateCurrent() just before the focus dispatch, so the move and the
+	// focus are one user action.
 	//
 	// `movewindowpixel` ONLY. It does not touch floating state, and that is
 	// the entire reason it is used: making Hyprland 0.55.4 re-tile a floating
 	// window segfaulted the compositor and destroyed a session on 2026-09-06
 	// (dragBegin -> dragEnd -> changeFloatingMode -> CDwindleAlgorithm::addTarget).
-	function rescueCurrent(): void {
-		const entry = root.windows[root.currentIndex];
-		if (!entry || !entry.address || !entry.offscreen)
-			return;
+	function rescueTo(entry: var): void {
 		const target = root.focusedRect(root.monitorRects());
 		if (!target)
 			return;
@@ -326,8 +339,6 @@ Item {
 		const x = Math.round(target.x + target.w * 0.1);
 		const y = Math.round(target.y + target.h * 0.1);
 		Hyprland.dispatch("movewindowpixel exact " + x + " " + y + ",address:" + entry.address);
-		root.dismissed();
-		Hyprland.dispatch("focuswindow address:" + entry.address);
 	}
 
 	// Letting go of Alt commits the highlighted row. Hyprland forwards a key
@@ -386,14 +397,6 @@ Item {
 		enabled: root.active
 		sequences: ["Return", "Enter"]
 		onActivated: root.activateCurrent()
-	}
-
-	// Rescue is inert on any row not flagged offscreen, so Ctrl+Return can
-	// never displace a window that was reachable to begin with.
-	Shortcut {
-		enabled: root.active
-		sequences: ["Ctrl+Return", "Ctrl+Enter"]
-		onActivated: root.rescueCurrent()
 	}
 
 	Rectangle {
@@ -501,7 +504,7 @@ Item {
 					// appended.
 					text: modelData.offscreen
 						? (index === root.currentIndex
-							? "offscreen  ·  Ctrl+Return to rescue"
+							? "offscreen  ·  select to bring it back"
 							: "offscreen")
 						: ((modelData.workspace ? "ws " + modelData.workspace : "")
 							+ (modelData.monitor ? "  ·  " + modelData.monitor : ""))
