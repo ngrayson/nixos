@@ -102,8 +102,81 @@ Item {
 		return "(untitled window)";
 	}
 
+	// Monitor rectangles in HYPRLAND's coordinate space, which is the space
+	// toplevel `at`/`size` are reported in.
+	//
+	// The trap this exists for: `Hyprland.monitors` reports width/height
+	// PRE-transform, so a 90/270-rotated output actually occupies
+	// height x width. Measured on Tawa: DP-1 is x=4000 w=2560 h=1440
+	// transform=1, but really spans x in [4000, 5440] -- using the raw width
+	// invents 1120px of desktop that is not there, and a window parked in
+	// that phantom strip would be judged on-screen while being invisible.
+	//
+	// `Quickshell.screens` has the post-transform dimensions but NOT
+	// Hyprland's coordinate space, so it cannot be used here.
+	function monitorRects(): var {
+		Hyprland.refreshMonitors();
+		const mons = Hyprland.monitors ? Hyprland.monitors.values : [];
+		const rects = [];
+		for (let i = 0; i < mons.length; ++i) {
+			const m = mons[i].lastIpcObject || ({});
+			const x = m["x"], y = m["y"], w = m["width"], h = m["height"];
+			// A monitor list that is empty or still reporting zeros is a
+			// TRANSIENT state after refreshMonitors(), not a desktop with no
+			// outputs. Skipping such entries -- and flagging nothing when
+			// none survive -- is what keeps a slow refresh from declaring
+			// every window offscreen.
+			if (typeof x !== "number" || typeof y !== "number"
+				|| typeof w !== "number" || typeof h !== "number"
+				|| w <= 0 || h <= 0)
+				continue;
+			const rotated = m["transform"] === 1 || m["transform"] === 3
+				|| m["transform"] === 5 || m["transform"] === 7;
+			rects.push({
+				x: x,
+				y: y,
+				w: rotated ? h : w,
+				h: rotated ? w : h,
+				focused: m["focused"] === true
+			});
+		}
+		return rects;
+	}
+
+	function focusedRect(rects: var): var {
+		for (let i = 0; i < rects.length; ++i) {
+			if (rects[i].focused)
+				return rects[i];
+		}
+		return rects.length > 0 ? rects[0] : null;
+	}
+
+	// True only when the window rectangle intersects NO monitor at all.
+	//
+	// A real intersection test, deliberately not a centre-point one: a window
+	// hanging half off the left edge is still grabbable and must not be
+	// flagged. With no usable monitor data this returns false -- rescue is
+	// simply unavailable, which is safer than flagging everything.
+	function isOffscreen(at: var, size: var, rects: var): bool {
+		if (!rects || rects.length === 0 || !at || !size)
+			return false;
+		if (at.length < 2 || size.length < 2)
+			return false;
+		const wx = at[0], wy = at[1], ww = size[0], wh = size[1];
+		if (typeof wx !== "number" || typeof wy !== "number"
+			|| typeof ww !== "number" || typeof wh !== "number")
+			return false;
+		for (let i = 0; i < rects.length; ++i) {
+			const r = rects[i];
+			if (wx < r.x + r.w && wx + ww > r.x && wy < r.y + r.h && wy + wh > r.y)
+				return false;
+		}
+		return true;
+	}
+
 	function rebuild(): void {
 		Hyprland.refreshToplevels();
+		const rects = root.monitorRects();
 
 		// Remember the highlighted window so an async repopulation, or a
 		// window closing while the list is open, does not move the selection.
@@ -129,7 +202,11 @@ Item {
 				cls: ipc["class"] || "",
 				workspace: t.workspace ? t.workspace.name : "",
 				monitor: t.monitor ? t.monitor.name : "",
-				focusHistory: typeof fh === "number" ? fh : -1
+				focusHistory: typeof fh === "number" ? fh : -1,
+				// HyprlandToplevel has no x/y/width/height in Quickshell
+				// 0.3.0 -- those are HyprlandMonitor properties. Geometry is
+				// only reachable through lastIpcObject, as two-element arrays.
+				offscreen: root.isOffscreen(ipc["at"], ipc["size"], rects)
 			});
 		}
 
@@ -230,6 +307,29 @@ Item {
 		Hyprland.dispatch("focuswindow address:" + entry.address);
 	}
 
+	// Move an offscreen window back onto the focused monitor, then focus it,
+	// so rescuing and switching to it are one action.
+	//
+	// `movewindowpixel` ONLY. It does not touch floating state, and that is
+	// the entire reason it is used: making Hyprland 0.55.4 re-tile a floating
+	// window segfaulted the compositor and destroyed a session on 2026-09-06
+	// (dragBegin -> dragEnd -> changeFloatingMode -> CDwindleAlgorithm::addTarget).
+	function rescueCurrent(): void {
+		const entry = root.windows[root.currentIndex];
+		if (!entry || !entry.address || !entry.offscreen)
+			return;
+		const target = root.focusedRect(root.monitorRects());
+		if (!target)
+			return;
+		// Inset rather than placed at the origin, so the window lands well
+		// inside the output instead of flush against its edge.
+		const x = Math.round(target.x + target.w * 0.1);
+		const y = Math.round(target.y + target.h * 0.1);
+		Hyprland.dispatch("movewindowpixel exact " + x + " " + y + ",address:" + entry.address);
+		root.dismissed();
+		Hyprland.dispatch("focuswindow address:" + entry.address);
+	}
+
 	// Letting go of Alt commits the highlighted row. Hyprland forwards a key
 	// release iff its press was forwarded (0.55.4 KeybindManager.cpp
 	// onKeyEvent), and a bare Alt press matches no bind, so the Alt key-up
@@ -286,6 +386,14 @@ Item {
 		enabled: root.active
 		sequences: ["Return", "Enter"]
 		onActivated: root.activateCurrent()
+	}
+
+	// Rescue is inert on any row not flagged offscreen, so Ctrl+Return can
+	// never displace a window that was reachable to begin with.
+	Shortcut {
+		enabled: root.active
+		sequences: ["Ctrl+Return", "Ctrl+Enter"]
+		onActivated: root.rescueCurrent()
 	}
 
 	Rectangle {
@@ -386,9 +494,18 @@ Item {
 					anchors.right: parent.right
 					anchors.rightMargin: 16
 					anchors.verticalCenter: parent.verticalCenter
-					text: (modelData.workspace ? "ws " + modelData.workspace : "")
-						+ (modelData.monitor ? "  ·  " + modelData.monitor : "")
-					color: Theme.muted
+					// The hint shows ONLY on the selected offscreen row, so the
+					// overlay stays quiet in the ordinary case. A rescued
+					// window's workspace/monitor is not useful information
+					// while it is unreachable, so it is replaced rather than
+					// appended.
+					text: modelData.offscreen
+						? (index === root.currentIndex
+							? "offscreen  ·  Ctrl+Return to rescue"
+							: "offscreen")
+						: ((modelData.workspace ? "ws " + modelData.workspace : "")
+							+ (modelData.monitor ? "  ·  " + modelData.monitor : ""))
+					color: modelData.offscreen ? Theme.error : Theme.muted
 					font.pixelSize: 11
 				}
 
