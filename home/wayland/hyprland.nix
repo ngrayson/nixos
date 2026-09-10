@@ -219,6 +219,10 @@ in {
         ", XF86PowerOff, exec, ${lib.getExe hs.hyprQuickshellIpc} call power toggle"
       ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
+      # Its popups -- file dialog, splash, error dialogs -- are SEPARATE transient X11
+      # toplevels carrying the same title, so every rule below hits the popups as well as
+      # the main window. `hyprctl clients` lists only mapped windows and cannot see a popup
+      # that maps and unmaps quickly; `xwininfo -root -tree` can. `pxc-debug` captures both.
       #
       # `monitor DP-1` is what stops the AppImage opening invisibly, and the
       # reason is an anchor, not a position. The AppImage centres itself on the

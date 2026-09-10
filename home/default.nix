@@ -10,6 +10,7 @@
     ./programs/qt-palette.nix
     ./programs/albert.nix
     ./programs/slippi.nix
+    ./programs/pixel-composer.nix
     ./programs/zsh.nix
     ./programs/claude-skills.nix
     ./programs/git.nix
