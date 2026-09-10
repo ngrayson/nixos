@@ -205,6 +205,24 @@
           fi
         fi
 
+        # Loud, because the leak above went unnoticed for a whole day of
+        # captures and silently multiplied the pollers on the machine.
+        local stale
+        stale=0
+        for d in "$ROOT"/*/; do
+          d="''${d%/}"
+          [ -d "$d" ] || continue
+          [ "$d" = "$run" ] && continue
+          [ -f "$d/pids" ] || continue
+          while IFS= read -r p; do
+            [ -n "$p" ] && [ -d "/proc/$p" ] && stale=$((stale + 1))
+          done <"$d/pids"
+        done
+        if [ "$stale" -gt 0 ]; then
+          echo "WARNING: $stale collector(s) from earlier runs are still alive."
+          echo "         Run \`pxc-debug stop\` to reap every run, then start again." >&2
+        fi
+
         echo "run dir: $run"
         echo "Reproduce the bug, then the instant it happens run:  pxc-debug mark <what you saw>"
       }
@@ -225,17 +243,51 @@
         echo "marked $n in $run"
       }
 
+      # Stops EVERY run's collectors, not just the newest.
+      #
+      # This used to stop only newest_run(), which leaked badly: each `start`
+      # creates a new run dir, so any earlier run's collectors were orphaned
+      # permanently. Measured 2026-09-10 after a day of captures -- 31 stray
+      # processes, the oldest alive 9h54m, including 16 open `nc -U`
+      # connections to Hyprland's event socket and xwininfo pollers still
+      # sampling every 250 ms. Nothing in the harness ever reaped them.
+      #
+      # Pass a run dir to stop just that one.
       cmd_stop() {
-        local run pid
-        run="$(newest_run)"
-        [ -n "$run" ] || { echo "pxc-debug: no run to stop" >&2; exit 1; }
-        if [ -f "$run/pids" ]; then
+        local only="''${1:-}" run pid alive total
+        total=0
+        # Glob, not `find` in a for-loop (SC2044). Run dirs are direct
+        # children of $ROOT, so a glob is both correct and safer.
+        for run in "$ROOT"/*/; do
+          run="''${run%/}"
+          [ -d "$run" ] || continue
+          [ -z "$only" ] || [ "$run" = "$only" ] || continue
+          [ -f "$run/pids" ] || continue
+          alive=0
           while IFS= read -r pid; do
             [ -n "$pid" ] || continue
-            kill "$pid" 2>/dev/null || true
+            if [ -d "/proc/$pid" ]; then
+              # CHILDREN FIRST. The pids file records the subshell wrapping a
+              # pipeline (`nc | grep | while read`), and killing that subshell
+              # leaves `nc` -- and the xwininfo/hyprctl pollers -- running,
+              # reparented to init. Measured: reaping only the recorded pids
+              # still left 4 live `nc -U` connections to Hyprland's event
+              # socket. Kill descendants before the parent, or they survive.
+              pkill -P "$pid" 2>/dev/null || true
+              kill "$pid" 2>/dev/null || true
+              alive=$((alive + 1))
+            fi
           done <"$run/pids"
+          if [ "$alive" -gt 0 ]; then
+            echo "stopped $alive collector(s) from $(basename "$run")"
+            total=$((total + alive))
+          fi
+        done
+        if [ "$total" -eq 0 ]; then
+          echo "no live collectors found"
+        else
+          echo "$total collector(s) stopped; Pixel Composer left running"
         fi
-        echo "collectors stopped; Pixel Composer left running"
       }
 
       # Output is meant to be pasted into a Conveyor card, so home paths and
