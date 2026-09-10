@@ -70,7 +70,14 @@
       # Both Pixel Composer builds. The Steam/Proton window carries a real
       # WM_CLASS; the AppImage's is empty, which is why the AppImage is matched
       # on title and popups cannot be told apart from the main window by class.
+      # Anchored, for matching hyprctl's `title` FIELD.
       TITLE_RE='^Pixel Composer|^Select files| - Pixel Composer'
+      # Unanchored, for grepping xwininfo -tree OUTPUT LINES, which begin with
+      # whitespace and the window id -- `0x6800003 "Pixel Composer 1.21.0": ...`
+      # -- so an anchored pattern matches nothing. Getting this wrong silently
+      # produced an EMPTY x11-tree.log for the AppImage while every other
+      # collector worked, which is the one window this harness exists to watch.
+      X11_RE='Pixel Composer|Select files'
       STEAM_CLASS='steam_app_2299510'
 
       newest_run() {
@@ -81,7 +88,7 @@
       # source of truth for popups; hyprctl cannot see an unmapped window.
       x11_snapshot() {
         local ids id
-        ids="$(xwininfo -display "$DISP" -root -tree 2>/dev/null | grep -E "$TITLE_RE" || true)"
+        ids="$(xwininfo -display "$DISP" -root -tree 2>/dev/null | grep -E "$X11_RE" || true)"
         [ -n "$ids" ] || return 0
         printf '%s\n' "$ids"
         printf '%s\n' "$ids" | grep -o '0x[0-9a-f]*' | while IFS= read -r id; do
