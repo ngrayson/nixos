@@ -244,6 +244,14 @@ in {
       # placement rule. Only changing the anchor survives that. Do not
       # re-try `center`/`move` here without re-testing that ordering.
       #
+      # SCOPED TO THE APPIMAGE by `match:class ^$`. Without that it also caught
+      # the STEAM build, whose title is plain "Pixel Composer <version>" until a
+      # project is opened -- observed 2026-09-10 dragging a 2560x1440 Steam
+      # window onto DP-1, which is 1440 wide in portrait, so it hung 1120px off
+      # the right edge. The AppImage has an EMPTY WM_CLASS under XWayland; the
+      # Steam build has `steam_app_2299510`. Only the AppImage miscomputes its
+      # position, so only the AppImage needs the anchor.
+      #
       # If DP-1 is ever disconnected this rule stops applying and the window
       # can go offscreen again; the alt-tab switcher's offscreen rescue is the
       # recovery path. The float rule below is what makes position matter at
@@ -251,7 +259,8 @@ in {
       windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
-        "match:title ^Pixel Composer.*, float on, monitor DP-1"
+        "match:title ^Pixel Composer.*, float on"
+        "match:class ^$, match:title ^Pixel Composer.*, monitor DP-1"
         "match:title ^Select files$, float on"
         "match:class ^(PixelComposer|pixelcomposer).*, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
