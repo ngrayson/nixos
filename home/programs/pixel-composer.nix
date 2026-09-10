@@ -77,7 +77,14 @@
       # -- so an anchored pattern matches nothing. Getting this wrong silently
       # produced an EMPTY x11-tree.log for the AppImage while every other
       # collector worked, which is the one window this harness exists to watch.
-      X11_RE='Pixel Composer|Select files'
+      #
+      # The class is matched too, and that is not redundant: the STEAM build's
+      # popups do not carry the app's name at all. Measured 2026-09-10, its
+      # splash maps as title "Window" and settles as "dialog" --
+      #     0x5e00004 "dialog": ("steam_app_2299510" "steam_app_2299510")  1280x800
+      # -- so a title-only filter saw 1 line where the class filter saw 18, and
+      # the popup this harness exists to capture was among the 17 it missed.
+      X11_RE='Pixel Composer|Select files|steam_app_2299510'
       STEAM_CLASS='steam_app_2299510'
 
       newest_run() {
