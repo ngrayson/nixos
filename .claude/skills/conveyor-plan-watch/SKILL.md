@@ -84,6 +84,16 @@ the Skill tool until the CLI restarts. Restart, then start the loop.
    `noop: false` when one was. The `ScheduleWakeup` is now only a fallback
    heartbeat for a silently dead monitor: use 3600 s, never a shorter cadence.
 
+   **Do not trust that heartbeat to fire.** In this skill's sessions every
+   observed wake came from the Monitor or from Nick, never demonstrably from
+   `ScheduleWakeup`, and one 3600 s wakeup sat unfired for 13 h. So on each
+   wake, run `CronList` and `date`: a `(one-shot)` entry already past its
+   minute did not fire — `CronDelete` it and note it in the relay, after first
+   ruling out a reboot or a resumed session, which explain a stale entry
+   without any bug. Then arm the heartbeat as a background `Bash`
+   `sleep 3600; echo PLAN-WATCH-HEARTBEAT` alongside the `ScheduleWakeup`,
+   one only, `TaskList` first. See convey-her amendment 4 for why.
+
 ## The subagent brief
 
 Send this verbatim, substituting the two placeholders. It carries the rules
