@@ -1,6 +1,6 @@
 ---
 name: convey-her
-description: Nick's overlay on upstream conveyor-local-loop (1.0.4) for the WizOs repo — the same serial local card loop, executing each card via conveyor-build, with five amendments. (1) A loop-opened PR is merged to dev in the iteration that finds it green — this overrides upstream's never-merge-your-own-PR rule; only one may stay open awaiting the loop's own work, every open PR needs a named blocker, and PRs parked on the user do not count. (2) A card touching hosts/Hearth or hosts/Go3 is verified by actually running hearth-deploy switch / go3-deploy switch, not a build. (3) The loop ends its turn at card boundaries so the user has a window to /compact. (4) A denied CronCreate falls back to ScheduleWakeup rather than stalling. (5) The WizOs card-hygiene rules — file a bug as a card the moment it's noticed, falsify a cause before asserting it, and the create_task parameter gotchas. Use when the user says "/convey-her". For the unmodified loop use conveyor-local-loop; for exactly one card or one pack use conveyor-build.
+description: Nick's overlay on upstream conveyor-local-loop (1.0.4) for the WizOs repo — the same serial local card loop, executing each card via conveyor-build, with five amendments. (1) A loop-opened PR is merged to dev in the iteration that finds it green — this overrides upstream's never-merge-your-own-PR rule; only one may stay open awaiting the loop's own work, every open PR needs a named blocker, and PRs parked on the user do not count. (2) A card touching hosts/Hearth or hosts/Go3 is verified by actually running hearth-deploy switch / go3-deploy switch, not a build. (3) The loop ends its turn at card boundaries so the user has a window to /compact. (4) Pacing survives a scheduler that lets you down in either direction — a denied CronCreate falls back to ScheduleWakeup, and an armed-but-never-fired wakeup is detected and replaced with a background-sleep pacer. (5) The WizOs card-hygiene rules — file a bug as a card the moment it's noticed, falsify a cause before asserting it, and the create_task parameter gotchas. Use when the user says "/convey-her". For the unmodified loop use conveyor-local-loop; for exactly one card or one pack use conveyor-build.
 ---
 
 # Convey-Her
@@ -143,6 +143,74 @@ pack is holding the loop's WIP slot.
 
 The base skill's own pacing table (dynamic `/loop` with no interval) is
 otherwise unchanged.
+
+### The reverse failure: an armed wakeup that never fires
+
+A dynamic `/loop` ends every iteration with `ScheduleWakeup`. In several WizOs
+sessions that call was accepted, reported a correct next-fire time, appeared in
+`CronList` — and never fired. The loop then sat idle while the session still
+looked alive: 1 h 46 m after a 90 s request on 2026-09-09, and 13 h after a
+3600 s request in a plan-watch session. Nobody is told, because a loop that
+cannot schedule its next iteration has no way to say so.
+
+**`Every day at H:MM (one-shot)` is the NORMAL `CronList` rendering of a
+wakeup**, including ones that fired — `CronList` prints that for any `M H * * *`
+expression. The rendering is not the defect. The tell is **a one-shot still
+listed after its wall-clock minute has passed**, because one-shots are deleted
+when they fire.
+
+**Recurring `CronCreate` jobs do not fire either — measured, not assumed.** On
+2026-09-10 a session ran continuously idle from 00:49 to 09:06 PDT with a
+one-shot due at 00:49 and a recurring `7,22,37,52 * * * *` job that should have
+fired ~33 times. Neither fired once; the loop only resumed because the user
+typed. Both boring explanations were excluded: `who -b` predated the wakeup, and
+the session process had run unbroken since the previous evening. So do NOT
+reach for `CronCreate` as the fallback pacer — it is not one here.
+
+The cause is unknown. Do not assert one; state the symptom and apply the rules.
+
+- **Rule A — check the registration (end of iteration).** The result line reads
+  `Next wakeup scheduled for HH:MM:SS (in Ns)`. Require
+  `delay ≤ N ≤ delay + 60` (the tool rounds up to the next whole minute).
+  Anything else — clamped, an error, no line at all — re-issue once, then treat
+  the wakeup as dead. **This check is necessary and nowhere near sufficient:
+  every observed miss passed it.** It cannot be the whole fix.
+- **Rule B — detect the miss (start of EVERY iteration).** Run `CronList` and
+  `date`. A `(one-shot)` entry whose time is earlier than now did not fire:
+  `CronDelete` it, say so in the iteration summary, and use Rule C for the rest
+  of the session. Send one `PushNotification` **only if the user is not present
+  in the session** — they may have been waiting for hours, but paging someone
+  who is sitting in front of you is noise.
+  Being woken by the user, or by a `<task-notification>`, when the previous
+  iteration's scheduled minute has already passed counts as the same signal.
+
+  **First rule out the boring explanations, or Rule B will cry wolf.** A cron
+  job here is session-only and in-memory, so it cannot fire while the session
+  is not running. Before calling a past-due one-shot a miss, confirm the
+  session was actually alive and idle through that minute — `who -b` for a
+  reboot, and the session process's own start time (`ps -eo pid,lstart,args`,
+  looking for `--resume=<this session id>`) for a restart. A machine that
+  rebooted, or a session that was closed and later resumed, explains a stale
+  entry completely and is not evidence of anything. This is not hypothetical:
+  on 2026-09-09 a ~19 h gap with no fires looked damning until the reboot at
+  10:24 and a `--resume=` process start explained all of it.
+- **Rule C — pace on a wake that has been observed to work.** Before the closing
+  `ScheduleWakeup`, arm `Bash` with `run_in_background: true` and
+  `sleep <delaySeconds>; echo LOOP-WAKE`, using the same delay as the pacing
+  tier. Its completion notification is the wake you actually rely on — that is
+  the same `<task-notification>` path that kept waking sessions whose cron
+  entry was dead, and the ONLY pacing mechanism observed to work here. Call `ScheduleWakeup` last anyway, so `/loop` bookkeeping
+  stays intact and you get a second chance. `TaskList` first: never two sleeps
+  in flight, mirroring upstream's never-arm-a-second-wait rule. On a sleep
+  wake, re-enter the skill exactly as `/loop` step 5 says for task-notification
+  wakes. Keep Rule C **always on, at every tier.** It was originally scoped to
+  the short tier with the long tiers falling back to cron; the measurement
+  above killed that plan, because the cron fallback does not fire. An idle loop
+  is exactly where a dead wakeup costs the most, since nobody is watching for
+  it.
+- **Rule D — every wait is bounded.** A polling wait needs a deadline and must
+  report on BOTH outcomes, so a condition that can never come true surfaces as
+  a timeout rather than as silence.
 
 ## 5. WizOs card hygiene — every card, every iteration
 
