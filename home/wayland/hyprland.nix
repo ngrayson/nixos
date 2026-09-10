@@ -131,8 +131,8 @@ in {
           "ALT SHIFT, j, movewindow, d"
           "ALT SHIFT, k, movewindow, u"
           "ALT SHIFT, l, movewindow, r"
-          "ALT, Return, exec, ${pkgs.kitty}/bin/kitty"
-          "ALT, escape, killactive,"
+          "ALT, Return, exec, ${lib.getExe hs.hyprAltReturn}"
+          "ALT, escape, exec, ${lib.getExe hs.hyprAltEscape}"
           "ALT SHIFT, Q, killactive,"
           "ALT, Space, exec, ${lib.getExe pkgs.albert} toggle"
           "ALT, 1, workspace, 1"
@@ -192,6 +192,11 @@ in {
           # (quickshell/WindowSwitcher.qml), deliberately NOT by a bindr:
           # Hyprland never delivers a release bind for a modifier that took
           # part in another bind, and Alt+Tab always is one (PR #228).
+          # Return and Esc while Alt is held are the two ALT binds above,
+          # routed through hypr-alt-return / hypr-alt-escape, which ask the
+          # bar whether the overlay is open and fall through to kitty /
+          # killactive when it is not. The overlay never sees those keys
+          # either, for the same reason the repeats come back over IPC.
           "ALT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher next"
           "ALT SHIFT, Tab, exec, ${lib.getExe hs.hyprQuickshellIpc} call switcher prev"
           ", Print, exec, ${lib.getExe hs.hyprScreenshotRegion}"
@@ -243,13 +248,51 @@ in {
       #   popups, at map time  match:class ^steam_app_2299510$, match:title ^Window$
       #
       # Pair the two: `^Window$` alone would match any application that maps a
-      # window titled "Window". No rule is added here on purpose -- an effect
-      # without a consumer is a behaviour change nobody asked for; the sibling
-      # that needs it brings the effect (see the pixel-composer pack).
+      # window titled "Window". Child 1 deliberately added no effect here; the
+      # popup-visibility sibling below is the consumer that brings one.
+      # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
+      # Its popups -- file dialog, splash, error dialogs -- are SEPARATE transient X11
+      # toplevels carrying the same title, so every rule below hits the popups as well as
+      # the main window. `hyprctl clients` lists only mapped windows and cannot see a popup
+      # that maps and unmaps quickly; `xwininfo -root -tree` can. `pxc-debug` captures both.
+      #
+      # `monitor DP-1` is what stops the AppImage opening invisibly, and the
+      # reason is an anchor, not a position. The AppImage centres itself on the
+      # FIRST X11 output via GameMaker display_get_width/height -- DP-1,
+      # portrait -- and asks for X11 (240,453). Hyprland packs XWayland's
+      # screen left-to-right at y=0 regardless of the real layout, then
+      # translates a ConfigureRequest anchored on the WINDOW's monitor rather
+      # than the one whose X11 rect contains the requested point. Anchored on
+      # whatever happened to be focused:
+      #   (240,453) - DP-1_x11(2880,0) + HDMI-A-1_global(1440,544) = (-1200,997)
+      # entirely left of x=0, invisible, and the app looks like it never
+      # launched. Anchored on DP-1 the same request becomes
+      #   (240,453) - (0,0) + DP-1_global(4000,0) = (4240,453)
+      # which is where the app meant to put itself. Both verified live on
+      # 2026-09-09, to the pixel.
+      #
+      # `center on` was tried FIRST and does NOT work: the app issues its own
+      # ConfigureRequest after the window maps, which overrides any static
+      # placement rule. Only changing the anchor survives that. Do not
+      # re-try `center`/`move` here without re-testing that ordering.
+      #
+      # SCOPED TO THE APPIMAGE by `match:class ^$`. Without that it also caught
+      # the STEAM build, whose title is plain "Pixel Composer <version>" until a
+      # project is opened -- observed 2026-09-10 dragging a 2560x1440 Steam
+      # window onto DP-1, which is 1440 wide in portrait, so it hung 1120px off
+      # the right edge. The AppImage has an EMPTY WM_CLASS under XWayland; the
+      # Steam build has `steam_app_2299510`. Only the AppImage miscomputes its
+      # position, so only the AppImage needs the anchor.
+      #
+      # If DP-1 is ever disconnected this rule stops applying and the window
+      # can go offscreen again; the alt-tab switcher's offscreen rescue is the
+      # recovery path. The float rule below is what makes position matter at
+      # all -- a tiled window would ignore it.
       windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
         "match:title ^Pixel Composer.*, float on"
+        "match:class ^$, match:title ^Pixel Composer.*, monitor DP-1"
         "match:title ^Select files$, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
         # Since 0.54 `move` reads the pre-`size` width, so `window_w` lands the window wrong
@@ -331,6 +374,8 @@ in {
     hs.hyprDpmsSideOff
     hs.hyprDpmsSideOn
     hs.hyprResizeMoveToggle
+    hs.hyprAltReturn
+    hs.hyprAltEscape
     hs.hyprCavaViz
   ];
 

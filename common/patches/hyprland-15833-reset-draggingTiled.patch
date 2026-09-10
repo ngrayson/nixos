@@ -1,0 +1,18 @@
+--- a/src/layout/supplementary/DragController.cpp
++++ b/src/layout/supplementary/DragController.cpp
+@@ -85,6 +85,7 @@
+ void CDragStateController::dragBegin(SP<ITarget> target, eMouseBindMode mode) {
+     m_target   = target;
+     m_dragMode = mode;
++    m_draggingTiled = false;
+ 
+     const auto  DRAGGINGTARGET = m_target.lock();
+     static auto PDRAGTHRESHOLD = CConfigValue<Config::INTEGER>("binds:drag_threshold");
+@@ -222,6 +223,7 @@
+ 
+     m_wasDraggingWindow = false;
+     m_dragMode          = MBIND_INVALID;
++    m_draggingTiled     = false;
+ }
+ 
+ void CDragStateController::mouseMove(const Vector2D& mousePos) {

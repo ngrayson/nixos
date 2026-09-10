@@ -811,10 +811,30 @@ main() {
 
   local default_answer="yes"
   is_activation_action "$ACTION" && default_answer="no"
-  if [[ "$NO_PROMPT" != "1" ]] &&
-    ! prompt_confirm "Run '$ACTION' for $configured_host from $(branch_summary)?" "$default_answer"; then
-    warn "Aborted"
-    return 0
+  if [[ "$NO_PROMPT" != "1" ]]; then
+    if [[ ! -t 0 ]]; then
+      # `read` only returns on EOF or a newline. Stdin redirected from
+      # /dev/null or a closed pipe gives EOF immediately and prompt_confirm
+      # falls through to its default -- but an OPEN pipe with no writer, which
+      # is what a backgrounded or harness-run shell usually gets, blocks
+      # forever. Observed 2026-09-08: two builds sat here for ten minutes with
+      # no output past the prompt, indistinguishable from a slow evaluation.
+      #
+      # Take the same default the EOF path already takes, so behaviour is
+      # identical for every non-interactive caller instead of depending on
+      # which kind of stdin it happened to inherit. That means a build
+      # proceeds (default yes) and an activation refuses (default no) --
+      # matching the rule that agents never activate unattended.
+      if [[ "$default_answer" == "yes" ]]; then
+        info "No terminal to confirm on; proceeding with '$ACTION' for $configured_host from $(branch_summary)."
+      else
+        warn "No terminal to confirm on; refusing to '$ACTION' unattended. Pass --yes to proceed."
+        return 0
+      fi
+    elif ! prompt_confirm "Run '$ACTION' for $configured_host from $(branch_summary)?" "$default_answer"; then
+      warn "Aborted"
+      return 0
+    fi
   fi
 
   local -a rebuild=(nixos-rebuild "$ACTION" --flake "$FLAKE")
