@@ -292,6 +292,31 @@ in {
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
         "match:title ^Pixel Composer.*, float on"
+        # Steam/Proton popups (splash, add-node, error dialogs) must survive their
+        # own parent going fullscreen. Without this the splash is INVISIBLE and
+        # UNCLICKABLE while the app looks hung -- the symptom Nick reported.
+        #
+        # Mechanism, read out of Hyprland 0.55.4 and confirmed live 2026-09-10:
+        #   isBlockedByFullscreen() = workspace has a fullscreen window
+        #                             AND !isAllowedOverFullscreen()
+        #   isAllowedOverFullscreen() = isFullscreen() || m_pinned
+        #                             || m_createdOverFullscreen
+        # A blocked window is drawn at alpha 0 AND gets INPUT_BLOCK_BELOW_FULLSCREEN
+        # (Window.cpp:809), so acceptsInput() goes false. That is why every other
+        # lever failed: `focuswindow` cannot focus it, and `stay_focused` is checked
+        # only AFTER acceptsInput() in CCompositor::getForceFocus(), so the rule can
+        # never fire on exactly the window that needs it.
+        #
+        # `pin` satisfies isAllowedOverFullscreen() directly, so the popup is never
+        # alpha-0'd and never input-blocked. Verified: with the parent forced to
+        # fullscreen the pinned popup remained focusable, and Nick confirmed on
+        # screen that the splash is visible.
+        #
+        # Matched on the popup's INITIAL title, per the matcher notes above -- these
+        # windows map as "Window" and only later become "dialog" / "Add node".
+        # Paired with the class so `^Window$` cannot catch another application.
+        # Side effect worth knowing: a pinned window follows you across workspaces.
+        "match:class ^steam_app_2299510$, match:title ^Window$, pin on"
         "match:class ^$, match:title ^Pixel Composer.*, monitor DP-1"
         "match:title ^Select files$, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
