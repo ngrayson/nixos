@@ -317,6 +317,24 @@ in {
         # Paired with the class so `^Window$` cannot catch another application.
         # Side effect worth knowing: a pinned window follows you across workspaces.
         "match:class ^steam_app_2299510$, match:title ^Window$, pin on"
+        # Float EVERY Steam window, dialogs included. Without this the file
+        # dialogs are TILED while the main window FLOATS, and Hyprland renders
+        # the floating layer above the tiled one -- so the dialog is covered by
+        # its own parent, unconditionally. It also fills the monitor, being the
+        # only tile on the workspace, which is what "it looks maximized" meant.
+        #
+        # Why only some dialogs: Hyprland auto-floats an X11 window that is
+        # transient, modal, or has min == max size hints
+        # (XWaylandManager.cpp:126-140). The add-node popup and the file OPEN
+        # dialog declare fixed sizes (Open is min=max=420x267) and float for
+        # free. A save/export dialog is RESIZABLE by nature, so it declares no
+        # fixed size, matches none of those conditions, and tiles.
+        #
+        # Matched on CLASS, not title, deliberately: these dialogs are titled
+        # "Save as", "Export to", "Open", ... and a title rule is whack-a-mole.
+        # Verified live 2026-09-10 -- floating the tiled "Export to" dialog put
+        # it above the parent and Nick confirmed it became visible.
+        "match:class ^steam_app_2299510$, float on"
         "match:class ^$, match:title ^Pixel Composer.*, monitor DP-1"
         "match:title ^Select files$, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
