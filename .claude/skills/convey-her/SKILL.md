@@ -226,6 +226,41 @@ The cause is unknown. Do not assert one; state the symptom and apply the rules.
   report on BOTH outcomes, so a condition that can never come true surfaces as
   a timeout rather than as silence.
 
+### The board-event wake needs credentials this repo hides
+
+The base skill arms `conveyor-wait` on idle iterations and calls its credential
+fallback — environment, then `.mcp.json` from the cwd up, then `~/.claude.json`
+— "what makes this work at all". **In this repo all three miss and the CLI
+exits 1**, measured 2026-09-10.
+
+`.mcp.json`'s `conveyor` entry carries only a `command`, pointing at
+`scripts/conveyor-mcp.sh`; the token lives in `~/.config/conveyor/env`, which
+that script sources at launch. Nothing that merely inspects `.mcp.json` can see
+it. `~/.claude.json` does hold `conveyor` credentials, but only under unrelated
+projects, never under `~/.config/nixos`.
+
+So **source the env file when arming the watch**:
+
+```bash
+set -a; . "$HOME/.config/conveyor/env"; set +a
+npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1500
+```
+
+**Then verify it armed, before saying so.** This failure is invisible from the
+outside: the loop still holds its `ScheduleWakeup`, so it keeps iterating and
+merely stops noticing new cards until the next timed tier — up to 25 minutes
+late. A live watch prints `Watching N card(s)`; a dead one exits 1 with a
+credentials line. Read the output. **Never report the watch as running on the
+strength of having launched it** — an earlier iteration in the same session did
+exactly that, and the watch had been dead for an unknown number of iterations.
+
+This is also why the base skill's "report it once, fall back to plain timed
+polling, and do not re-arm it every iteration" must not be reached for here.
+That guidance is right for a failure you cannot fix; this one has a fix, and
+taking the fallback skips it.
+
+Never print or commit the contents of `~/.config/conveyor/env`.
+
 ## 5. WizOs card hygiene — every card, every iteration
 
 These are Nick's rules; the examples are the point, so they are stated in full
