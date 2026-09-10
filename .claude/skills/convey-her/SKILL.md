@@ -159,6 +159,14 @@ expression. The rendering is not the defect. The tell is **a one-shot still
 listed after its wall-clock minute has passed**, because one-shots are deleted
 when they fire.
 
+**Recurring `CronCreate` jobs do not fire either — measured, not assumed.** On
+2026-09-10 a session ran continuously idle from 00:49 to 09:06 PDT with a
+one-shot due at 00:49 and a recurring `7,22,37,52 * * * *` job that should have
+fired ~33 times. Neither fired once; the loop only resumed because the user
+typed. Both boring explanations were excluded: `who -b` predated the wakeup, and
+the session process had run unbroken since the previous evening. So do NOT
+reach for `CronCreate` as the fallback pacer — it is not one here.
+
 The cause is unknown. Do not assert one; state the symptom and apply the rules.
 
 - **Rule A — check the registration (end of iteration).** The result line reads
@@ -169,8 +177,10 @@ The cause is unknown. Do not assert one; state the symptom and apply the rules.
   every observed miss passed it.** It cannot be the whole fix.
 - **Rule B — detect the miss (start of EVERY iteration).** Run `CronList` and
   `date`. A `(one-shot)` entry whose time is earlier than now did not fire:
-  `CronDelete` it, say so in the iteration summary, send one `PushNotification`
-  (the user may have been waiting), and use Rule C for the rest of the session.
+  `CronDelete` it, say so in the iteration summary, and use Rule C for the rest
+  of the session. Send one `PushNotification` **only if the user is not present
+  in the session** — they may have been waiting for hours, but paging someone
+  who is sitting in front of you is noise.
   Being woken by the user, or by a `<task-notification>`, when the previous
   iteration's scheduled minute has already passed counts as the same signal.
 
@@ -189,13 +199,15 @@ The cause is unknown. Do not assert one; state the symptom and apply the rules.
   `sleep <delaySeconds>; echo LOOP-WAKE`, using the same delay as the pacing
   tier. Its completion notification is the wake you actually rely on — that is
   the same `<task-notification>` path that kept waking sessions whose cron
-  entry was dead. Call `ScheduleWakeup` last anyway, so `/loop` bookkeeping
+  entry was dead, and the ONLY pacing mechanism observed to work here. Call `ScheduleWakeup` last anyway, so `/loop` bookkeeping
   stays intact and you get a second chance. `TaskList` first: never two sleeps
   in flight, mirroring upstream's never-arm-a-second-wait rule. On a sleep
   wake, re-enter the skill exactly as `/loop` step 5 says for task-notification
-  wakes. Keep Rule C **always on for the short tier** (60–90 s, actionable work
-  queued), where a stall is most expensive, and switch the long tiers to it
-  once Rule B has seen a miss.
+  wakes. Keep Rule C **always on, at every tier.** It was originally scoped to
+  the short tier with the long tiers falling back to cron; the measurement
+  above killed that plan, because the cron fallback does not fire. An idle loop
+  is exactly where a dead wakeup costs the most, since nobody is watching for
+  it.
 - **Rule D — every wait is bounded.** A polling wait needs a deadline and must
   report on BOTH outcomes, so a condition that can never come true surfaces as
   a timeout rather than as silence.
