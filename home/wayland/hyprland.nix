@@ -219,10 +219,35 @@ in {
         ", XF86PowerOff, exec, ${lib.getExe hs.hyprQuickshellIpc} call power toggle"
       ];
       # Pixel Composer (YoYo AppImage): WM_CLASS is empty under XWayland (see `hyprctl clients`); match titles.
+      #
+      # `monitor DP-1` is what stops the AppImage opening invisibly, and the
+      # reason is an anchor, not a position. The AppImage centres itself on the
+      # FIRST X11 output via GameMaker display_get_width/height -- DP-1,
+      # portrait -- and asks for X11 (240,453). Hyprland packs XWayland's
+      # screen left-to-right at y=0 regardless of the real layout, then
+      # translates a ConfigureRequest anchored on the WINDOW's monitor rather
+      # than the one whose X11 rect contains the requested point. Anchored on
+      # whatever happened to be focused:
+      #   (240,453) - DP-1_x11(2880,0) + HDMI-A-1_global(1440,544) = (-1200,997)
+      # entirely left of x=0, invisible, and the app looks like it never
+      # launched. Anchored on DP-1 the same request becomes
+      #   (240,453) - (0,0) + DP-1_global(4000,0) = (4240,453)
+      # which is where the app meant to put itself. Both verified live on
+      # 2026-09-09, to the pixel.
+      #
+      # `center on` was tried FIRST and does NOT work: the app issues its own
+      # ConfigureRequest after the window maps, which overrides any static
+      # placement rule. Only changing the anchor survives that. Do not
+      # re-try `center`/`move` here without re-testing that ordering.
+      #
+      # If DP-1 is ever disconnected this rule stops applying and the window
+      # can go offscreen again; the alt-tab switcher's offscreen rescue is the
+      # recovery path. The float rule below is what makes position matter at
+      # all -- a tiled window would ignore it.
       windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
-        "match:title ^Pixel Composer.*, float on"
+        "match:title ^Pixel Composer.*, float on, monitor DP-1"
         "match:title ^Select files$, float on"
         "match:class ^(PixelComposer|pixelcomposer).*, float on"
         # `move` takes monitor-local math expressions; expressions may not contain spaces.
