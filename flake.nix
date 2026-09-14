@@ -29,6 +29,10 @@
     };
 
     vortix.url = "github:Harry-kp/vortix/fbd3b431e3372cdefb16a72920a809c865ba8029";
+
+    # Declarative Flatpak installs (services.flatpak.packages). Pure modules,
+    # no nixpkgs input to follow. Used by hosts/Theseus/sober.nix.
+    nix-flatpak.url = "github:gmodena/nix-flatpak/?ref=v0.7.0";
   };
 
   outputs = inputs @ {

@@ -57,3 +57,17 @@ Join tailnet `ngrayson.github`. Do not put auth keys in the flake.
 ## Keyboard backlight
 
 Quickshell's bar still talks to `chromeos::kbd_backlight` (Intel Framework path). On Theseus, check `brightnessctl -l` — if the EC device is different (`framework_laptop::kbd_backlight` or similar), say so and we will host-gate the QML device name. Panel brightness keys use `brightnessctl -c backlight`.
+
+## Roblox (Sober)
+
+`sober.nix` installs Roblox through [Sober](https://flathub.org/apps/org.vinegarhq.Sober), the VinegarHQ Linux client, which ships only as a Flatpak. The module imports `nix-flatpak` (flake input) so `org.vinegarhq.Sober` is declared in `services.flatpak.packages` rather than installed by hand; `flatpak-managed-install.service` performs the install at activation and **needs network** — an offline switch still succeeds, the app is just absent until `systemctl start flatpak-managed-install`. The Flatpak is refreshed weekly by `flatpak-managed-install.timer`; Sober updates Roblox itself on launch.
+
+After switch:
+
+```bash
+systemctl status flatpak-managed-install   # inactive (dead), exit 0
+flatpak list --app                          # org.vinegarhq.Sober
+flatpak run org.vinegarhq.Sober             # first launch downloads Roblox
+```
+
+Sober's data and config live under `~/.var/app/org.vinegarhq.Sober/` (`config/sober/config.json` for renderer / fflag tuning). Theseus-only: `profiles/workstation.nix` is shared with Tawa and stays Flatpak-free.
