@@ -15,5 +15,6 @@
     ./hardware-configuration.nix
     ./host.nix
     ./hibernate.nix
+    ./sober.nix
   ];
 }
