@@ -224,6 +224,39 @@ ShellRoot {
 	property bool claudeMenuVisible: false
 	readonly property string claudeRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/claude-usage`
 
+	// tailscaled health. home/services/tailscale-health.nix polls the daemon
+	// on a user timer and owns the debounce and the notification; the bar
+	// only reads its JSON and shows a pill while there is something to say.
+	property var tsHealth: ({})
+	readonly property string tsHealthRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/tailscale-health`
+
+	function tsActiveWarnings(): var {
+		return (shellRoot.tsHealth?.warnings ?? []).filter(w => w && w.active);
+	}
+
+	function tsBackendBad(): bool {
+		const b = shellRoot.tsHealth?.backend;
+		return !!b && b !== "Running";
+	}
+
+	function tsPillVisible(): bool {
+		return tsActiveWarnings().length > 0 || tsBackendBad();
+	}
+
+	function tsHealthColor(): string {
+		// Same palette rule as networkColor(): red for a real warning, muted
+		// for a daemon that is merely not running.
+		if (tsActiveWarnings().length > 0)
+			return Theme.error;
+		return Theme.muted;
+	}
+
+	function tsHealthIcon(): string {
+		if (tsActiveWarnings().length > 0)
+			return String.fromCodePoint(0xF0319); // nf-md-lan_disconnect
+		return String.fromCodePoint(0xF0C9B); // nf-md-network_off
+	}
+
 	function sunsetOk(): bool {
 		return (shellRoot.sunsetState?.ok ?? false) === true;
 	}
@@ -491,6 +524,23 @@ ShellRoot {
 		return lines.join("\n");
 	}
 
+	function tailscaleTooltipText(): string {
+		const lines = [];
+		const b = shellRoot.tsHealth?.backend;
+		if (b === "NeedsLogin")
+			lines.push("Tailscale: needs login");
+		else if (b === "Stopped")
+			lines.push("Tailscale: stopped");
+		else if (b === "unreachable")
+			lines.push("Tailscale: daemon unreachable");
+		else if (b && b !== "Running")
+			lines.push("Tailscale: " + b);
+		for (const w of tsActiveWarnings())
+			lines.push(w.text);
+		lines.push("Left-click: tailscale status");
+		return lines.join("\n");
+	}
+
 	function bluetoothTooltipText(): string {
 		const lines = [];
 		if (btBlocked)
@@ -589,6 +639,8 @@ ShellRoot {
 			return qsReloadTooltipText();
 		if (kind === "wifi")
 			return wifiTooltipText();
+		if (kind === "tailscale")
+			return tailscaleTooltipText();
 		if (kind === "bt")
 			return bluetoothTooltipText();
 		if (kind === "brightness")
@@ -1313,6 +1365,32 @@ ShellRoot {
 		onFileChanged: claudeStateFile.reload()
 	}
 
+	// tailscaled health, rewritten atomically by qs-tailscale-health every ten
+	// seconds. Absent is the normal state before the first tick after login,
+	// and on a healthy daemon the pill is hidden either way.
+	FileView {
+		id: tsHealthFile
+		path: `${shellRoot.tsHealthRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		// Named parseState for the same reason as claudeStateFile's: FileView
+		// already has a reload(), and shadowing it here would recurse.
+		function parseState(): void {
+			const raw = tsHealthFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.tsHealth = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next write brings a whole file.
+			}
+		}
+
+		onLoaded: tsHealthFile.parseState()
+		onFileChanged: tsHealthFile.reload()
+	}
+
 	Timer {
 		interval: 1500
 		running: true
@@ -1882,6 +1960,28 @@ ShellRoot {
 								font.pixelSize: 14
 								font.family: "IosevkaTermSlab NF"
 								text: shellRoot.networkIcon()
+							}
+						}
+
+						// Hidden while tailscaled is healthy: the cluster is dense
+						// enough, and the wifi pill deliberately does not carry this
+						// state -- separating the two failure modes is the point.
+						StatusPill {
+							id: tsHealthPill
+							visible: shellRoot.tsPillVisible()
+							tipKind: "tailscale"
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								Hyprland.dispatch("exec kitty --title tailscale-status sh -c 'tailscale status; echo; tailscale dns status; echo; read -r'");
+							}
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.tsHealthColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.tsHealthIcon()
 							}
 						}
 

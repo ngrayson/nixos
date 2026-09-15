@@ -46,6 +46,15 @@ sudo tailscale up
 
 Join tailnet `ngrayson.github`. Do not put auth keys in the flake.
 
+**Health pill.** `home/services/tailscale-health.nix` polls `tailscale status
+--json` every 10 s on a user timer. While tailscaled reports a warnable (DNS
+forwarding failing, no DERP, needs login, ...) an alert pill appears next to
+the wifi pill in the bar and one sticky critical notification fires; on
+recovery it is replaced by a short "Tailscale healthy again". Both debounce
+15 s, so the few-second flaps on every resume never show. Raw view:
+`journalctl --user -u qs-tailscale-health` and
+`cat $XDG_RUNTIME_DIR/tailscale-health/state.json`.
+
 ## Display
 
 `hypr/Theseus/monitors.conf` starts from the Framework 13 2880x1920 panel at scale 1.6 on `eDP-1`. On Theseus, run `hyprmon-cfg` and rebuild if the scale or connector name is wrong.
