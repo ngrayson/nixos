@@ -1391,6 +1391,18 @@ ShellRoot {
 		onFileChanged: tsHealthFile.reload()
 	}
 
+	// A file watcher cannot watch a path that does not exist yet, and on a
+	// fresh login the state file only appears after the timer's first tick,
+	// 15 s after the bar. Without this the pill never shows until the next
+	// bar reload (observed 2026-09-19). Poll reload() until the file loads;
+	// watchChanges takes over from there.
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !tsHealthFile.loaded
+		onTriggered: tsHealthFile.reload()
+	}
+
 	Timer {
 		interval: 1500
 		running: true
@@ -2283,7 +2295,10 @@ ShellRoot {
 				visible: barWindow.tipOn && barWindow.tipItem !== null
 				grabFocus: false
 				color: "transparent"
-				implicitWidth: barTipText.implicitWidth + 16
+				// The text wraps at 360, so size the popup from its wrapped width,
+				// not implicitWidth (the unwrapped line) -- otherwise a long line
+				// leaves wide empty margins either side of the wrapped block.
+				implicitWidth: barTipText.width + 16
 				implicitHeight: barTipText.implicitHeight + 12
 				anchor.window: barWindow
 				anchor.item: barWindow.tipItem
