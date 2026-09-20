@@ -226,7 +226,7 @@ The cause is unknown. Do not assert one; state the symptom and apply the rules.
   report on BOTH outcomes, so a condition that can never come true surfaces as
   a timeout rather than as silence.
 
-### The board-event wake needs credentials this repo hides
+### The board-event wake needs credentials this repo hides, and an open stdin
 
 The base skill arms `conveyor-wait` on idle iterations and calls its credential
 fallback — environment, then `.mcp.json` from the cwd up, then `~/.claude.json`
@@ -239,20 +239,36 @@ that script sources at launch. Nothing that merely inspects `.mcp.json` can see
 it. `~/.claude.json` does hold `conveyor` credentials, but only under unrelated
 projects, never under `~/.config/nixos`.
 
-So **source the env file when arming the watch**:
+**A second, independent way it dies: `conveyor-wait` treats EOF on stdin as an
+interrupt.** Background Bash hands it `/dev/null`, so it prints
+`{"reason":"interrupted"}` and exits 0 before it has even subscribed — no
+`Watching` line, no error, measured 2026-09-19 after every arm in a session
+had died this way. The package had not changed; the harness's stdin handling
+had. Isolated: `conveyor-wait --timeout 5 </dev/null` → `interrupted` at once;
+`sleep 20 | conveyor-wait --timeout 5` → subscribes and times out correctly.
+
+So **source the env file AND hold stdin open** when arming the watch:
 
 ```bash
 set -a; . "$HOME/.config/conveyor/env"; set +a
-npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1500
+sleep 1710 | npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1700
 ```
 
-**Then verify it armed, before saying so.** This failure is invisible from the
-outside: the loop still holds its `ScheduleWakeup`, so it keeps iterating and
-merely stops noticing new cards until the next timed tier — up to 25 minutes
-late. A live watch prints `Watching N card(s)`; a dead one exits 1 with a
-credentials line. Read the output. **Never report the watch as running on the
-strength of having launched it** — an earlier iteration in the same session did
-exactly that, and the watch had been dead for an unknown number of iterations.
+The `sleep` is the timeout plus a margin. When the wait exits early on an
+event, the sleep lingers for at most the remainder and keeps the Bash wrapper
+alive with it; that is harmless, but it is why `ps` may show more than one
+`conveyor-wait` command line. Count `node …/conveyor-wait` processes, not
+wrappers, when checking for a live watch.
+
+**Then verify it armed, before saying so.** Both failures are invisible from
+the outside: the loop still holds its `ScheduleWakeup`, so it keeps iterating
+and merely stops noticing new cards until the next timed tier — up to 25
+minutes late. The check is not "an output file exists" — a watch that printed
+only `{"reason":"interrupted"}` has one too. **The output must contain
+`Watching N card(s)`.** A dead watch shows either a credentials line (exit 1)
+or a bare `interrupted` (exit 0). Read the output. **Never report the watch as
+running on the strength of having launched it** — that has now happened in
+two separate sessions, and each time the watch had been dead for hours.
 
 This is also why the base skill's "report it once, fall back to plain timed
 polling, and do not re-arm it every iteration" must not be reached for here.
