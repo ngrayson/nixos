@@ -1338,6 +1338,16 @@ ShellRoot {
 		onFileChanged: sunsetStateFile.reload()
 	}
 
+	// Same reason as tsHealthFile's retry: a watcher cannot watch a path that
+	// does not exist yet, and on a fresh login the first tick lands after the
+	// bar. Poll reload() until the file loads; watchChanges takes over.
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !sunsetStateFile.loaded
+		onTriggered: sunsetStateFile.reload()
+	}
+
 	// Claude usage, rewritten atomically by qs-claude-usage every five minutes
 	// and again whenever the menu opens. Absent is the normal state before the
 	// first tick after login: the pill stays up (it is a launcher first) and
@@ -1363,6 +1373,14 @@ ShellRoot {
 
 		onLoaded: claudeStateFile.parseState()
 		onFileChanged: claudeStateFile.reload()
+	}
+
+	// Same retry as sunsetStateFile / tsHealthFile; see the comment there.
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !claudeStateFile.loaded
+		onTriggered: claudeStateFile.reload()
 	}
 
 	// tailscaled health, rewritten atomically by qs-tailscale-health every ten
