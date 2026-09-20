@@ -24,6 +24,7 @@
     ./services/battery-notify.nix
     ./services/calendar-sync.nix
     ./services/claude-usage.nix
+    ./services/tailscale-health.nix
     ./services/polkit-agent.nix
     ./services/nm-applet.nix
     ./services/hypridle.nix
