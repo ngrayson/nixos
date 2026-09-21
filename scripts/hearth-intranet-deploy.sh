@@ -46,7 +46,8 @@ restart. A later `hearth-deploy switch` restores whatever the repo declares.
 Settings baked into Hearth systemd units (bus stops, OBA key/interval, AQI,
 calendar, gallery dir) do not ship this way; they need `hearth-deploy switch`.
 
-  --yes   skip the confirmation prompt
+  --yes   skip the confirmation prompt (required when stdin is not a terminal;
+          a non-interactive run without it builds and then refuses to push)
 USAGE
 }
 
@@ -191,13 +192,20 @@ main() {
   info "build-id ${build_id:0:12}"
   warn_if_stops_diverge "$out"
 
-  if (( ! no_prompt )) && [[ -t 0 ]]; then
-    local reply
-    read -r -p "Push to ${TARGET}:${SERVE_DIR}? [y/N] " reply
-    [[ "$reply" =~ ^[Yy]$ ]] || {
-      warn "Aborted."
+  # Off a terminal there is nobody to answer, so refuse rather than treat
+  # silence as consent: --yes is the only way to push non-interactively.
+  if (( ! no_prompt )); then
+    if [[ -t 0 ]]; then
+      local reply
+      read -r -p "Push to ${TARGET}:${SERVE_DIR}? [y/N] " reply
+      [[ "$reply" =~ ^[Yy]$ ]] || {
+        warn "Aborted."
+        return 1
+      }
+    else
+      error "stdin is not a terminal; pass --yes to push without confirmation."
       return 1
-    }
+    fi
   fi
 
   # sudo on the far side: the served directory is root-owned (tmpfiles), the
