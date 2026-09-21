@@ -5,9 +5,19 @@
 # Hearth system for any change at all, so a one-line CSS tweak costs the same
 # as a kernel bump. Caddy now serves the dashboard off
 # /var/lib/hearth-intranet/current instead of a Nix store path, so replacing
-# that directory's contents is the whole deploy: no closure copy, no
-# activation, and no Caddy restart — file_server reads the directory per
-# request. The kiosk picks the change up on its own via build-id.txt.
+# that directory's contents is the whole deploy FOR THE DASHBOARD: no closure
+# copy, no activation, and no Caddy restart — file_server reads the directory
+# per request. The kiosk picks the change up on its own via build-id.txt.
+#
+# It is NOT the whole deploy for anything a Hearth systemd unit bakes at eval
+# time. Those ship only with `hearth-deploy switch`: transit.busStops,
+# obaApiKey and obaPollSeconds (hosts/Hearth/intranet-transit.nix), weather for
+# AQI (intranet-aqi.nix), calendar (intranet-calendar.nix) and
+# gallery.galleryDir (intranet-gallery.nix, caddy.nix). The stop list is the
+# one that bites: this script ships a new intranet-config.js and build-id, the
+# kiosk reloads, and the page keeps showing the poller's old stops. So before
+# the push prompt it diffs the checkout's busStops against the live
+# /transit.json and warns when they differ.
 #
 # This deploys the WORKING CHECKOUT, not origin/deploy/hearth. That is the
 # point (iterate without committing), but it means the served dashboard can
@@ -33,6 +43,8 @@ Usage: hearth-intranet-deploy [--yes]
 Builds .#hearth-intranet from this checkout and rsyncs it into
 /var/lib/hearth-intranet/current on Hearth. No nixos-rebuild, no Caddy
 restart. A later `hearth-deploy switch` restores whatever the repo declares.
+Settings baked into Hearth systemd units (bus stops, OBA key/interval, AQI,
+calendar, gallery dir) do not ship this way; they need `hearth-deploy switch`.
 
   --yes   skip the confirmation prompt
 USAGE
@@ -43,6 +55,67 @@ refuse_if_on_hearth() {
     error "This is Hearth. Build and deploy from Tawa with hearth-intranet-deploy."
     return 1
   fi
+}
+
+# Fetch one file from the served dashboard over the tailnet. --resolve pins the
+# vhost to Hearth's tailnet address so the check works without MagicDNS.
+served_get() {
+  curl -fsS --max-time 5 --resolve "home.wizt.org:443:${TAILNET_IPV4}" \
+    "https://home.wizt.org/$1"
+}
+
+# The stop list is baked into hearth-intranet-transit.service, so this fast
+# path cannot change it. Compare the posted stop ids the checkout would poll
+# with the ids the live poller is actually polling and warn on a difference.
+# Non-fatal like the build-id probe: a mismatch must not block a CSS push, and
+# a tailnet outage says nothing about the stops.
+#
+# Only `id`s are compared. A name-only edit is also unit-baked and also needs a
+# switch, but transit.json falls back to OBA's name when the config name is
+# empty, so names cannot be diffed without false alarms; obaApiKey and
+# obaPollSeconds are not in intranet-config.js at all.
+warn_if_stops_diverge() {
+  local out="$1"
+  if ! command -v jq >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+    warn "jq/curl not on PATH; cannot compare the checkout's busStops with the live poller."
+    return 0
+  fi
+  [[ -f "$out/intranet-config.js" ]] || {
+    warn "No intranet-config.js in the build; cannot compare busStops with the live poller."
+    return 0
+  }
+
+  # Mirror skip_stop() in hosts/Hearth/intranet-transit.nix: transit.json only
+  # lists stops the poller queried, so a kept-but-skipped Houston entry must
+  # not count on this side either.
+  local checkout_ids live_ids
+  checkout_ids="$(sed 's/^window\.hearthIntranet = //; s/;[[:space:]]*$//' "$out/intranet-config.js" \
+    | jq -r '.transit.busStops // []
+      | map(if type == "string" then {id: .} else . end)
+      | map(select((.skip // false) | not))
+      | map(select(((.feed // "") | ascii_downcase) as $f | $f != "houston" and $f != "metro"))
+      | map((.id // .stopId // "") | tostring)
+      | map(select(. != "" and . != "25027" and . != "25028"))
+      | sort | .[]')" || {
+    warn "Could not read transit.busStops from the built intranet-config.js; skipping the live comparison."
+    return 0
+  }
+  live_ids="$(served_get transit.json 2>/dev/null | jq -r '[.stops[]?.id | tostring] | sort | .[]')" || {
+    warn "Could not read https://home.wizt.org/transit.json; cannot confirm the live poller's stop list matches this checkout."
+    return 0
+  }
+
+  local n m
+  n="$(printf '%s\n' "$checkout_ids" | grep -c .)" || n=0
+  m="$(printf '%s\n' "$live_ids" | grep -c .)" || m=0
+  if [[ "$checkout_ids" == "$live_ids" ]]; then
+    ok "busStops match the live poller (${n} stops)."
+    return 0
+  fi
+  warn "busStops in hosts/Hearth/intranet/config/transit/config.nix differ from what Hearth's poller is running (checkout ${n}, live ${m})."
+  warn "This fast path cannot ship them: the stop list is baked into hearth-intranet-transit.service."
+  warn "Run: hearth-deploy build && hearth-deploy switch --yes"
+  diff <(printf '%s\n' "$checkout_ids") <(printf '%s\n' "$live_ids") || true
 }
 
 # The build is --impure and reads these through builtins.getEnv NIXOS_DIR.
@@ -116,6 +189,7 @@ main() {
   fi
   ok "Built ${out}"
   info "build-id ${build_id:0:12}"
+  warn_if_stops_diverge "$out"
 
   if (( ! no_prompt )) && [[ -t 0 ]]; then
     local reply
@@ -153,8 +227,7 @@ main() {
   # tailnet says nothing about whether it worked.
   if command -v curl >/dev/null 2>&1; then
     local served
-    served="$(curl -fsS --max-time 5 --resolve "home.wizt.org:443:${TAILNET_IPV4}" \
-      https://home.wizt.org/build-id.txt 2>/dev/null | tr -d '[:space:]')" || served=""
+    served="$(served_get build-id.txt 2>/dev/null | tr -d '[:space:]')" || served=""
     if [[ -z "$served" ]]; then
       warn "Could not read https://home.wizt.org/build-id.txt (tailnet down?); sync itself succeeded."
     elif [[ "$served" == "$build_id" ]]; then

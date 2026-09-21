@@ -8,6 +8,9 @@
 # A posted stop number is ONE platform, i.e. one direction of travel. A two-way
 # intersection needs two entries (one per direction); OBA's stop/1_<id>.json
 # reports which in its `direction` field, so suffix `name` with it.
+# busStops, obaApiKey and obaPollSeconds are baked into the Hearth poller unit:
+# editing them needs `hearth-deploy switch`. hearth-intranet-deploy cannot ship
+# them and warns when the checkout's stop ids differ from the live poller's.
 # Houston METRO ids are not OBA — set skip = true (or feed = "houston") so
 # they stay in the list without being queried. 25027 / 25028 are skipped.
 # obaApiKey "TEST" is the public OBA development key, not a Bitwarden secret.
