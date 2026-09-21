@@ -1518,7 +1518,10 @@ ShellRoot {
 			anchors.left: true
 			anchors.right: true
 			implicitHeight: shellRoot.topBarHeight
-			color: Theme.depth
+			// Deliberately transparent so the wallpaper shows through: every
+			// cluster (tray, status, media, workspaces, clock) carries its own
+			// Theme.surface pill, so nothing sits bare on the wallpaper.
+			color: "transparent"
 
 			property Item tipItem: null
 			property string tipKind: ""
@@ -2272,30 +2275,40 @@ ShellRoot {
 					}
 				}
 
-				// Clock, click to open the calendar popup. BarHoverArea is
-				// transparent when idle, so the clock looks unchanged until
-				// hovered.
-				BarHoverArea {
-					id: clockArea
+				// Clock, click to open the calendar popup. Same idiom as mediaPill
+				// and wsPill: the outer Rectangle owns the resting Theme.surface
+				// backing, the inner BarHoverArea owns hover and press-squish. Not
+				// a resting colour on BarHoverArea itself -- its hover Rectangle
+				// replaces the colour rather than compositing over it, so the pill
+				// would go MORE transparent on hover.
+				Rectangle {
+					id: clockPill
 					radius: 8
-					implicitWidth: clockLabel.implicitWidth + 14
+					color: Theme.surface
 					implicitHeight: 24
-					onClicked: shellRoot.calendarPopupVisible = !shellRoot.calendarPopupVisible
+					implicitWidth: clockLabel.implicitWidth + 14
 
-					Text {
-						id: clockLabel
-						anchors.centerIn: parent
-						color: Theme.text
-						font.pixelSize: 14
+					BarHoverArea {
+						id: clockArea
+						anchors.fill: parent
+						radius: 8
+						onClicked: shellRoot.calendarPopupVisible = !shellRoot.calendarPopupVisible
 
-						Timer {
-							running: true
-							repeat: true
-							interval: 30000
-							onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+						Text {
+							id: clockLabel
+							anchors.centerIn: parent
+							color: Theme.text
+							font.pixelSize: 14
+
+							Timer {
+								running: true
+								repeat: true
+								interval: 30000
+								onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+							}
+
+							Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 						}
-
-						Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 					}
 				}
 
