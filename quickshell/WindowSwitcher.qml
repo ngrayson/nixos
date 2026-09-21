@@ -53,9 +53,52 @@ Item {
 	// lands on the previous window rather than on nothing.
 	property bool pendingCommit: false
 
+	// Last monitor rectangles that were actually usable. refreshMonitors() is
+	// asynchronous and the model reads back empty or all-zero for a while
+	// after it is called, so recomputing from scratch on every rebuild would
+	// intermittently yield no rectangles at all -- and with no rectangles
+	// nothing can be judged offscreen. Monitors change far more rarely than
+	// windows do, so the previous good answer is the right fallback.
+	property var monitorRectsCache: []
+
 	// Warm the Hyprland connection at startup so the first Alt+Tab of a
-	// session has data ready rather than an empty card.
-	Component.onCompleted: Hyprland.refreshToplevels()
+	// session has data ready rather than an empty card. Monitors are warmed
+	// for the same reason: the offscreen test needs them on the FIRST open.
+	Component.onCompleted: {
+		Hyprland.refreshToplevels();
+		Hyprland.refreshMonitors();
+	}
+
+	// A window that MOVED does not change the set of windows, so
+	// Hyprland.toplevels can emit no valuesChanged at all even though every
+	// coordinate this overlay reads is now stale. Rebuilding once shortly
+	// after opening is what makes the first Alt+Tab agree with the second.
+	//
+	// Observed 2026-09-09: a window parked outside every monitor showed as
+	// on-screen and unflagged on the first open, correct on the second, and
+	// selecting it in the stale state focused a window nobody could see --
+	// which also drags the cursor off to the screen edge.
+	//
+	// rebuild() preserves the selection by address and does not re-apply
+	// banked steps once the list is populated, so this cannot move the
+	// highlight under the user.
+	Timer {
+		id: settleTimer
+		interval: 120
+		repeat: true
+		property int fires: 0
+		onTriggered: {
+			settleTimer.fires += 1;
+			if (root.active)
+				root.rebuild();
+			// Three ticks rather than one: a single 120 ms settle was enough
+			// on this machine but there is no guarantee the refresh has landed
+			// by then, and the cost of an extra rebuild on an open overlay is
+			// a list rebuild that preserves selection.
+			if (settleTimer.fires >= 3 || !root.active)
+				settleTimer.stop();
+		}
+	}
 
 	Connections {
 		target: Hyprland.toplevels
@@ -68,8 +111,11 @@ Item {
 
 	onActiveChanged: {
 		if (root.active) {
+			Hyprland.refreshMonitors();
 			root.rebuild();
 			root.forceActiveFocus();
+			settleTimer.fires = 0;
+			settleTimer.restart();
 		} else {
 			root.windows = [];
 			// Never let anything banked against this open leak into the next one.
@@ -102,8 +148,87 @@ Item {
 		return "(untitled window)";
 	}
 
+	// Monitor rectangles in HYPRLAND's coordinate space, which is the space
+	// toplevel `at`/`size` are reported in.
+	//
+	// The trap this exists for: `Hyprland.monitors` reports width/height
+	// PRE-transform, so a 90/270-rotated output actually occupies
+	// height x width. Measured on Tawa: DP-1 is x=4000 w=2560 h=1440
+	// transform=1, but really spans x in [4000, 5440] -- using the raw width
+	// invents 1120px of desktop that is not there, and a window parked in
+	// that phantom strip would be judged on-screen while being invisible.
+	//
+	// `Quickshell.screens` has the post-transform dimensions but NOT
+	// Hyprland's coordinate space, so it cannot be used here.
+	function monitorRects(): var {
+		Hyprland.refreshMonitors();
+		const mons = Hyprland.monitors ? Hyprland.monitors.values : [];
+		const rects = [];
+		for (let i = 0; i < mons.length; ++i) {
+			const m = mons[i].lastIpcObject || ({});
+			const x = m["x"], y = m["y"], w = m["width"], h = m["height"];
+			// A monitor list that is empty or still reporting zeros is a
+			// TRANSIENT state after refreshMonitors(), not a desktop with no
+			// outputs. Skipping such entries -- and flagging nothing when
+			// none survive -- is what keeps a slow refresh from declaring
+			// every window offscreen.
+			if (typeof x !== "number" || typeof y !== "number"
+				|| typeof w !== "number" || typeof h !== "number"
+				|| w <= 0 || h <= 0)
+				continue;
+			const rotated = m["transform"] === 1 || m["transform"] === 3
+				|| m["transform"] === 5 || m["transform"] === 7;
+			rects.push({
+				x: x,
+				y: y,
+				w: rotated ? h : w,
+				h: rotated ? w : h,
+				focused: m["focused"] === true
+			});
+		}
+		// Transiently empty is normal right after refreshMonitors(); fall back
+		// to the last good answer rather than reporting "no monitors", which
+		// would silently disable the offscreen flag entirely.
+		if (rects.length === 0)
+			return root.monitorRectsCache;
+		root.monitorRectsCache = rects;
+		return rects;
+	}
+
+	function focusedRect(rects: var): var {
+		for (let i = 0; i < rects.length; ++i) {
+			if (rects[i].focused)
+				return rects[i];
+		}
+		return rects.length > 0 ? rects[0] : null;
+	}
+
+	// True only when the window rectangle intersects NO monitor at all.
+	//
+	// A real intersection test, deliberately not a centre-point one: a window
+	// hanging half off the left edge is still grabbable and must not be
+	// flagged. With no usable monitor data this returns false -- rescue is
+	// simply unavailable, which is safer than flagging everything.
+	function isOffscreen(at: var, size: var, rects: var): bool {
+		if (!rects || rects.length === 0 || !at || !size)
+			return false;
+		if (at.length < 2 || size.length < 2)
+			return false;
+		const wx = at[0], wy = at[1], ww = size[0], wh = size[1];
+		if (typeof wx !== "number" || typeof wy !== "number"
+			|| typeof ww !== "number" || typeof wh !== "number")
+			return false;
+		for (let i = 0; i < rects.length; ++i) {
+			const r = rects[i];
+			if (wx < r.x + r.w && wx + ww > r.x && wy < r.y + r.h && wy + wh > r.y)
+				return false;
+		}
+		return true;
+	}
+
 	function rebuild(): void {
 		Hyprland.refreshToplevels();
+		const rects = root.monitorRects();
 
 		// Remember the highlighted window so an async repopulation, or a
 		// window closing while the list is open, does not move the selection.
@@ -129,7 +254,11 @@ Item {
 				cls: ipc["class"] || "",
 				workspace: t.workspace ? t.workspace.name : "",
 				monitor: t.monitor ? t.monitor.name : "",
-				focusHistory: typeof fh === "number" ? fh : -1
+				focusHistory: typeof fh === "number" ? fh : -1,
+				// HyprlandToplevel has no x/y/width/height in Quickshell
+				// 0.3.0 -- those are HyprlandMonitor properties. Geometry is
+				// only reachable through lastIpcObject, as two-element arrays.
+				offscreen: root.isOffscreen(ipc["at"], ipc["size"], rects)
 			});
 		}
 
@@ -223,11 +352,91 @@ Item {
 		root.dismissed();
 		if (!entry || !entry.address)
 			return;
+		// An offscreen window is rescued as PART of being selected, never
+		// behind a second keybind. Two reasons, the first found by testing on
+		// 2026-09-09:
+		//
+		// 1. This overlay only exists while Alt is held. Reaching any chord
+		//    means letting go of Alt, which already commits and dismisses --
+		//    and with Alt still down the event carries Alt, so a Shortcut
+		//    declared "Ctrl+Return" does not match it. A secondary bind is
+		//    therefore reachable only via the mouse-browse `toggle` path,
+		//    which is exactly when it is not needed.
+		// 2. Focusing a window that sits outside every monitor without moving
+		//    it is a no-op the user cannot see. Selecting it can only sensibly
+		//    mean "bring it back".
+		if (root.isAddressOffscreen(entry.address, entry.offscreen))
+			root.rescueToAddress(entry.address);
+		// ...and check again once a refresh has actually landed. Neither the
+		// snapshot nor the live read above can be trusted for a very fast
+		// commit: Hyprland.dispatch() does not update Quickshell's model, so
+		// a window moved moments ago still reports its OLD coordinates, and
+		// the fastest measured Alt tap on this machine committed 17 ms after
+		// the keypress. Without this, such a commit focuses a window the user
+		// cannot see and drags the cursor off to the screen edge -- observed
+		// on 2026-09-09.
+		Hyprland.refreshToplevels();
+		root.pendingRescueAddress = entry.address;
+		rescueCheckTimer.restart();
 		// Explicit dispatch rather than the Wayland handle's activate(): this
 		// is the same call path an offscreen-rescue follow-up needs, and it
 		// shows up in hyprctl logs. HyprlandToplevel itself has no activate()
 		// in Quickshell 0.3.0 -- that method is on HyprlandWorkspace.
 		Hyprland.dispatch("focuswindow address:" + entry.address);
+	}
+
+	// Live offscreen test for one address, used at commit time. Falls back to
+	// the row's snapshot when the address is no longer in the model at all,
+	// so a window that closed under the cursor cannot change the answer.
+	function isAddressOffscreen(address: string, fallback: bool): bool {
+		const vals = Hyprland.toplevels ? Hyprland.toplevels.values : [];
+		for (let i = 0; i < vals.length; ++i) {
+			if (root.normalizeAddress(vals[i].address) !== address)
+				continue;
+			const ipc = vals[i].lastIpcObject || ({});
+			return root.isOffscreen(ipc["at"], ipc["size"], root.monitorRects());
+		}
+		return fallback;
+	}
+
+	// Set by activateCurrent(), cleared by rescueCheckTimer. Holds the address
+	// whose position could not be trusted at commit time.
+	property string pendingRescueAddress: ""
+
+	Timer {
+		id: rescueCheckTimer
+		interval: 200
+		repeat: false
+		onTriggered: {
+			const address = root.pendingRescueAddress;
+			root.pendingRescueAddress = "";
+			if (!address)
+				return;
+			// Fallback false: if the window is gone from the model entirely
+			// there is nothing to rescue, and guessing would move whatever
+			// inherited its address.
+			if (root.isAddressOffscreen(address, false))
+				root.rescueToAddress(address);
+		}
+	}
+
+	// Move an offscreen window onto the focused monitor. Called from
+	// activateCurrent() just before the focus dispatch, so the move and the
+	// focus are one user action.
+	//
+	// `movewindowpixel` ONLY. It does not touch floating state, and that is
+	// the entire reason it is used: making Hyprland 0.55.4 re-tile a floating
+	// window segfaulted the compositor and destroyed a session on 2026-09-06
+	// (dragBegin -> dragEnd -> changeFloatingMode -> CDwindleAlgorithm::addTarget).
+	function rescueToAddress(address: string): void {
+		const target = root.focusedRect(root.monitorRects());
+		if (!target || !address)
+			return;
+		// Inset rather than placed at the origin, so the window lands well
+		// inside the output instead of flush against its edge.
+		const x = Math.round(target.x + target.w * 0.1);
+		const y = Math.round(target.y + target.h * 0.1);
+		Hyprland.dispatch("movewindowpixel exact " + x + " " + y + ",address:" + address);
 	}
 
 	// Letting go of Alt commits the highlighted row. Hyprland forwards a key
@@ -386,9 +595,18 @@ Item {
 					anchors.right: parent.right
 					anchors.rightMargin: 16
 					anchors.verticalCenter: parent.verticalCenter
-					text: (modelData.workspace ? "ws " + modelData.workspace : "")
-						+ (modelData.monitor ? "  ·  " + modelData.monitor : "")
-					color: Theme.muted
+					// The hint shows ONLY on the selected offscreen row, so the
+					// overlay stays quiet in the ordinary case. A rescued
+					// window's workspace/monitor is not useful information
+					// while it is unreachable, so it is replaced rather than
+					// appended.
+					text: modelData.offscreen
+						? (index === root.currentIndex
+							? "offscreen  ·  select to bring it back"
+							: "offscreen")
+						: ((modelData.workspace ? "ws " + modelData.workspace : "")
+							+ (modelData.monitor ? "  ·  " + modelData.monitor : ""))
+					color: modelData.offscreen ? Theme.error : Theme.muted
 					font.pixelSize: 11
 				}
 

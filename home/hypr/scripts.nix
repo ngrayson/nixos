@@ -330,6 +330,36 @@ in rec {
     fi
   '';
 
+  # Alt+Return while the alt-tab overlay is open. Hyprland consumes a matched
+  # bind before the overlay's exclusive-focus surface sees anything, so the key
+  # can never reach the picker directly -- the bar is ASKED instead, because it
+  # is the only thing that knows whether the overlay is up.
+  hyprAltReturn = pkgs.writeShellScriptBin "hypr-alt-return" ''
+    set -euo pipefail
+    IPC="${lib.getExe hyprQuickshellIpc}"
+    # Match the printed string, never $?. A bar that does not know this
+    # function prints "Function not found." and exits 0, and with no bar
+    # running the output is empty -- an exit-code test would read both as
+    # success and swallow the key. Falling through means the worst case of
+    # this bind is exactly its pre-card behaviour.
+    if [ "$("$IPC" call switcher commitIfOpen 2>/dev/null || true)" = "true" ]; then
+      exit 0
+    fi
+    exec ${pkgs.kitty}/bin/kitty
+  '';
+
+  # Alt+Esc while the overlay is open: close it, rather than killing the window
+  # you were about to switch away from. Same fall-through contract as above.
+  hyprAltEscape = pkgs.writeShellScriptBin "hypr-alt-escape" ''
+    set -euo pipefail
+    H="${pkgs.hyprland}/bin/hyprctl"
+    IPC="${lib.getExe hyprQuickshellIpc}"
+    if [ "$("$IPC" call switcher dismissIfOpen 2>/dev/null || true)" = "true" ]; then
+      exit 0
+    fi
+    exec "$H" dispatch killactive
+  '';
+
   # Suppress idle lock while Slippi emulation is active.
   quickshellLockGuarded = pkgs.writeShellScriptBin "quickshell-lock-guarded" ''
     set -euo pipefail

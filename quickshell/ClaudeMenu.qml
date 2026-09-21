@@ -78,7 +78,7 @@ Item {
 
 				Text {
 					anchors.verticalCenter: parent.verticalCenter
-					text: String.fromCodePoint(0xF0674) // nf-md-creation
+					text: String.fromCodePoint(0xF4F5) // nf-oct-north_star
 					color: Theme.accent
 					font.pixelSize: 18
 					font.family: "IosevkaTermSlab NF"

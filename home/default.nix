@@ -10,6 +10,7 @@
     ./programs/qt-palette.nix
     ./programs/albert.nix
     ./programs/slippi.nix
+    ./programs/pixel-composer.nix
     ./programs/zsh.nix
     ./programs/claude-skills.nix
     ./programs/git.nix
@@ -23,6 +24,7 @@
     ./services/battery-notify.nix
     ./services/calendar-sync.nix
     ./services/claude-usage.nix
+    ./services/tailscale-health.nix
     ./services/polkit-agent.nix
     ./services/nm-applet.nix
     ./services/hypridle.nix

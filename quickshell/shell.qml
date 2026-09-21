@@ -224,6 +224,39 @@ ShellRoot {
 	property bool claudeMenuVisible: false
 	readonly property string claudeRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/claude-usage`
 
+	// tailscaled health. home/services/tailscale-health.nix polls the daemon
+	// on a user timer and owns the debounce and the notification; the bar
+	// only reads its JSON and shows a pill while there is something to say.
+	property var tsHealth: ({})
+	readonly property string tsHealthRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/tailscale-health`
+
+	function tsActiveWarnings(): var {
+		return (shellRoot.tsHealth?.warnings ?? []).filter(w => w && w.active);
+	}
+
+	function tsBackendBad(): bool {
+		const b = shellRoot.tsHealth?.backend;
+		return !!b && b !== "Running";
+	}
+
+	function tsPillVisible(): bool {
+		return tsActiveWarnings().length > 0 || tsBackendBad();
+	}
+
+	function tsHealthColor(): string {
+		// Same palette rule as networkColor(): red for a real warning, muted
+		// for a daemon that is merely not running.
+		if (tsActiveWarnings().length > 0)
+			return Theme.error;
+		return Theme.muted;
+	}
+
+	function tsHealthIcon(): string {
+		if (tsActiveWarnings().length > 0)
+			return String.fromCodePoint(0xF0319); // nf-md-lan_disconnect
+		return String.fromCodePoint(0xF0C9B); // nf-md-network_off
+	}
+
 	function sunsetOk(): bool {
 		return (shellRoot.sunsetState?.ok ?? false) === true;
 	}
@@ -491,6 +524,23 @@ ShellRoot {
 		return lines.join("\n");
 	}
 
+	function tailscaleTooltipText(): string {
+		const lines = [];
+		const b = shellRoot.tsHealth?.backend;
+		if (b === "NeedsLogin")
+			lines.push("Tailscale: needs login");
+		else if (b === "Stopped")
+			lines.push("Tailscale: stopped");
+		else if (b === "unreachable")
+			lines.push("Tailscale: daemon unreachable");
+		else if (b && b !== "Running")
+			lines.push("Tailscale: " + b);
+		for (const w of tsActiveWarnings())
+			lines.push(w.text);
+		lines.push("Left-click: tailscale status");
+		return lines.join("\n");
+	}
+
 	function bluetoothTooltipText(): string {
 		const lines = [];
 		if (btBlocked)
@@ -589,6 +639,8 @@ ShellRoot {
 			return qsReloadTooltipText();
 		if (kind === "wifi")
 			return wifiTooltipText();
+		if (kind === "tailscale")
+			return tailscaleTooltipText();
 		if (kind === "bt")
 			return bluetoothTooltipText();
 		if (kind === "brightness")
@@ -996,9 +1048,33 @@ ShellRoot {
 				shellRoot.windowSwitcherCommit();
 		}
 
-		// Alt+Esc: close without changing focus.
+		// Close without changing focus. This is the tooling and test entry
+		// point; the Alt+Esc KEY goes through dismissIfOpen() below, because
+		// Hyprland consumes a matched bind before the overlay sees the key.
 		function dismiss(): void {
 			shellRoot.windowSwitcherVisible = false;
+		}
+
+		// Alt+Return via hypr-alt-return: commit and report true if the overlay
+		// was open, else report false so the script falls through to kitty.
+		//
+		// One call that checks AND acts, deliberately. A separate isOpen query
+		// would leave a window in which the overlay could close between the
+		// answer and the commit, and it would double the round-trip on a key
+		// path that a human is holding Alt through.
+		function commitIfOpen(): bool {
+			if (!shellRoot.windowSwitcherVisible)
+				return false;
+			shellRoot.windowSwitcherCommit();
+			return true;
+		}
+
+		// Alt+Esc via hypr-alt-escape: same shape, close without changing focus.
+		function dismissIfOpen(): bool {
+			if (!shellRoot.windowSwitcherVisible)
+				return false;
+			shellRoot.windowSwitcherVisible = false;
+			return true;
 		}
 	}
 
@@ -1262,6 +1338,16 @@ ShellRoot {
 		onFileChanged: sunsetStateFile.reload()
 	}
 
+	// Same reason as tsHealthFile's retry: a watcher cannot watch a path that
+	// does not exist yet, and on a fresh login the first tick lands after the
+	// bar. Poll reload() until the file loads; watchChanges takes over.
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !sunsetStateFile.loaded
+		onTriggered: sunsetStateFile.reload()
+	}
+
 	// Claude usage, rewritten atomically by qs-claude-usage every five minutes
 	// and again whenever the menu opens. Absent is the normal state before the
 	// first tick after login: the pill stays up (it is a launcher first) and
@@ -1287,6 +1373,52 @@ ShellRoot {
 
 		onLoaded: claudeStateFile.parseState()
 		onFileChanged: claudeStateFile.reload()
+	}
+
+	// Same retry as sunsetStateFile / tsHealthFile; see the comment there.
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !claudeStateFile.loaded
+		onTriggered: claudeStateFile.reload()
+	}
+
+	// tailscaled health, rewritten atomically by qs-tailscale-health every ten
+	// seconds. Absent is the normal state before the first tick after login,
+	// and on a healthy daemon the pill is hidden either way.
+	FileView {
+		id: tsHealthFile
+		path: `${shellRoot.tsHealthRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		// Named parseState for the same reason as claudeStateFile's: FileView
+		// already has a reload(), and shadowing it here would recurse.
+		function parseState(): void {
+			const raw = tsHealthFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.tsHealth = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next write brings a whole file.
+			}
+		}
+
+		onLoaded: tsHealthFile.parseState()
+		onFileChanged: tsHealthFile.reload()
+	}
+
+	// A file watcher cannot watch a path that does not exist yet, and on a
+	// fresh login the state file only appears after the timer's first tick,
+	// 15 s after the bar. Without this the pill never shows until the next
+	// bar reload (observed 2026-09-19). Poll reload() until the file loads;
+	// watchChanges takes over from there.
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !tsHealthFile.loaded
+		onTriggered: tsHealthFile.reload()
 	}
 
 	Timer {
@@ -1386,7 +1518,10 @@ ShellRoot {
 			anchors.left: true
 			anchors.right: true
 			implicitHeight: shellRoot.topBarHeight
-			color: Theme.depth
+			// Deliberately transparent so the wallpaper shows through: every
+			// cluster (tray, status, media, workspaces, clock) carries its own
+			// Theme.surface pill, so nothing sits bare on the wallpaper.
+			color: "transparent"
 
 			property Item tipItem: null
 			property string tipKind: ""
@@ -1861,6 +1996,28 @@ ShellRoot {
 							}
 						}
 
+						// Hidden while tailscaled is healthy: the cluster is dense
+						// enough, and the wifi pill deliberately does not carry this
+						// state -- separating the two failure modes is the point.
+						StatusPill {
+							id: tsHealthPill
+							visible: shellRoot.tsPillVisible()
+							tipKind: "tailscale"
+							acceptedButtons: Qt.LeftButton
+							onClicked: {
+								barWindow.disarmTip();
+								Hyprland.dispatch("exec kitty --title tailscale-status sh -c 'tailscale status; echo; tailscale dns status; echo; read -r'");
+							}
+
+							Text {
+								anchors.centerIn: parent
+								color: shellRoot.tsHealthColor()
+								font.pixelSize: 14
+								font.family: "IosevkaTermSlab NF"
+								text: shellRoot.tsHealthIcon()
+							}
+						}
+
 						StatusPill {
 							id: btPill
 							visible: shellRoot.btPresent
@@ -1928,7 +2085,7 @@ ShellRoot {
 								color: shellRoot.claudeColor()
 								font.pixelSize: 14
 								font.family: "IosevkaTermSlab NF"
-								text: String.fromCodePoint(0xF0674) // nf-md-creation
+								text: String.fromCodePoint(0xF4F5) // nf-oct-north_star
 							}
 						}
 
@@ -2118,30 +2275,40 @@ ShellRoot {
 					}
 				}
 
-				// Clock, click to open the calendar popup. BarHoverArea is
-				// transparent when idle, so the clock looks unchanged until
-				// hovered.
-				BarHoverArea {
-					id: clockArea
+				// Clock, click to open the calendar popup. Same idiom as mediaPill
+				// and wsPill: the outer Rectangle owns the resting Theme.surface
+				// backing, the inner BarHoverArea owns hover and press-squish. Not
+				// a resting colour on BarHoverArea itself -- its hover Rectangle
+				// replaces the colour rather than compositing over it, so the pill
+				// would go MORE transparent on hover.
+				Rectangle {
+					id: clockPill
 					radius: 8
-					implicitWidth: clockLabel.implicitWidth + 14
+					color: Theme.surface
 					implicitHeight: 24
-					onClicked: shellRoot.calendarPopupVisible = !shellRoot.calendarPopupVisible
+					implicitWidth: clockLabel.implicitWidth + 14
 
-					Text {
-						id: clockLabel
-						anchors.centerIn: parent
-						color: Theme.text
-						font.pixelSize: 14
+					BarHoverArea {
+						id: clockArea
+						anchors.fill: parent
+						radius: 8
+						onClicked: shellRoot.calendarPopupVisible = !shellRoot.calendarPopupVisible
 
-						Timer {
-							running: true
-							repeat: true
-							interval: 30000
-							onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+						Text {
+							id: clockLabel
+							anchors.centerIn: parent
+							color: Theme.text
+							font.pixelSize: 14
+
+							Timer {
+								running: true
+								repeat: true
+								interval: 30000
+								onTriggered: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
+							}
+
+							Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 						}
-
-						Component.onCompleted: clockLabel.text = Qt.formatDateTime(new Date(), "ddd d MMM  HH:mm")
 					}
 				}
 
@@ -2159,7 +2326,10 @@ ShellRoot {
 				visible: barWindow.tipOn && barWindow.tipItem !== null
 				grabFocus: false
 				color: "transparent"
-				implicitWidth: barTipText.implicitWidth + 16
+				// The text wraps at 360, so size the popup from its wrapped width,
+				// not implicitWidth (the unwrapped line) -- otherwise a long line
+				// leaves wide empty margins either side of the wrapped block.
+				implicitWidth: barTipText.width + 16
 				implicitHeight: barTipText.implicitHeight + 12
 				anchor.window: barWindow
 				anchor.item: barWindow.tipItem
