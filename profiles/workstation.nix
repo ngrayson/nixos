@@ -130,6 +130,10 @@ in {
   };
   services.desktopManager.plasma6.enable = true;
   # Hyprland (Wayland) default; KDE still available as plasma / plasmax11 at SDDM.
+  # The session runs through start-hyprland, which relaunches a crashed
+  # compositor in --safe-mode on a generic recovery config: kept on purpose,
+  # see documentation/hyprland-safe-mode-relaunch.md (and do not press "Load
+  # config" in that dialog -- log out and back in).
   programs.hyprland.enable = true;
   services.displayManager.defaultSession = "hyprland";
 
