@@ -392,9 +392,12 @@ in {
 
   systemd.services.hearth-ingest = {
     description = "Hardlink new Syncthing arrivals into the Jellyfin library";
+    # A parked COLD is an expected state on Hearth, so a tick with no mount is
+    # a condition-skip, not a Requires= that fails with 'dependency' every
+    # five minutes. After= (not Wants=) so a replug's in-flight mount lands
+    # before the check; the mount is deliberately never pulled from here.
     after = ["mnt-cold.mount" "local-fs.target"];
-    wants = ["mnt-cold.mount"];
-    unitConfig.RequiresMountsFor = ["/mnt/cold"];
+    unitConfig.ConditionPathIsMountPoint = "/mnt/cold";
     serviceConfig = {
       Type = "oneshot";
       # Same identity services.syncthing runs as (syncthing.nix): COLD is
