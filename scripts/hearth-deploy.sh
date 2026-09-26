@@ -269,7 +269,11 @@ refuse_shared_deploy_paths() {
     printf '    %s\n' $hit
     return 0
   fi
-  if git -C "$NIXOS_DIR" log origin/main.."$tip" --pretty=%B 2>/dev/null | grep -q '^Hearth-Deploy: allow-shared$'; then
+  # Capture, then match: piping git log into grep -q under pipefail lets grep's
+  # early exit SIGPIPE git (status 141) and read as "no trailer" most runs.
+  local msgs
+  msgs="$(git -C "$NIXOS_DIR" log origin/main.."$tip" --pretty=%B 2>/dev/null || true)"
+  if grep -q '^Hearth-Deploy: allow-shared$' <<<"$msgs"; then
     warn "Shared-tree paths allowed by trailer Hearth-Deploy: allow-shared."
     return 0
   fi
@@ -677,7 +681,7 @@ EOS
 
   local trusted parent
   trusted="$(printf '%s\n' "$report" | sed -n 's/^trusted-users=//p' | tail -n1)"
-  if printf ' %s ' "$trusted" | grep -qE ' (@wheel|wiz) '; then
+  if grep -qE ' (@wheel|wiz) ' <<<" $trusted "; then
     DOC_TRUST="ok"
   elif [[ -z "$trusted" ]]; then
     DOC_TRUST="unknown"
@@ -920,7 +924,7 @@ json="$(hyprctl -i 0 monitors -j 2>/dev/null)" || exit 0
 awake=0
 if command -v jq >/dev/null 2>&1; then
   awake="$(printf '%s' "$json" | jq '[.[] | select((.dpmsStatus // false) == true and (.disabled // false) != true)] | length' 2>/dev/null)" || awake=0
-elif printf '%s' "$json" | grep -q '"dpmsStatus":[[:space:]]*true'; then
+elif grep -q '"dpmsStatus":[[:space:]]*true' <<<"$json"; then
   awake=1
 fi
 [ "$awake" -gt 0 ] 2>/dev/null || exit 0
