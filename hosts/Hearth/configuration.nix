@@ -33,6 +33,6 @@
     ./restic.nix
     ./syncthing.nix
     ./ingest.nix
-    ./plate.nix
+    ./scry.nix
   ];
 }
