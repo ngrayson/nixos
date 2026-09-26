@@ -1,4 +1,4 @@
-// Build a "what's on my plate" digest from Conveyor.
+// Scrying Orb: build the weekly "scry" digest from Conveyor + Notion.
 // Usage: node digest.mjs [--post]   → prints markdown; --post also sends it to Discord.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -29,7 +29,7 @@ const transport = new StdioClientTransport({
   args: ["-r", join(here, "preload.cjs"), join(here, "node_modules/@rallycry/conveyor-mcp/dist/cli.js")],
   env, stderr: "pipe",
 });
-const client = new Client({ name: "plate-digest", version: "0.1.0" });
+const client = new Client({ name: "scry-digest", version: "0.1.0" });
 await client.connect(transport);
 const call = async (name, args = {}) => {
   const r = await client.callTool({ name, arguments: args });
@@ -108,10 +108,10 @@ const age = (iso) => Math.round((Date.now() - new Date(iso)) / 864e5);
 const isRelease = (t) => /^Release \d/.test(t.title);
 const short = (t, n = 90) => (t.title.length > n ? t.title.slice(0, n - 1) + "…" : t.title);
 const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" });
-const lines = [`# Plate — ${today}`];
+const lines = [`# 🔮 Scrying Orb — ${today}`];
 
-// PLATE_MAX_ITEMS: cap per group before "…and N more" (default 4).
-const MAX = Math.max(1, parseInt(env.PLATE_MAX_ITEMS || "4", 10) || 4);
+// SCRY_MAX_ITEMS (PLATE_MAX_ITEMS still accepted): cap per group before "…and N more" (default 4).
+const MAX = Math.max(1, parseInt(env.SCRY_MAX_ITEMS || env.PLATE_MAX_ITEMS || "4", 10) || 4);
 const capped = (items, render) => {
   for (const it of items.slice(0, MAX)) lines.push(render(it));
   if (items.length > MAX) lines.push(`-# …and ${items.length - MAX} more`);
@@ -193,7 +193,7 @@ for (const { project, buckets, incidents } of report) {
 // Notion areas are fetched (for future use / digest.json) but not rendered.
 if (agentQueue) lines.push(`-# ${agentQueue} task${agentQueue > 1 ? "s" : ""} queued for agents`);
 const md = lines.join("\n");
-const outDir = env.PLATE_OUT || process.cwd();
+const outDir = env.SCRY_OUT || env.PLATE_OUT || process.cwd();
 try {
   writeFileSync(join(outDir, "digest.md"), md);
   writeFileSync(join(outDir, "digest.json"), JSON.stringify(report, null, 2));
@@ -213,7 +213,7 @@ if (process.argv.includes("--post")) {
     const res = await fetch(env.DISCORD_WEBHOOK_URL, {
       method: "POST", headers: { "Content-Type": "application/json" },
       // flags 4 = SUPPRESS_EMBEDS: linked titles must not spawn a link preview per line.
-      body: JSON.stringify({ content, username: "Plate", flags: 4 }),
+      body: JSON.stringify({ content, username: "Scrying Orb", flags: 4 }),
     });
     if (!res.ok) throw new Error(`discord ${res.status}: ${await res.text()}`);
   }

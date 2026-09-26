@@ -1,5 +1,5 @@
 {
-  "name": "plate",
+  "name": "scry",
   "private": true,
   "type": "module",
   "scripts": { "digest": "node digest.mjs", "post": "node digest.mjs --post", "cv": "node cv.mjs" },
