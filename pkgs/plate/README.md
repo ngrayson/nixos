@@ -13,6 +13,21 @@ cards assigned to / reviewed by you, and posts a Discord digest:
 
 New Conveyor projects and Notion areas show up automatically.
 
+## Format
+
+Discord markdown headers: `# Plate — <date>`, then `## Waiting on you` with
+one `### <project> (n)` group per Conveyor project (plus `### Notion (n)`),
+then `## Projects` and `## Areas`. Items inside a group carry no project
+prefix and are listed oldest first: open decisions, your no-agent cards, open
+incidents, verify-live, approve-PR.
+
+- `services.plate.maxItems` (default 4, exported as `PLATE_MAX_ITEMS`) caps
+  each group; the rest collapse to a `-# …and N more` subtext line.
+- `services.plate.runOnChange` (default true) adds `plate-on-change.service`,
+  which posts once during the switch that changes the plate package (a new
+  format or a dependency bump) and records it in `/var/lib/plate/last-format`.
+  Reboots and switches that leave the package alone post nothing.
+
 ## Notion setup (once)
 
 1. notion.so/profile/integrations → new internal integration "plate", read +
