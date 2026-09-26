@@ -106,35 +106,36 @@ const age = (iso) => Math.round((Date.now() - new Date(iso)) / 864e5);
 const isRelease = (t) => /^Release \d/.test(t.title);
 const short = (t, n = 90) => (t.title.length > n ? t.title.slice(0, n - 1) + "…" : t.title);
 const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" });
-const lines = [`**Plate — week of ${today}**`];
+const lines = [`# Plate — ${today}`];
 
-// Section 1: things only you can unblock.
-const decisions = [], yours = [], verify = [], approve = [], releases = [];
+// PLATE_MAX_ITEMS: cap per group before "…and N more" (default 4).
+const MAX = Math.max(1, parseInt(env.PLATE_MAX_ITEMS || "4", 10) || 4);
+const capped = (items, render) => {
+  for (const it of items.slice(0, MAX)) lines.push(render(it));
+  if (items.length > MAX) lines.push(`-# …and ${items.length - MAX} more`);
+};
+
+// Section 1: things only you can unblock — grouped by project, oldest first within a group.
+const byAge = (a, b) => new Date(a.t?.updatedAt || a.d?.updatedAt || 0) - new Date(b.t?.updatedAt || b.d?.updatedAt || 0);
+const groups = [];
+let releases = [];
 for (const { project, buckets, decisions: ds, incidents } of report) {
-  for (const d of ds) decisions.push({ project, d });
+  const items = [];
+  for (const d of ds) items.push({ d, kind: "decide" });
   for (const s of ["InProgress", "Planning", "Open"])
-    for (const t of buckets[s] || []) if (!t.agentId) yours.push({ project, t, s });
-  for (const t of buckets.ReviewLive || []) (isRelease(t) ? releases : verify).push({ project, t });
-  for (const t of buckets.ReviewPR || []) approve.push({ project, t });
-  for (const t of incidents) if (t.status === "Open" && !t.agentId) yours.push({ project, t, s: "incident" });
+    for (const t of buckets[s] || []) if (!t.agentId) items.push({ t, kind: "yours" });
+  for (const t of incidents) if (t.status === "Open" && !t.agentId) items.push({ t, kind: "incident" });
+  for (const t of buckets.ReviewLive || []) (isRelease(t) ? releases : items).push(isRelease(t) ? { project, t } : { t, kind: "verify" });
+  for (const t of buckets.ReviewPR || []) items.push({ t, kind: "approve" });
+  if (items.length) groups.push({ name: project.name, items: items.sort(byAge) });
 }
-const byAge = (a, b) => new Date(a.t?.updatedAt || a.d?.updatedAt) - new Date(b.t?.updatedAt || b.d?.updatedAt);
-yours.sort(byAge); verify.sort(byAge); approve.sort(byAge);
+const renderItem = ({ t, d, kind }) => {
+  if (kind === "decide") return `- ❓ decide: ${d.title || d.question || JSON.stringify(d).slice(0, 80)}`;
+  const pr = t.githubPRNumber ? ` (#${t.githubPRNumber})` : "";
+  const tag = { yours: "", incident: " ⚠ incident", verify: " — verify live", approve: " — approve PR" }[kind];
+  return `- ${short(t)}${pr}${tag} · ${age(t.updatedAt)}d`;
+};
 
-lines.push(`\n**Waiting on you**`);
-if (decisions.length) {
-  lines.push(`*Decisions open (${decisions.length})*`);
-  for (const { project, d } of decisions) lines.push(`• ${project.name}: ${d.title || d.question || JSON.stringify(d).slice(0, 80)}`);
-}
-if (yours.length) {
-  lines.push(`*Your tasks — no agent can move these (${yours.length})*`);
-  for (const { project, t, s } of yours) lines.push(`• ${project.name}: ${short(t)}${s === "incident" ? " ⚠ incident" : ""} · ${age(t.updatedAt)}d`);
-}
-if (verify.length || approve.length) {
-  lines.push(`*Verify / approve (${verify.length + approve.length})*`);
-  for (const { project, t } of verify) lines.push(`• ${project.name}: verify live — ${short(t, 70)}${t.githubPRNumber ? ` (#${t.githubPRNumber})` : ""} · ${age(t.updatedAt)}d`);
-  for (const { project, t } of approve) lines.push(`• ${project.name}: approve PR — ${short(t, 70)}${t.githubPRNumber ? ` (#${t.githubPRNumber})` : ""} · ${age(t.updatedAt)}d`);
-}
 // Notion tasks: yours/collab, not done. Overdue → due soon → by priority.
 const PRI = { P0: 0, P1: 1, P2: 2, P3: 3 };
 const dayDiff = (d) => Math.round((new Date(d) - new Date(today)) / 864e5);
@@ -146,24 +147,30 @@ const ntasks = notion.tasks
     return oa - ob;
   });
 const agentQueue = notion.tasks.filter((t) => t.assignee === "Agent").length;
+const renderNotion = (t) => {
+  const d = t.due ? dayDiff(t.due) : null;
+  const when = d === null ? "" : d < 0 ? ` ⚠ ${-d}d overdue` : d === 0 ? " · due today" : d <= 7 ? ` · due in ${d}d` : ` · due ${t.due}`;
+  const bits = [t.priority, t.status === "Waiting" ? "waiting" : null, t.assignee === "Collaboration" ? "collab" : null, t.tags.join("/") || null].filter(Boolean).join(" · ");
+  return `- ${t.title}${bits ? ` [${bits}]` : ""}${when}`;
+};
+
+lines.push(`## Waiting on you`);
+for (const g of groups) {
+  lines.push(`### ${g.name} (${g.items.length})`);
+  capped(g.items, renderItem);
+}
 if (ntasks.length) {
-  lines.push(`*Notion tasks (${ntasks.length})*`);
-  for (const t of ntasks.slice(0, 10)) {
-    const d = t.due ? dayDiff(t.due) : null;
-    const when = d === null ? "" : d < 0 ? ` ⚠ ${-d}d overdue` : d === 0 ? " · due today" : d <= 7 ? ` · due in ${d}d` : ` · due ${t.due}`;
-    const bits = [t.priority, t.status === "Waiting" ? "waiting" : null, t.assignee === "Collaboration" ? "collab" : null, t.tags.join("/") || null].filter(Boolean).join(" · ");
-    lines.push(`• ${t.title}${bits ? ` [${bits}]` : ""}${when}`);
-  }
-  if (ntasks.length > 10) lines.push(`• …and ${ntasks.length - 10} more`);
+  lines.push(`### Notion (${ntasks.length})`);
+  capped(ntasks, renderNotion);
 }
 if (releases.length) {
   const oldest = Math.max(...releases.map(({ t }) => age(t.updatedAt)));
-  lines.push(`• ${releases.length} release cards in verify-live (oldest ${oldest}d) — batch-close?`);
+  lines.push(`-# ${releases.length} release cards in verify-live (oldest ${oldest}d) — batch-close?`);
 }
-if (!decisions.length && !yours.length && !verify.length && !approve.length && !releases.length && !ntasks.length) lines.push("• nothing — you're clear");
+if (!groups.length && !ntasks.length && !releases.length) lines.push("- nothing — you're clear");
 
 // Section 2: one line per project.
-lines.push(`\n**Projects**`);
+lines.push(`## Projects`);
 for (const { project, buckets, incidents } of report) {
   const n = (s) => buckets[s]?.length || 0;
   const live = ORDER.reduce((a, s) => a + n(s), 0);
@@ -176,18 +183,18 @@ for (const { project, buckets, incidents } of report) {
   const backlog = n("Planning") + n("Open");
   if (backlog) parts.push(`${backlog} backlog`);
   if (incidents.length) parts.push(`${incidents.length} incident${incidents.length > 1 ? "s" : ""}`);
-  lines.push(`• __${project.name}__ — ${parts.join(" · ")}`);
+  lines.push(`- **${project.name}** — ${parts.join(" · ")}`);
 }
 // Section 3: areas (Notion) — status, next action, agent notes needing attention.
 if (notion.enabled && notion.areas.length) {
-  lines.push(`\n**Areas**`);
+  lines.push(`## Areas`);
   for (const a of notion.areas.filter((a) => a.status !== "Archived")) {
     const stale = a.touched ? Math.max(0, -dayDiff(a.touched)) : null;
     const bits = [a.status, a.next ? `next: ${a.next}` : "no next action", stale !== null && stale > 14 ? `${stale}d quiet` : null, a.notes ? "📝 agent notes" : null].filter(Boolean);
-    lines.push(`• __${a.name}__ — ${bits.join(" · ")}`);
+    lines.push(`- **${a.name}** — ${bits.join(" · ")}`);
   }
-  if (agentQueue) lines.push(`• ${agentQueue} task${agentQueue > 1 ? "s" : ""} queued for agents`);
-} else if (!notion.enabled) lines.push(`\n_(Notion not configured — set NOTION_TOKEN)_`);
+  if (agentQueue) lines.push(`-# ${agentQueue} task${agentQueue > 1 ? "s" : ""} queued for agents`);
+} else if (!notion.enabled) lines.push(`-# Notion not configured — set NOTION_TOKEN`);
 const md = lines.join("\n");
 const outDir = env.PLATE_OUT || process.cwd();
 try {
