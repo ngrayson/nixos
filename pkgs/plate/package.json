@@ -1,0 +1,11 @@
+{
+  "name": "plate",
+  "private": true,
+  "type": "module",
+  "scripts": { "digest": "node digest.mjs", "post": "node digest.mjs --post", "cv": "node cv.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@rallycry/conveyor-mcp": "^5.0.6",
+    "https-proxy-agent": "^7.0.0"
+  }
+}
