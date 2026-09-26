@@ -141,8 +141,11 @@ fi
 
 require_unit caddy
 if command -v curl >/dev/null 2>&1; then
-  if curl -fsS --max-time 5 --resolve home.wizt.org:443:100.84.222.78 \
-    https://home.wizt.org/status.json | grep -q '"root"'; then
+  # Fetch, then match: curl | grep -q under pipefail fails when grep exits
+  # before curl has finished writing (curl exit 23), independent of content.
+  status_json="$(curl -fsS --max-time 5 --resolve home.wizt.org:443:100.84.222.78 \
+    https://home.wizt.org/status.json 2>/dev/null || true)"
+  if grep -q '"root"' <<<"$status_json"; then
     ok "home.wizt.org/status.json has root"
   else
     fail "home.wizt.org/status.json missing or has no root (Caddy is on 100.84.222.78)"
