@@ -81,23 +81,25 @@ if (notion.enabled) {
   };
   const text = (p) => (p?.title || p?.rich_text || []).map((r) => r.plain_text).join("");
   const sel = (p) => p?.select?.name || p?.status?.name || null;
+  const areas = await nq(NOTION_AREAS_DS);
+  notion.areas = areas.map((r) => ({
+    id: r.id, name: text(r.properties.Name), status: sel(r.properties.Status),
+    next: text(r.properties["Next action"]), notes: text(r.properties["Agent notes"]),
+    touched: r.properties["Last touched"]?.date?.start || null,
+  }));
+  const areaName = new Map(notion.areas.map((a) => [a.id, a.name]));
   const rows = await nq(NOTION_TASKS_DS, { filter: { property: "Status", status: { does_not_equal: "Done" } } });
   notion.tasks = rows.map((r) => ({
     id: r.id, url: r.url,
     title: text(r.properties.Name),
     status: sel(r.properties.Status),
-    assignee: sel(r.properties.Assignee),
+    assignee: sel(r.properties[env.ASSIGNEE_PROP || "Type"] || r.properties.Assignee),
     priority: sel(r.properties.Priority),
     due: r.properties["Due Date"]?.date?.start || null,
-    tags: (r.properties.Tags?.multi_select || []).map((t) => t.name),
+    // Tags were folded into the Area relation; resolve ids → names via the areas fetched above.
+    tags: (r.properties.Area?.relation || []).map((rel) => areaName.get(rel.id)).filter(Boolean),
     parent: (r.properties["Parent item"]?.relation || []).length > 0,
     updatedAt: r.last_edited_time,
-  }));
-  const areas = await nq(NOTION_AREAS_DS);
-  notion.areas = areas.map((r) => ({
-    name: text(r.properties.Name), status: sel(r.properties.Status),
-    next: text(r.properties["Next action"]), notes: text(r.properties["Agent notes"]),
-    touched: r.properties["Last touched"]?.date?.start || null,
   }));
 }
 
