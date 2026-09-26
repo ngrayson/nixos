@@ -61,6 +61,8 @@ in
       description = "Plate digest: Conveyor → Discord";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
+      # digest.mjs spawns the Conveyor MCP server as a bare `node` child process.
+      path = [ pkgs.nodejs ];
       serviceConfig = {
         Type = "oneshot";
         DynamicUser = true;
