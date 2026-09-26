@@ -21,6 +21,8 @@ per Conveyor project and the items waiting on you directly beneath it, oldest
 first: open decisions, your no-agent cards, open incidents, verify-live,
 approve-PR. Notion areas are still fetched into `digest.json` but not
 rendered; only a `-# N tasks queued for agents` line follows the projects.
+Every item title links to its Conveyor card or Notion page, PR numbers link
+to the PR, and posts set `flags: 4` so Discord shows no link previews.
 
 - `services.plate.maxItems` (default 4, exported as `PLATE_MAX_ITEMS`) caps
   each group; the rest collapse to a `-# …and N more` subtext line.
