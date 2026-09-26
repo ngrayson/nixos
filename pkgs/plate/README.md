@@ -15,11 +15,11 @@ New Conveyor projects and Notion areas show up automatically.
 
 ## Format
 
-Discord markdown headers: `# Plate — <date>`, then `## Waiting on you` with
-one `### <project> (n)` group per Conveyor project (plus `### Notion (n)`),
-then `## Projects` and `## Areas`. Items inside a group carry no project
-prefix and are listed oldest first: open decisions, your no-agent cards, open
-incidents, verify-live, approve-PR.
+Discord markdown headers: `# Plate — <date>`, then `# General` (your Notion
+tasks), then `# Projects` with one `## [<project>](<board link>) — <counts>`
+per Conveyor project and the items waiting on you directly beneath it, oldest
+first: open decisions, your no-agent cards, open incidents, verify-live,
+approve-PR. Notion area lines follow at the end with no header.
 
 - `services.plate.maxItems` (default 4, exported as `PLATE_MAX_ITEMS`) caps
   each group; the rest collapse to a `-# …and N more` subtext line.

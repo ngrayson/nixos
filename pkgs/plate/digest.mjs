@@ -154,23 +154,15 @@ const renderNotion = (t) => {
   return `- ${t.title}${bits ? ` [${bits}]` : ""}${when}`;
 };
 
-lines.push(`## Waiting on you`);
-for (const g of groups) {
-  lines.push(`### ${g.name} (${g.items.length})`);
-  capped(g.items, renderItem);
+// # General — Notion tasks (yours / collab), at the top.
+if (ntasks.length || !notion.enabled) {
+  lines.push(`# General`);
+  if (ntasks.length) capped(ntasks, renderNotion);
+  else lines.push(`-# Notion not configured — set NOTION_TOKEN`);
 }
-if (ntasks.length) {
-  lines.push(`### Notion (${ntasks.length})`);
-  capped(ntasks, renderNotion);
-}
-if (releases.length) {
-  const oldest = Math.max(...releases.map(({ t }) => age(t.updatedAt)));
-  lines.push(`-# ${releases.length} release cards in verify-live (oldest ${oldest}d) — batch-close?`);
-}
-if (!groups.length && !ntasks.length && !releases.length) lines.push("- nothing — you're clear");
 
-// Section 2: one line per project.
-lines.push(`## Projects`);
+// # Projects — one ## per Conveyor project: linked name + counts, then the items waiting on you.
+lines.push(`# Projects`);
 for (const { project, buckets, incidents } of report) {
   const n = (s) => buckets[s]?.length || 0;
   const live = ORDER.reduce((a, s) => a + n(s), 0);
@@ -183,18 +175,27 @@ for (const { project, buckets, incidents } of report) {
   const backlog = n("Planning") + n("Open");
   if (backlog) parts.push(`${backlog} backlog`);
   if (incidents.length) parts.push(`${incidents.length} incident${incidents.length > 1 ? "s" : ""}`);
-  lines.push(`- **${project.name}** — ${parts.join(" · ")}`);
+  const url = `https://conveyor.rallycryapp.com/projects/${project.slug}/cards`;
+  lines.push(`## [${project.name}](${url}) — ${parts.join(" · ")}`);
+  const g = groups.find((g) => g.name === project.name);
+  if (g) capped(g.items, renderItem);
+  const rel = releases.filter((r) => r.project.id === project.id);
+  if (rel.length) {
+    const oldest = Math.max(...rel.map(({ t }) => age(t.updatedAt)));
+    lines.push(`-# ${rel.length} release cards in verify-live (oldest ${oldest}d) — batch-close?`);
+  }
 }
+
 // Section 3: areas (Notion) — status, next action, agent notes needing attention.
 if (notion.enabled && notion.areas.length) {
-  lines.push(`## Areas`);
+  lines.push("");
   for (const a of notion.areas.filter((a) => a.status !== "Archived")) {
     const stale = a.touched ? Math.max(0, -dayDiff(a.touched)) : null;
     const bits = [a.status, a.next ? `next: ${a.next}` : "no next action", stale !== null && stale > 14 ? `${stale}d quiet` : null, a.notes ? "📝 agent notes" : null].filter(Boolean);
     lines.push(`- **${a.name}** — ${bits.join(" · ")}`);
   }
   if (agentQueue) lines.push(`-# ${agentQueue} task${agentQueue > 1 ? "s" : ""} queued for agents`);
-} else if (!notion.enabled) lines.push(`-# Notion not configured — set NOTION_TOKEN`);
+}
 const md = lines.join("\n");
 const outDir = env.PLATE_OUT || process.cwd();
 try {
