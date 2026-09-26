@@ -99,8 +99,12 @@ if (notion.enabled) {
     // Tags were folded into the Area relation; resolve ids → names via the areas fetched above.
     tags: (r.properties.Area?.relation || []).map((rel) => areaName.get(rel.id)).filter(Boolean),
     parent: (r.properties["Parent item"]?.relation || []).length > 0,
+    children: (r.properties["Sub-item"]?.relation || []).map((x) => x.id),
     updatedAt: r.last_edited_time,
   }));
+  // Open sub-task count per parent (Done rows are already filtered out of `rows`).
+  const open = new Set(notion.tasks.map((t) => t.id));
+  for (const t of notion.tasks) t.subtasks = t.children.filter((id) => open.has(id)).length;
 }
 
 // ---- render ----
@@ -155,7 +159,8 @@ const renderNotion = (t) => {
   const d = t.due ? dayDiff(t.due) : null;
   const when = d === null ? "" : d < 0 ? ` ⚠ ${-d}d overdue` : d === 0 ? " · due today" : d <= 7 ? ` · due in ${d}d` : ` · due ${t.due}`;
   const bits = [t.priority, t.status === "Waiting" ? "waiting" : null, t.assignee === "Collaboration" ? "collab" : null, t.tags.join("/") || null].filter(Boolean).join(" · ");
-  return `- ${link(t.title, t.url)}${bits ? ` [${bits}]` : ""}${when}`;
+  const subs = t.subtasks ? ` (${t.subtasks} sub-task${t.subtasks > 1 ? "s" : ""})` : "";
+  return `- ${link(t.title, t.url)}${subs}${bits ? ` [${bits}]` : ""}${when}`;
 };
 
 // # General — Notion tasks (yours / collab), at the top.
