@@ -19,7 +19,8 @@ Discord markdown headers: `# Plate — <date>`, then `# General` (your Notion
 tasks), then `# Projects` with one `## [<project>](<board link>) — <counts>`
 per Conveyor project and the items waiting on you directly beneath it, oldest
 first: open decisions, your no-agent cards, open incidents, verify-live,
-approve-PR. Notion area lines follow at the end with no header.
+approve-PR. Notion areas are still fetched into `digest.json` but not
+rendered; only a `-# N tasks queued for agents` line follows the projects.
 
 - `services.plate.maxItems` (default 4, exported as `PLATE_MAX_ITEMS`) caps
   each group; the rest collapse to a `-# …and N more` subtext line.

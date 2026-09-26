@@ -186,16 +186,8 @@ for (const { project, buckets, incidents } of report) {
   }
 }
 
-// Section 3: areas (Notion) — status, next action, agent notes needing attention.
-if (notion.enabled && notion.areas.length) {
-  lines.push("");
-  for (const a of notion.areas.filter((a) => a.status !== "Archived")) {
-    const stale = a.touched ? Math.max(0, -dayDiff(a.touched)) : null;
-    const bits = [a.status, a.next ? `next: ${a.next}` : "no next action", stale !== null && stale > 14 ? `${stale}d quiet` : null, a.notes ? "📝 agent notes" : null].filter(Boolean);
-    lines.push(`- **${a.name}** — ${bits.join(" · ")}`);
-  }
-  if (agentQueue) lines.push(`-# ${agentQueue} task${agentQueue > 1 ? "s" : ""} queued for agents`);
-}
+// Notion areas are fetched (for future use / digest.json) but not rendered.
+if (agentQueue) lines.push(`-# ${agentQueue} task${agentQueue > 1 ? "s" : ""} queued for agents`);
 const md = lines.join("\n");
 const outDir = env.PLATE_OUT || process.cwd();
 try {
