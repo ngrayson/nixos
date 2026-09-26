@@ -1,4 +1,6 @@
-# plate — "what's on my plate" digest
+# scry — the Scrying Orb digest
+
+Formerly "plate". Posts to Discord as **Scrying Orb**.
 
 Walks every Conveyor project the token can see, filters shared projects to
 cards assigned to / reviewed by you, and posts a Discord digest:
@@ -15,7 +17,7 @@ New Conveyor projects and Notion areas show up automatically.
 
 ## Format
 
-Discord markdown headers: `# Plate — <date>`, then `# General` (your Notion
+Discord markdown headers: `# 🔮 Scrying Orb — <date>`, then `# General` (your Notion
 tasks), then `# Projects` with one `## [<project>](<board link>) — <counts>`
 per Conveyor project and the items waiting on you directly beneath it, oldest
 first: open decisions, your no-agent cards, open incidents, verify-live,
@@ -24,11 +26,11 @@ rendered; only a `-# N tasks queued for agents` line follows the projects.
 Every item title links to its Conveyor card or Notion page, PR numbers link
 to the PR, and posts set `flags: 4` so Discord shows no link previews.
 
-- `services.plate.maxItems` (default 4, exported as `PLATE_MAX_ITEMS`) caps
+- `services.scry.maxItems` (default 4, exported as `SCRY_MAX_ITEMS`) caps
   each group; the rest collapse to a `-# …and N more` subtext line.
-- `services.plate.runOnChange` (default true) adds `plate-on-change.service`,
-  which posts once during the switch that changes the plate package (a new
-  format or a dependency bump) and records it in `/var/lib/plate/last-format`.
+- `services.scry.runOnChange` (default true) adds `scry-on-change.service`,
+  which posts once during the switch that changes the scry package (a new
+  format or a dependency bump) and records it in `/var/lib/scry/last-format`.
   Reboots and switches that leave the package alone post nothing.
 
 ## Notion setup (once)
@@ -49,7 +51,7 @@ Without `NOTION_TOKEN` the digest still runs (Conveyor only) and says so.
 | `digest.mjs` | the digest; `--post` sends to Discord |
 | `cv.mjs` | tiny CLI over the Conveyor MCP: `node cv.mjs list`, `node cv.mjs call <tool> '<json>'` |
 | `preload.cjs` | routes the MCP's websocket through `HTTPS_PROXY` when set; no-op on Hearth |
-| `module.nix` | NixOS module: `services.plate` — systemd timer + `plate-now` command |
+| `module.nix` | NixOS module: `services.scry` — systemd timer + `scry-now` command |
 | `package.json`, `package-lock.json` | pinned deps (`@rallycry/conveyor-mcp` 5.x) |
 
 ## Local run
@@ -61,17 +63,17 @@ Without `NOTION_TOKEN` the digest still runs (Conveyor only) and says so.
 
 ## Hearth (WizOs)
 
-1. Drop this folder into the flake, e.g. `pkgs/plate/`, and import `module.nix`
+1. Drop this folder into the flake, e.g. `pkgs/scry/`, and import `module.nix`
    in the Hearth host config.
 2. Put the five `KEY=value` lines from `.env.example` in an encrypted secret
    (age/sops, whatever `secrets/` already uses) and point
-   `services.plate.environmentFile` at its decrypted path.
-3. `services.plate.enable = true;` — default schedule `Sat 10:00` host-local
+   `services.scry.environmentFile` at its decrypted path.
+3. `services.scry.enable = true;` — default schedule `Sat 10:00` host-local
    (`onCalendar` to change). `Persistent = true` so a missed Saturday fires on
    next boot.
 4. First `hearth-deploy build` fails on `npmDepsHash = lib.fakeHash` and prints
    the real hash; paste it in and build again.
-5. On demand: `plate-now` (or `systemctl start plate.service`).
+5. On demand: `scry-now` (or `systemctl start scry.service`).
 
 ## Tuning
 
@@ -84,4 +86,4 @@ Without `NOTION_TOKEN` the digest still runs (Conveyor only) and says so.
 ## Later
 
 - Notion "Plate" DB (priority + due) merged into "Waiting on you".
-- `PLATE_OUT=/var/lib/plate` to keep `digest.json` for a Go3 dashboard panel.
+- `SCRY_OUT=/var/lib/scry` to keep `digest.json` for a Go3 dashboard panel.
