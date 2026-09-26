@@ -127,13 +127,15 @@ for (const { project, buckets, decisions: ds, incidents } of report) {
   for (const t of incidents) if (t.status === "Open" && !t.agentId) items.push({ t, kind: "incident" });
   for (const t of buckets.ReviewLive || []) (isRelease(t) ? releases : items).push(isRelease(t) ? { project, t } : { t, kind: "verify" });
   for (const t of buckets.ReviewPR || []) items.push({ t, kind: "approve" });
-  if (items.length) groups.push({ name: project.name, items: items.sort(byAge) });
+  if (items.length) groups.push({ name: project.name, slug: project.slug, items: items.sort(byAge) });
 }
-const renderItem = ({ t, d, kind }) => {
-  if (kind === "decide") return `- ❓ decide: ${d.title || d.question || JSON.stringify(d).slice(0, 80)}`;
-  const pr = t.githubPRNumber ? ` (#${t.githubPRNumber})` : "";
+const cardUrl = (slug, t) => `https://conveyor.rallycryapp.com/projects/${slug}/cards/${t.slug}`;
+const link = (text, url) => (url ? `[${text.replace(/[\[\]]/g, "\\$&")}](${url})` : text);
+const renderItem = (slug) => ({ t, d, kind }) => {
+  if (kind === "decide") return `- ❓ decide: ${link(d.title || d.question || JSON.stringify(d).slice(0, 80), d.slug && cardUrl(slug, d))}`;
+  const pr = t.githubPRNumber ? ` ([#${t.githubPRNumber}](${t.githubPRUrl}))` : "";
   const tag = { yours: "", incident: " ⚠ incident", verify: " — verify live", approve: " — approve PR" }[kind];
-  return `- ${short(t)}${pr}${tag} · ${age(t.updatedAt)}d`;
+  return `- ${link(short(t), t.slug && cardUrl(slug, t))}${pr}${tag} · ${age(t.updatedAt)}d`;
 };
 
 // Notion tasks: yours/collab, not done. Overdue → due soon → by priority.
@@ -151,7 +153,7 @@ const renderNotion = (t) => {
   const d = t.due ? dayDiff(t.due) : null;
   const when = d === null ? "" : d < 0 ? ` ⚠ ${-d}d overdue` : d === 0 ? " · due today" : d <= 7 ? ` · due in ${d}d` : ` · due ${t.due}`;
   const bits = [t.priority, t.status === "Waiting" ? "waiting" : null, t.assignee === "Collaboration" ? "collab" : null, t.tags.join("/") || null].filter(Boolean).join(" · ");
-  return `- ${t.title}${bits ? ` [${bits}]` : ""}${when}`;
+  return `- ${link(t.title, t.url)}${bits ? ` [${bits}]` : ""}${when}`;
 };
 
 // # General — Notion tasks (yours / collab), at the top.
@@ -178,7 +180,7 @@ for (const { project, buckets, incidents } of report) {
   const url = `https://conveyor.rallycryapp.com/projects/${project.slug}/cards`;
   lines.push(`## [${project.name}](${url}) — ${parts.join(" · ")}`);
   const g = groups.find((g) => g.name === project.name);
-  if (g) capped(g.items, renderItem);
+  if (g) capped(g.items, renderItem(project.slug));
   const rel = releases.filter((r) => r.project.id === project.id);
   if (rel.length) {
     const oldest = Math.max(...rel.map(({ t }) => age(t.updatedAt)));
@@ -208,7 +210,8 @@ if (process.argv.includes("--post")) {
   for (const content of chunks) {
     const res = await fetch(env.DISCORD_WEBHOOK_URL, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, username: "Plate" }),
+      // flags 4 = SUPPRESS_EMBEDS: linked titles must not spawn a link preview per line.
+      body: JSON.stringify({ content, username: "Plate", flags: 4 }),
     });
     if (!res.ok) throw new Error(`discord ${res.status}: ${await res.text()}`);
   }
