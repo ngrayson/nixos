@@ -5,6 +5,13 @@
 # The page only reads /transit.json (not a Caddy /transit/oba proxy).
 # busStops is a list. `id` is the posted Metro stop number (OBA uses 1_<id>)
 # or a full agency_stop id. Optional `name` is display-only.
+# A posted stop number is ONE platform, i.e. one direction of travel. A two-way
+# intersection needs two entries (one per direction); OBA's stop/1_<id>.json
+# reports which in its `direction` field, so suffix `name` with it.
+# busStops, obaApiKey, obaPollSeconds and arrivalsPerStop are baked into the
+# Hearth poller unit: editing them needs `hearth-deploy switch`.
+# hearth-intranet-deploy cannot ship them and warns when the checkout's stop
+# ids differ from the live poller's.
 # Houston METRO ids are not OBA — set skip = true (or feed = "houston") so
 # they stay in the list without being queried. 25027 / 25028 are skipped.
 # obaApiKey "TEST" is the public OBA development key, not a Bitwarden secret.
@@ -25,5 +32,8 @@
   mapProvider = "waze";
   obaApiKey = "TEST";
   obaPollSeconds = 60;
+  # Arrival rows kept per stop. OBA is asked 60 min ahead, so on a busy stop
+  # about 10 is the practical ceiling; fewer show when fewer buses are due.
+  arrivalsPerStop = 6;
   busStops = [];
 }

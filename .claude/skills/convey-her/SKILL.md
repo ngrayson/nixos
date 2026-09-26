@@ -251,14 +251,27 @@ So **source the env file AND hold stdin open** when arming the watch:
 
 ```bash
 set -a; . "$HOME/.config/conveyor/env"; set +a
-sleep 1710 | npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1700
+npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1700 < <(sleep 1710)
 ```
 
-The `sleep` is the timeout plus a margin. When the wait exits early on an
-event, the sleep lingers for at most the remainder and keeps the Bash wrapper
-alive with it; that is harmless, but it is why `ps` may show more than one
-`conveyor-wait` command line. Count `node …/conveyor-wait` processes, not
-wrappers, when checking for a live watch.
+The `sleep` is the timeout plus a margin, and it is fed through a **process
+substitution, not a pipe**. `sleep 1710 | conveyor-wait` also holds stdin
+open, but the shell waits for every process in a pipeline, so the background
+command — and the completion notification that is the loop's wake — did not
+end when `conveyor-wait` exited on an event; it ended when the `sleep` ran
+out. Measured 2026-09-21: a card entered Open at 11:22, the output file held
+its `event` line by 11:26, and the wake arrived at 11:31, once the sleep
+armed at 10:59 had finished. The shell does not wait on a process
+substitution, so with `< <(sleep 1710)` the command ends the moment
+`conveyor-wait` exits (a probe card was echoed ~1 s after creation); the
+orphaned `sleep` runs out on its own and is harmless. It is why `ps` may show
+a stray `sleep 1710` after a wake — count `node …/conveyor-wait` processes,
+not sleeps or wrappers, when checking for a live watch.
+
+Redirect nothing: the `Waiting up to …` / `Watching N card(s)` preamble is on
+stderr and the one JSON line on stdout, and the check below reads the
+preamble from the output file. `conveyor-plan-watch/SKILL.md` step 5 carries
+the same shape and cites this section; when this changes, that changes.
 
 **Then verify it armed, before saying so.** Both failures are invisible from
 the outside: the loop still holds its `ScheduleWakeup`, so it keeps iterating
