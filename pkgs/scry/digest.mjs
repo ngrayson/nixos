@@ -109,6 +109,15 @@ if (notion.enabled) {
 
 // ---- render ----
 const age = (iso) => Math.round((Date.now() - new Date(iso)) / 864e5);
+// Discord relative timestamps: <t:unix:R> renders as "in 3 days" / "6 days ago" in the viewer's locale.
+const rel = (iso) => `<t:${Math.floor(new Date(iso).getTime() / 1000)}:R>`;
+// Date-only values (Notion due dates) → noon Pacific so the relative wording doesn't flip at midnight.
+// A due value that carries a time is already an instant, so it goes through rel() as-is.
+const relDate = (ymd) => {
+  if (ymd.includes("T")) return rel(ymd);
+  const [y, m, d] = ymd.split("-").map(Number);
+  return `<t:${Math.floor(Date.UTC(y, m - 1, d, 19) / 1000)}:R>`;
+};
 const isRelease = (t) => /^Release \d/.test(t.title);
 const short = (t, n = 90) => (t.title.length > n ? t.title.slice(0, n - 1) + "…" : t.title);
 const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" });
@@ -141,7 +150,7 @@ const renderItem = (slug) => ({ t, d, kind }) => {
   if (kind === "decide") return `- ❓ decide: ${link(d.title || d.question || JSON.stringify(d).slice(0, 80), d.slug && cardUrl(slug, d))}`;
   const pr = t.githubPRNumber ? ` ([#${t.githubPRNumber}](${t.githubPRUrl}))` : "";
   const tag = { yours: "", incident: " ⚠ incident", verify: " — verify live", approve: " — approve PR" }[kind];
-  return `- ${link(short(t), t.slug && cardUrl(slug, t))}${pr}${tag} · ${age(t.updatedAt)}d`;
+  return `- ${link(short(t), t.slug && cardUrl(slug, t))}${pr}${tag} · ${rel(t.updatedAt)}`;
 };
 
 // Notion tasks: yours/collab, not done. Overdue → due soon → by priority.
@@ -157,7 +166,7 @@ const ntasks = notion.tasks
 const agentQueue = notion.tasks.filter((t) => t.assignee === "Agent").length;
 const renderNotion = (t) => {
   const d = t.due ? dayDiff(t.due) : null;
-  const when = d === null ? "" : d < 0 ? ` ⚠ ${-d}d overdue` : d === 0 ? " · due today" : d <= 7 ? ` · due in ${d}d` : ` · due ${t.due}`;
+  const when = d === null ? "" : d < 0 ? ` ⚠ overdue ${relDate(t.due)}` : ` · due ${relDate(t.due)}`;
   const bits = [t.priority, t.status === "Waiting" ? "waiting" : null, t.assignee === "Collaboration" ? "collab" : null, t.tags.join("/") || null].filter(Boolean).join(" · ");
   const subs = t.subtasks ? ` (${t.subtasks} sub-task${t.subtasks > 1 ? "s" : ""})` : "";
   return `- ${link(t.title, t.url)}${subs}${bits ? ` [${bits}]` : ""}${when}`;
@@ -185,13 +194,14 @@ for (const { project, buckets, incidents } of report) {
   if (backlog) parts.push(`${backlog} backlog`);
   if (incidents.length) parts.push(`${incidents.length} incident${incidents.length > 1 ? "s" : ""}`);
   const url = `https://conveyor.rallycryapp.com/projects/${project.slug}/cards`;
-  lines.push(`## [${project.name}](${url}) — ${parts.join(" · ")}`);
+  lines.push(`## [${project.name}](${url})`);
+  lines.push(parts.join(" · "));
   const g = groups.find((g) => g.name === project.name);
   if (g) capped(g.items, renderItem(project.slug));
-  const rel = releases.filter((r) => r.project.id === project.id);
-  if (rel.length) {
-    const oldest = Math.max(...rel.map(({ t }) => age(t.updatedAt)));
-    lines.push(`-# ${rel.length} release cards in verify-live (oldest ${oldest}d) — batch-close?`);
+  const rels = releases.filter((r) => r.project.id === project.id);
+  if (rels.length) {
+    const oldest = rels.reduce((a, b) => (new Date(a.t.updatedAt) < new Date(b.t.updatedAt) ? a : b));
+    lines.push(`-# ${rels.length} release cards in verify-live (oldest ${rel(oldest.t.updatedAt)}) — batch-close?`);
   }
 }
 
