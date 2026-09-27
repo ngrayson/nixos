@@ -1,6 +1,6 @@
 ---
 name: convey-her
-description: Nick's overlay on upstream conveyor-local-loop (1.0.4) for the WizOs repo — the same serial local card loop, executing each card via conveyor-build, with five amendments. (1) A loop-opened PR is merged to dev in the iteration that finds it green — this overrides upstream's never-merge-your-own-PR rule; only one may stay open awaiting the loop's own work, every open PR needs a named blocker, and PRs parked on the user do not count. (2) A card touching hosts/Hearth or hosts/Go3 is verified by actually running hearth-deploy switch / go3-deploy switch, not a build. (3) The loop ends its turn at card boundaries so the user has a window to /compact. (4) Pacing survives a scheduler that lets you down in either direction — a denied CronCreate falls back to ScheduleWakeup, and an armed-but-never-fired wakeup is detected and replaced with a background-sleep pacer. (5) The WizOs card-hygiene rules — file a bug as a card the moment it's noticed, falsify a cause before asserting it, and the create_task parameter gotchas. Use when the user says "/convey-her". For the unmodified loop use conveyor-local-loop; for exactly one card or one pack use conveyor-build.
+description: Nick's overlay on upstream conveyor-local-loop (1.0.4) for the WizOs repo — the same serial local card loop, executing each card via conveyor-build, with five amendments. (1) A loop-opened PR is merged to dev in the iteration that finds it green — this overrides upstream's never-merge-your-own-PR rule; only one may stay open awaiting the loop's own work, every open PR needs a named blocker, and PRs parked on the user do not count. (2) A card touching hosts/Hearth or hosts/Go3 is verified by actually running hearth-deploy switch / go3-deploy switch, not a build. (3) The loop ends its turn at card boundaries so the user has a window to /compact. (4) Pacing survives a scheduler that lets you down in either direction — a denied CronCreate falls back to ScheduleWakeup, and an armed-but-never-fired wakeup is detected and replaced with a background-sleep pacer; an idle loop waits on a persistent conveyor-wait Monitor with only an hourly heartbeat, not a timer. (5) The WizOs card-hygiene rules — file a bug as a card the moment it's noticed, falsify a cause before asserting it, and the create_task parameter gotchas. Use when the user says "/convey-her". For the unmodified loop use conveyor-local-loop; for exactly one card or one pack use conveyor-build.
 ---
 
 # Convey-Her
@@ -142,7 +142,55 @@ just stops while the session still looks alive. This applies unchanged when a
 pack is holding the loop's WIP slot.
 
 The base skill's own pacing table (dynamic `/loop` with no interval) is
-otherwise unchanged.
+otherwise unchanged, except for its idle row, which the next subsection
+replaces.
+
+### Idle means a standing watch, not a timer
+
+Nick, 2026-09-26: *"can we change the wakeup to a watcher instead of a timed
+thing the way we have plan-watch?"* — after a day of the idle loop waking
+every ~25 minutes to find nothing. The idle tier (queue enumerated empty this
+iteration, every loop PR green or parked on the user) therefore works like
+`conveyor-plan-watch` step 5:
+
+- **The wake is a persistent `Monitor`**, not a one-shot `conveyor-wait` and
+  not a timed sleep. Arm it with `timeout_ms: 1800000` around a loop that
+  echoes only real events and re-arms itself on timeout (credentials, stdin
+  and the `Watching` check are explained in the section after next):
+
+  ```bash
+  set -a; . "$HOME/.config/conveyor/env"; set +a
+  while true; do
+    out=$(npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait \
+      --statuses Open --scope mine,unclaimed \
+      --timeout 1700 < <(sleep 1710))
+    rc=$?
+    case "$out" in
+      *'"reason":"event"'*)   echo "$out" ;;
+      *'"reason":"timeout"'*) : ;;
+      *) echo "conveyor-wait DIED exit=$rc: ${out: -200}"; sleep 120 ;;
+    esac
+  done
+  ```
+
+  An `event` line wakes the session within seconds: run a normal iteration
+  (the payload is advisory — re-enumerate). A `DIED` line is a broken watch:
+  fix it, do not fall back to timers.
+- **Monitor expiry is a re-arm, not an iteration.** The tool caps a monitor at
+  30 minutes and sends an expiry notice. On that notice run the liveness
+  check, re-arm, and end the turn with `noop: true` — no queue scan, no card
+  reads. Everything that could have changed the queue arrives as an event.
+- **The only timed wake is an hourly heartbeat**: the Rule C background
+  `sleep 3600; echo LOOP-WAKE` plus `ScheduleWakeup(3600)`. It exists for the
+  one thing the watch cannot see — **a chat reply that un-parks a card that is
+  already Open** (a parked card never leaves Open, so nothing "enters" the
+  lane). Those are picked up at the heartbeat, or at once when Nick says so in
+  the session.
+- **Active tiers keep short timed gaps.** Between cards, while a merge is
+  queued, or while a PR's checks run, the loop still paces on 60–120 s sleeps;
+  this subsection only governs idling.
+- **Never two watches.** Before arming, the liveness check below must find no
+  live `node …/conveyor-wait`; `TaskList` alone is not proof either way.
 
 ### The reverse failure: an armed wakeup that never fires
 
@@ -211,7 +259,7 @@ The cause is unknown. Do not assert one; state the symptom and apply the rules.
 - **Rule C — pace on a wake that has been observed to work.** Before the closing
   `ScheduleWakeup`, arm `Bash` with `run_in_background: true` and
   `sleep <delaySeconds>; echo LOOP-WAKE`, using the same delay as the pacing
-  tier. Its completion notification is the wake you actually rely on — that is
+  tier (3600 s when idle — see *Idle means a standing watch*). Its completion notification is the wake you actually rely on — that is
   the same `<task-notification>` path that kept waking sessions whose cron
   entry was dead, and the ONLY pacing mechanism observed to work here. Call `ScheduleWakeup` last anyway, so `/loop` bookkeeping
   stays intact and you get a second chance. `TaskList` first: never two sleeps
@@ -247,23 +295,39 @@ had died this way. The package had not changed; the harness's stdin handling
 had. Isolated: `conveyor-wait --timeout 5 </dev/null` → `interrupted` at once;
 `sleep 20 | conveyor-wait --timeout 5` → subscribes and times out correctly.
 
-So **source the env file AND hold stdin open** when arming the watch:
+So **source the env file AND hold stdin open** when arming the watch — the
+Monitor loop in *Idle means a standing watch* does both; its core is:
 
 ```bash
 set -a; . "$HOME/.config/conveyor/env"; set +a
-sleep 1710 | npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1700
+npx -y -p @rallycry/conveyor-mcp@latest conveyor-wait --scope mine,unclaimed --timeout 1700 < <(sleep 1710)
 ```
 
-The `sleep` is the timeout plus a margin. When the wait exits early on an
-event, the sleep lingers for at most the remainder and keeps the Bash wrapper
-alive with it; that is harmless, but it is why `ps` may show more than one
-`conveyor-wait` command line. Count `node …/conveyor-wait` processes, not
-wrappers, when checking for a live watch.
+The `sleep` is the timeout plus a margin, and it is fed through a **process
+substitution, not a pipe**. `sleep 1710 | conveyor-wait` also holds stdin
+open, but the shell waits for every process in a pipeline, so the background
+command — and the completion notification that is the loop's wake — did not
+end when `conveyor-wait` exited on an event; it ended when the `sleep` ran
+out. Measured 2026-09-21: a card entered Open at 11:22, the output file held
+its `event` line by 11:26, and the wake arrived at 11:31, once the sleep
+armed at 10:59 had finished. The shell does not wait on a process
+substitution, so with `< <(sleep 1710)` the command ends the moment
+`conveyor-wait` exits (a probe card was echoed ~1 s after creation); the
+orphaned `sleep` runs out on its own and is harmless. It is why `ps` may show
+a stray `sleep 1710` after a wake — count `node …/conveyor-wait` processes,
+not sleeps or wrappers, when checking for a live watch.
 
-**Then verify it armed, before saying so.** Both failures are invisible from
-the outside: the loop still holds its `ScheduleWakeup`, so it keeps iterating
-and merely stops noticing new cards until the next timed tier — up to 25
-minutes late. The check is not "an output file exists" — a watch that printed
+Redirect nothing: the `Waiting up to …` / `Watching N card(s)` preamble is on
+stderr and the one JSON line on stdout, and the check below reads the
+preamble from the output file. `conveyor-plan-watch/SKILL.md` step 5 carries
+the same shape and cites this section; when this changes, that changes.
+
+**Then verify it armed, before saying so** — about 25 s after arming (npx
+needs a moment), confirm `pgrep -af 'conveyor-wait' | grep -c '^[0-9]* node '`
+is ≥ 1 and read the Monitor's output file. Both failures are invisible from
+the outside: the loop still holds its heartbeat, so it keeps iterating and
+merely stops noticing new cards until the next one — up to an hour late now
+that idling is heartbeat-only. The check is not "an output file exists" — a watch that printed
 only `{"reason":"interrupted"}` has one too. **The output must contain
 `Watching N card(s)`.** A dead watch shows either a credentials line (exit 1)
 or a bare `interrupted` (exit 0). Read the output. **Never report the watch as

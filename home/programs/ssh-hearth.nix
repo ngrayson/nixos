@@ -17,10 +17,12 @@
     '';
   };
 
-  # Fast path for home.wizt.org only: builds .#hearth-intranet and rsyncs it
-  # into /var/lib/hearth-intranet/current on Hearth. No nixos-rebuild, no Caddy
-  # restart. hearth-deploy switch stays authoritative and re-syncs the declared
-  # build over anything this pushed.
+  # Fast path for the home.wizt.org DASHBOARD only: builds .#hearth-intranet
+  # and rsyncs it into /var/lib/hearth-intranet/current on Hearth. No
+  # nixos-rebuild, no Caddy restart. Settings baked into Hearth units (bus
+  # stops, OBA key/interval, AQI, calendar, gallery dir) need hearth-deploy
+  # switch, which stays authoritative and re-syncs the declared build over
+  # anything this pushed.
   home.file.".local/bin/hearth-intranet-deploy" = {
     executable = true;
     text = ''

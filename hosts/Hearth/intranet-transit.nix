@@ -9,9 +9,17 @@
     if n < 60
     then 60
     else n;
+  # Rows kept per stop in transit.json; the widget renders every row it gets.
+  arrivalsPerStop = let
+    n = transitCfg.arrivalsPerStop or 6;
+  in
+    if n < 1
+    then 1
+    else n;
   pollCfg = pkgs.writeText "hearth-transit-poll.json" (builtins.toJSON {
     key = transitCfg.obaApiKey or "TEST";
     pollSeconds = pollSeconds;
+    arrivalsPerStop = arrivalsPerStop;
     stops = transitCfg.busStops or [];
   });
   writer = pkgs.writeShellApplication {
@@ -27,6 +35,7 @@
       out = "/run/hearth-intranet/transit.json"
       key = cfg.get("key") or "TEST"
       poll = max(60, int(cfg.get("pollSeconds") or 60))
+      per_stop = max(1, int(cfg.get("arrivalsPerStop") or 6))
       stops_in = cfg.get("stops") or []
 
       # Seconds between stop requests. Two back-to-back calls on the shared
@@ -134,7 +143,7 @@
               "status": status,
               "code": code,
               "currentTime": (data or {}).get("currentTime"),
-              "arrivals": arrivals[:6],
+              "arrivals": arrivals[:per_stop],
           }
 
       def is_429(row):
@@ -182,6 +191,7 @@
       payload = {
           "generatedAt": int(time.time()),
           "pollSeconds": poll,
+          "arrivalsPerStop": per_stop,
           "limited": limited,
           "stops": results,
       }
