@@ -79,7 +79,8 @@ Do **not** restore for:
 If `restic` says the repo is locked, `unlock` first (a piped `ls | head`
 can leave a stale lock). `check` is integrity only — it does not restore.
 
-Module: `hosts/Hearth/restic.nix`. Missing COLD fails only the backup unit.
+Module: `hosts/Hearth/restic.nix`. Missing COLD condition-skips the backup
+unit (`ConditionPathIsMountPoint=/mnt/cold`); it does not fail.
 `hearth-deploy` recopies widget `config.nix` after switch/boot; a restore of
 `/var/lib/hearth-intranet/config` is for when those files are gone on the
 builder too.
