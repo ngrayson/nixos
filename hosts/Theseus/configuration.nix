@@ -15,6 +15,7 @@
     ./hardware-configuration.nix
     ./host.nix
     ./hibernate.nix
+    ./wifi-resume-diag.nix
     ./sober.nix
   ];
 }

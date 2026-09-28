@@ -141,7 +141,7 @@ hardlinks work.
 ├── library/               ← Syncthing shares this to Hearth
 │   ├── movies/              Radarr root folder
 │   └── tv/                  Sonarr root folder
-└── hearth-upload/         ← Syncthing receives from Hearth
+└── hearth-upload/         ← Syncthing receives from Hearth; also the drop zone for cross-seeds
 ```
 
 **The invariant: nothing writes into `library/` except Sonarr and Radarr.**
@@ -264,22 +264,67 @@ enabled on the slot side of `hearth-upload`** (2026-08-31), which is what
 makes it an offsite copy rather than a mirror. Do not turn it off. Watch
 `.stversions` for quota growth.
 
-## Cross-seeding existing COLD content
+## Seeding files you already have (cross-seeding)
+
+Files you already have — a Linux ISO, a release from COLD — seed from
+**`/home/<user>/hearth-upload`** on the slot, and the only way in is Hearth's
+**`/mnt/cold/upload`**. That Syncthing folder is the one path from Hearth to
+the slot (`hosts/Hearth/syncthing.nix`); nothing else writes there, and no
+Rclone, SSH-to-slot or third folder is needed.
 
 Syncthing puts files on the slot; it does **not** make them seed. Seeding
 needs a `.torrent` whose piece hashes match the files exactly — names, folder
 structure, sizes.
 
-This works only for content still in **original release naming**. Anything
-Sonarr or Radarr has already renamed will not match a tracker's torrent.
+1. **Stage the files on Hearth, original name and layout intact.** From any
+   machine, as `wiz` (`/mnt/cold/upload` is `0775 wiz jellyfin` on NTFS):
 
-1. Let Syncthing finish pushing a release into `hearth-upload/`.
-2. Add the `.torrent` in qBittorrent with **Save Path** set to the directory
-   *containing* the release folder — not the folder itself. Off-by-one here is
-   the usual reason a cross-seed shows 0%.
-3. Leave hash checking **on** and let it verify to 100%.
-4. Give it a category neither Sonarr nor Radarr watches, so they do not try to
-   import your own library back into itself.
+   ```sh
+   rsync -a --info=progress2 <release> hearth:/mnt/cold/upload/
+   ```
+
+   A multi-file torrent needs its top-level folder name unchanged; a
+   single-file torrent (an ISO) is the bare file at the top of `upload/`.
+   Renamed files never match — that holds for anything Sonarr or Radarr has
+   renamed, and for an ISO you renamed yourself.
+
+2. **Wait for Syncthing to finish before touching qBittorrent.** From Hearth,
+   without the slot UI — this prints folder state only, never file names:
+
+   ```sh
+   ssh hearth 'k=$(sed -n "s:.*<apikey>\(.*\)</apikey>.*:\1:p" /var/lib/syncthing/.config/syncthing/config.xml|head -1); f=$(curl -s -H "X-API-Key: $k" http://127.0.0.1:8384/rest/config/folders | jq -r ".[]|select(.label==\"hearth-upload\").id"); curl -s -H "X-API-Key: $k" "http://127.0.0.1:8384/rest/db/status?folder=$f" | jq "{state,needBytes,localFiles}"'
+   ```
+
+   `state: "idle"` with `needBytes: 0` means everything in `/mnt/cold/upload`
+   has reached the slot.
+
+3. **Add the `.torrent` in qBittorrent:**
+   - **Save Path** `/home/<user>/hearth-upload` — the directory *containing*
+     the release folder or the bare ISO, not the folder itself. Off-by-one
+     here is the usual reason a cross-seed shows 0%.
+   - Hash checking **on**; never "Skip hash check". Let it verify to 100%.
+   - Category empty, or a `cross-seed` category **with no save path set** — a
+     category save path silently overrides the one in the dialog and would
+     relocate the data. Neither Sonarr nor Radarr may watch it, or they try to
+     import your own files back into the library.
+
+4. **If the check shows 0% with the correct Save Path**, suspect "Keep
+   incomplete torrents in" (enabled on this slot, see App configuration):
+   qBittorrent can look for the data under `torrents/incomplete` instead. This
+   is qBittorrent's known behaviour, not yet observed on this slot. Fallback:
+   add the torrent **paused** → right-click → **Set Location**
+   `/home/<user>/hearth-upload` → **Force Recheck** → resume.
+
+5. **A partial match means wrong bytes, not missing pieces.** If the check
+   stops below 100%, pause the torrent; do not let it download. Downloading
+   writes into the slot side of a Receive Only folder, which Syncthing then
+   reports as local changes and offers to "Revert" — reverting to Hearth's
+   copy, undoing the download.
+
+6. **Keep the source on COLD for as long as it seeds.** The folder is Send
+   Only on Hearth: deleting a file from `/mnt/cold/upload` deletes it on the
+   slot (into `.stversions`, still counting against quota) and the torrent
+   errors. Remove the torrent first, then delete Hearth-side.
 
 Batch this. Hash-checking is sustained read IO, which is the Fair Usage axis
 Ultra actually watches.

@@ -46,6 +46,43 @@ sudo tailscale up
 
 Join tailnet `ngrayson.github`. Do not put auth keys in the flake.
 
+**Health pill.** `home/services/tailscale-health.nix` polls `tailscale status
+--json` every 10 s on a user timer. While tailscaled reports a warnable (DNS
+forwarding failing, no DERP, needs login, ...) an alert pill appears next to
+the wifi pill in the bar and one sticky critical notification fires; on
+recovery it is replaced by a short "Tailscale healthy again". Both debounce
+15 s, so the few-second flaps on every resume never show. Raw view:
+`journalctl --user -u qs-tailscale-health` and
+`cat $XDG_RUNTIME_DIR/tailscale-health/state.json`.
+
+## Wifi after resume
+
+Symptom: after resume the wifi pill says connected, raw IPs work, and nothing
+resolves. Cause (triaged 2026-09-15, tailscale 1.98.10 source + journal):
+tailscaled recompiles DNS the instant the default route returns, reads
+NetworkManager's resolvconf entry before NM has re-registered it, gets an empty
+upstream and answers SERVFAIL until the next link change. The fix is a separate
+card; this host carries the instrumentation that proves the ordering.
+
+`hosts/Theseus/wifi-resume-diag.nix` snapshots resolver/link state from the
+systemd-sleep hook, logs one line per NetworkManager event, and runs a bounded
+90 s sampler after resume. NetworkManager logs at INFO here (default WARN).
+
+```bash
+wifi-resume-diag last     # latest capture: verdict.txt + file list
+wifi-resume-diag list     # all captures under /var/log/wifi-resume-diag
+```
+
+`verdict.txt` says `BROKEN` when tailscaled compiled an empty upstream list
+after the resume line (and when, if ever, NM's nameserver appeared in
+`resolvconf -l`), `OK` when it found one, `UNKNOWN` when the run was not a
+sleep cycle. Reproduce: close the lid, wait 2+ minutes, open it, touch nothing
+for 90 s, then `getent hosts example.com` and `wifi-resume-diag last`.
+
+The capture directories and the INFO-level journal contain SSIDs, MACs, LAN
+addresses and the tailnet name. They stay on this disk -- never paste them
+into a card or a commit unredacted. Runs age out after 30 days.
+
 ## Display
 
 `hypr/Theseus/monitors.conf` starts from the Framework 13 2880x1920 panel at scale 1.6 on `eDP-1`. On Theseus, run `hyprmon-cfg` and rebuild if the scale or connector name is wrong.
