@@ -59,6 +59,8 @@ in {
         # the resize-move mode too. Nick accepted that trade 2026-09-02 for
         # the sake of having any cursor feedback at all. `extend_border_grab_area`
         # (default 15) keeps the target generous despite border_size = 2.
+        # Exception: `../services/hypr-border-grab.nix` switches it off while
+        # an app that draws its own resize handles (Pixel Composer) has focus.
         resize_on_border = true;
         # Active scheme (home/theme/hosts.nix): overrides Stylix Hyprland `col.*`
         "col.active_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.accent}ff)";
