@@ -153,10 +153,10 @@ every ~25 minutes to find nothing. The idle tier (queue enumerated empty this
 iteration, every loop PR green or parked on the user) therefore works like
 `conveyor-plan-watch` step 5:
 
-- **The wake is a persistent `Monitor`**, not a one-shot `conveyor-wait` and
-  not a timed sleep. Arm it with `timeout_ms: 1800000` around a loop that
-  echoes only real events and re-arms itself on timeout (credentials, stdin
-  and the `Watching` check are explained in the section after next):
+- **The wake is a `Monitor` watch**, not a timed sleep. Arm it with
+  `timeout_ms: 1800000` around a loop that re-arms itself silently on timeout
+  and **ends at the first event** (credentials, stdin and the `Watching` check
+  are explained in the section after next):
 
   ```bash
   set -a; . "$HOME/.config/conveyor/env"; set +a
@@ -166,7 +166,7 @@ iteration, every loop PR green or parked on the user) therefore works like
       --timeout 1700 < <(sleep 1710))
     rc=$?
     case "$out" in
-      *'"reason":"event"'*)   echo "$out" ;;
+      *'"reason":"event"'*)   echo "$out"; exit 0 ;;
       *'"reason":"timeout"'*) : ;;
       *) echo "conveyor-wait DIED exit=$rc: ${out: -200}"; sleep 120 ;;
     esac
@@ -176,9 +176,20 @@ iteration, every loop PR green or parked on the user) therefore works like
   An `event` line wakes the session within seconds: run a normal iteration
   (the payload is advisory — re-enumerate). A `DIED` line is a broken watch:
   fix it, do not fall back to timers.
-- **Monitor expiry is a re-arm, not an iteration.** The tool caps a monitor at
-  30 minutes and sends an expiry notice. On that notice run the liveness
-  check, re-arm, and end the turn with `noop: true` — no queue scan, no card
+- **The watch exists only while the loop has no card in hand.** Nick,
+  2026-09-28: *"only one card at a time (we are currently working on this
+  card already, so no need to keep checking now)"* — after the watch kept
+  delivering new-card events in the middle of a live session with him. WIP is
+  1, so a new Open card cannot be acted on until the current one ends, and an
+  event mid-card is only an interruption. Hence the `exit 0` on the first
+  event, and: **`TaskStop` the watch the moment a card is claimed** (whether
+  the claim came from an event, the heartbeat, or Nick in the session), and
+  **do not re-arm it on expiry while a card is in hand.** Re-arm only when the
+  iteration ends idle (queue enumerated, nothing claimable). Cards that
+  arrived meanwhile are still Open then and are found by that enumeration.
+- **Monitor expiry is a re-arm, not an iteration** — while idle. The tool caps
+  a monitor at 30 minutes and sends an expiry notice. On that notice, if no
+  card is in hand, run the liveness check, re-arm, and end the turn with `noop: true` — no queue scan, no card
   reads. Everything that could have changed the queue arrives as an event.
 - **The only timed wake is an hourly heartbeat**: the Rule C background
   `sleep 3600; echo LOOP-WAKE` plus `ScheduleWakeup(3600)`. It exists for the
