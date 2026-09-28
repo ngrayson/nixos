@@ -127,7 +127,9 @@ static lease, Pi-hole as LAN DNS.
 ### H2 — Storage (HDD tier) — **shipped**
 COLD at `/mnt/cold`, `nofail` + `x-systemd.device-timeout=10s`; dirs
 `media/{movies,tv,music}` and `share/`. `hearth-disk park` before unplugging —
-`hearth-deploy health` is expected to fail while parked. Its NTFS semantics
+park runtime-masks `mnt-cold.mount` across the unmount because
+`local-fs.target` re-pulls it otherwise — `hearth-deploy health` is expected to
+fail while parked. Its NTFS semantics
 constrain everything that writes there: §8.
 
 ### H3 — Jellyfin consolidation (Tawa → Hearth)

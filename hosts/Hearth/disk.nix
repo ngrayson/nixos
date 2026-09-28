@@ -1,6 +1,13 @@
 # COLD park/resume: operator script + udisks2 + udev remount on plug-in.
 # man systemd-fstab-generator does not list x-systemd.device-bound, so do not
 # pass it. Replug starts mnt-cold.mount via udev; park is the graceful unplug.
+# park runtime-masks mnt-cold.mount for the unmount->power-off window: the
+# fstab-generated mount is WantedBy=local-fs.target and Required by every
+# RequiresMountsFor consumer, so the first unit to start after the unmount
+# (a per-minute timer, udisks2's own D-Bus activation) re-pulls the mount and
+# Jellyfin with it. /run/systemd/system (runtime masks) outranks
+# /run/systemd/generator, so the mask beats the generated unit. resume and
+# status clean up a mask left behind by an interrupted park.
 {pkgs, ...}: let
   # Same UUID as hosts/Hearth/host.nix and scripts/hearth-healthcheck.sh.
   coldUuid = "22C21140C2111A1D";
@@ -21,6 +28,11 @@
       COLD_UUID="${coldUuid}"
       COLD_DEV="/dev/disk/by-uuid/$COLD_UUID"
       COLD_MNT="/mnt/cold"
+      COLD_UNIT="mnt-cold.mount"
+      # Read-only readers such as hearth-tui's `restic snapshots` (~9 s on the
+      # NTFS USB disk) or a daily backup (~13 s) finish on their own; wait
+      # them out rather than abort.
+      HOLDER_WAIT_SEC=30
       JELLYFIN_HEALTH="http://127.0.0.1:8096/health"
 
       ok() { printf '[ok]   %s\n' "$*"; }
@@ -35,7 +47,8 @@
 
       Commands:
         status   Probe device, mount UUID, Jellyfin, and :8096/health (no changes)
-        park     Stop Jellyfin, unmount COLD, power off the enclosure (not the hub)
+        park     Stop Jellyfin/Syncthing, wait <=30s for readers, unmount COLD
+                 (mount masked meanwhile), power off the enclosure (not the hub)
         resume   Mount COLD and start Jellyfin after the drive is plugged in
       EOF
       }
@@ -84,6 +97,14 @@
         return "$leftover"
       }
 
+      # mask/unmask daemon-reload the manager by default; that reload is what
+      # makes the mask bite, so never pass --no-reload.
+      mask_mount() { systemctl mask --runtime --quiet "$COLD_UNIT"; }
+      # Runs from the EXIT trap and from resume on a machine that may have no
+      # mask, so it must never fail the caller.
+      unmask_mount() { systemctl unmask --runtime --quiet "$COLD_UNIT" 2>/dev/null || true; }
+      mount_masked() { [[ "$(systemctl is-enabled "$COLD_UNIT" 2>/dev/null || true)" == masked-runtime ]]; }
+
       probe_status() {
         local failed=0
         if device_present; then
@@ -116,11 +137,22 @@
           fail "Jellyfin health URL failed ($JELLYFIN_HEALTH)"
           failed=1
         fi
+        # Keep this row LAST: hearth-tui's decide_disk_action reads the rows
+        # positionally (device, mounted, jellyfin, ...).
+        if mount_masked; then
+          fail "$COLD_UNIT is masked (a park was interrupted) — run: sudo hearth-disk resume"
+          failed=1
+        else
+          ok "$COLD_UNIT is not masked"
+        fi
         return "$failed"
       }
 
       cmd_park() {
         need_root park
+        # Every exit path -- success, an abort below, a dropped ssh -- leaves
+        # no mask behind (only SIGKILL skips the trap).
+        trap unmask_mount EXIT
         # Both services hold files open on COLD. Syncthing especially: it
         # watches share/ and upload/ with fsWatcherEnabled, so a running
         # instance shows up in the unexpected_holders check below and aborts
@@ -129,11 +161,30 @@
         systemctl stop jellyfin
         systemctl stop syncthing
         if findmnt "$COLD_MNT" >/dev/null 2>&1; then
-          if ! unexpected_holders; then
-            fail "park aborted: those processes still have $COLD_MNT open. Close them and retry. Jellyfin and Syncthing are already stopped; the disk is still mounted."
-            exit 1
-          fi
-          systemctl stop mnt-cold.mount
+          # unexpected_holders names every holder on each call; print them on
+          # the first miss and at the abort, not once a second.
+          local waited=0 holders
+          until holders="$(unexpected_holders 2>&1 >/dev/null)"; do
+            if ((waited == 0)); then printf '%s\n' "$holders" >&2; fi
+            if ((waited >= HOLDER_WAIT_SEC)); then
+              printf '%s\n' "$holders" >&2
+              fail "park aborted: those processes still have $COLD_MNT open after ''${HOLDER_WAIT_SEC}s. Close them and retry. Jellyfin and Syncthing are already stopped; the disk is still mounted."
+              exit 1
+            fi
+            printf 'waiting for %s to be released (%ss)\n' "$COLD_MNT" "$waited"
+            sleep 1
+            waited=$((waited + 1))
+          done
+          # Mask BEFORE stopping: any unit starting in the next second re-pulls
+          # the fstab-generated mount through local-fs.target /
+          # RequiresMountsFor. A masked unit can still be stopped; it cannot
+          # be started.
+          mask_mount
+          systemctl stop "$COLD_UNIT"
+        else
+          # Unmounted but still plugged: the first start job would remount it
+          # before udisksctl gets to power it off.
+          mask_mount
         fi
         local waits=0
         while findmnt "$COLD_MNT" >/dev/null 2>&1 && ((waits < 50)); do
@@ -157,6 +208,11 @@
 
       cmd_resume() {
         need_root resume
+        # A park killed between mask and unmask would otherwise make replug
+        # (udev) and this start fail with "Unit mnt-cold.mount is masked".
+        # Before the device check so resume on an unplugged disk still clears
+        # it for the next plug.
+        unmask_mount
         if ! device_present; then
           fail "resume aborted: COLD is not plugged in (missing $COLD_DEV)."
           printf 'Plug the enclosure into the hub, wait for the disk to appear, then: sudo hearth-disk resume\n' >&2
