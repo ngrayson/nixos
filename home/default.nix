@@ -28,6 +28,7 @@
     ./services/nm-applet.nix
     ./services/hypridle.nix
     ./services/hyprsunset.nix
+    ./services/hypr-border-grab.nix
     ./services/spotifyd.nix
     ./activation/plasma-multi-monitor.nix
     ./xdg/config.nix
