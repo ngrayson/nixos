@@ -11,7 +11,7 @@
 # TWO UNIDIRECTIONAL FOLDERS, not one bidirectional:
 #
 #   hearth-library  slot ~/library      Send Only  -> /mnt/cold/share   Receive Only
-#   hearth-upload   /mnt/cold/upload    Send Only  -> slot ~/upload     Receive Only
+#   hearth-upload   /mnt/cold/upload    Send Only  -> slot ~/hearth-upload  Receive Only
 #
 # A single Send & Receive folder makes deletions round-trip: when the routing
 # step moves a file out of /mnt/cold/share, Syncthing would propagate that
