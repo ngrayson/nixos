@@ -53,6 +53,8 @@ in {
       "--keep-daily 7"
       "--keep-weekly 4"
     ];
+    # Second layer behind the unit's ConditionPathIsMountPoint below: covers
+    # the mount vanishing between the condition check and ExecStartPre.
     backupPrepareCommand = ''
       ${pkgs.util-linux}/bin/mountpoint -q /mnt/cold || {
         echo "COLD is not mounted; skip restic (nofail disk)."
@@ -61,9 +63,10 @@ in {
     '';
   };
 
+  # Same shape as hearth-ingest: a parked COLD condition-skips the daily run
+  # instead of failing it with 'dependency' (and the Persistent= catch-up).
   systemd.services.restic-backups-hearth = lib.mkIf havePassword {
     after = ["mnt-cold.mount"];
-    wants = ["mnt-cold.mount"];
-    unitConfig.RequiresMountsFor = ["/mnt/cold"];
+    unitConfig.ConditionPathIsMountPoint = "/mnt/cold";
   };
 }
