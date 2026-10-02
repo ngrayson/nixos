@@ -182,6 +182,20 @@
           bash ${./tests/hypr-sunset/run.sh}
           touch "$out"
         '';
+
+      # Drives Hearth's Go3 battery alert (hosts/Hearth/go3-battery-alert/
+      # script.nix) through its once-per-episode state machine with a fake
+      # readout, a fixed clock and a dry run — no Go3, no webhook.
+      hearth-go3-battery-alert-tests = let
+        alert = import ./hosts/Hearth/go3-battery-alert/script.nix {inherit pkgs;};
+      in
+        pkgs.runCommand "hearth-go3-battery-alert-tests" {
+          nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.diffutils];
+          HEARTH_GO3_BATTERY_ALERT_BIN = pkgs.lib.getExe alert;
+        } ''
+          bash ${./tests/hearth-go3-battery-alert/run.sh}
+          touch "$out"
+        '';
     };
   };
 }
