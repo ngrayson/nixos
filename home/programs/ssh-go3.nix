@@ -9,6 +9,8 @@
 #
 # PATH shim lives here (not only a zsh alias) so go3-deploy works in any
 # shell, matching how ssh-hearth.nix exposes hearth-deploy.
+#
+# hearth-tui's go3 home-screen panel rides this alias too (read-only, no sudo).
 {...}: {
   home.file.".local/bin/go3-deploy" = {
     executable = true;
