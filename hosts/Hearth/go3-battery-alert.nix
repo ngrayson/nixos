@@ -13,6 +13,11 @@
 # Wi-Fi, or not yet provisioned must never produce an alert — only a confirmed
 # low reading does. "Cannot reach Go3" is not a battery event.
 #
+# Once per episode: after the low alert posts, the first tick that finds Go3
+# plugged in again (Charging, Full or Not charging) posts one follow-up —
+# "charging again" / "plugged in again", with how low it got and how long ago
+# — then re-arms. Unreachable and Unknown ticks hold the state either way.
+#
 # Inert until Nick provisions the keypair: without secrets/hearth-go3-checkin.yaml
 # this module defines nothing at all, so Hearth still evaluates and builds.
 {
@@ -26,90 +31,10 @@
   keySecret = ../../secrets/hearth-go3-checkin.yaml;
   haveKey = builtins.pathExists keySecret;
 
-  hearthchimePost = import ./hearthchime.nix {inherit pkgs;};
-
-  alert = pkgs.writeShellApplication {
-    name = "hearth-go3-battery-alert";
-    runtimeInputs = [pkgs.coreutils pkgs.openssh pkgs.tailscale hearthchimePost];
-    text = ''
-      set -euo pipefail
-
-      THRESHOLD=${toString thresholdPct}
-      REARM=${toString rearmPct}
-      KEY="''${HEARTH_GO3_CHECKIN_KEY:-/run/secrets/hearth-go3-checkin}"
-      KNOWN_HOSTS="''${HEARTH_GO3_CHECKIN_KNOWN_HOSTS:-/var/lib/hearth-go3-checkin/known_hosts}"
-      PEER="''${HEARTH_GO3_CHECKIN_PEER:-go3}"
-      # Its own state file: Go3's discharge cycle and Hearth's are unrelated
-      # and must not share a fired marker.
-      STATE_DIR="''${HEARTH_GO3_BATTERY_ALERT_STATE_DIR:-/run/hearth-go3-battery-alert}"
-      STATE="$STATE_DIR/fired"
-
-      mkdir -p "$STATE_DIR"
-
-      if [[ ! -r "$KEY" ]]; then
-        echo "check-in key unreadable; skipping" >&2
-        exit 0
-      fi
-
-      # Hearth runs tailscale with --accept-dns=false (see remote-access.nix:
-      # MagicDNS as the only resolver hung public lookups on this LAN), so
-      # go3.tail6cd822.ts.net does not resolve here. Ask tailscaled for the
-      # peer address instead of hardcoding one — its socket answers queries
-      # without root, and this survives the node being re-added.
-      addr="$(tailscale ip -4 "$PEER" 2>/dev/null || true)"
-      if [[ -z "$addr" ]]; then
-        echo "go3 has no tailnet address right now; skipping" >&2
-        exit 0
-      fi
-
-      # The remote command is irrelevant — Go3's authorized_keys forces its own
-      # — but passing one avoids requesting a PTY. BatchMode so this can never
-      # block an unattended timer on a prompt.
-      readout="$(ssh -F /dev/null -i "$KEY" \
-        -o IdentitiesOnly=yes \
-        -o BatchMode=yes \
-        -o StrictHostKeyChecking=accept-new \
-        -o UserKnownHostsFile="$KNOWN_HOSTS" \
-        -o ConnectTimeout=10 \
-        -l wiz "$addr" true 2>/dev/null || true)"
-
-      if [[ -z "$readout" ]]; then
-        # Asleep, off the network, or the public key is not on Go3 yet.
-        echo "no battery readout from go3; skipping" >&2
-        exit 0
-      fi
-
-      pct="''${readout%% *}"
-      status="''${readout##* }"
-      if [[ ! "$pct" =~ ^[0-9]+$ ]]; then
-        echo "unexpected readout from go3; skipping" >&2
-        exit 0
-      fi
-
-      # Rearm on charge or on recovering past the margin, so the next genuine
-      # discharge cycle alerts again.
-      if [[ "$status" != "Discharging" ]] || [[ "$pct" -ge "$REARM" ]]; then
-        rm -f "$STATE"
-        exit 0
-      fi
-
-      if [[ "$pct" -ge "$THRESHOLD" ]]; then
-        exit 0
-      fi
-      # Already reported this discharge cycle.
-      if [[ -e "$STATE" ]]; then
-        exit 0
-      fi
-
-      msg="Go3 kiosk battery at ''${pct}% and discharging below ''${THRESHOLD}%. The house may have lost power."
-      if [[ "''${HEARTH_GO3_BATTERY_ALERT_DRY_RUN:-}" == "1" ]]; then
-        printf '%s\n' "$msg"
-      else
-        hearth-hearthchime-post "$msg"
-      fi
-      : >"$STATE"
-    '';
-  };
+  # The script lives in its own file so the flake's
+  # hearth-go3-battery-alert-tests check can build and drive it without the
+  # Hearth closure.
+  alert = import ./go3-battery-alert/script.nix {inherit pkgs thresholdPct rearmPct;};
 in
   lib.mkIf haveKey {
     sops.secrets.hearth-go3-checkin = {
@@ -132,13 +57,12 @@ in
         ExecStart = "${alert}/bin/hearth-go3-battery-alert";
         # known_hosts needs somewhere durable; ProtectHome hides the real one,
         # so give ssh a HOME it can actually use.
-        StateDirectory = "hearth-go3-checkin";
+        # The second directory holds the low-alert latch and last-readout. It
+        # is /var/lib, not /run, because a house power loss — the event this
+        # alert reports — can reboot Hearth too, and a /run latch would then
+        # either re-post the low alert or never post the follow-up.
+        StateDirectory = ["hearth-go3-checkin" "hearth-go3-battery-alert"];
         Environment = ["HOME=/var/lib/hearth-go3-checkin"];
-        # As in battery-alert.nix: /run is read-only under ProtectSystem=strict,
-        # and a oneshot would lose the fired marker on every exit without
-        # RuntimeDirectoryPreserve — re-posting on the next poll.
-        RuntimeDirectory = "hearth-go3-battery-alert";
-        RuntimeDirectoryPreserve = "yes";
         ProtectSystem = "strict";
         ProtectHome = true;
         PrivateTmp = true;

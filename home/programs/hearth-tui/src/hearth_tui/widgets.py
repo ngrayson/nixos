@@ -14,8 +14,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
+from rich.markup import escape
 from textual import work
 from textual.message import Message
 from textual.widgets import ListItem, ListView, Static
@@ -70,6 +72,42 @@ df -P -B1 / /mnt/cold 2>/dev/null | awk 'NR>1 {print "disk:" $6 "=" $3 "/" $2}'
 """
 
 
+# The go3 panel's one round trip, run on the kiosk over the `go3` alias. No
+# `set -e`: every line survives a missing tool or file, so one absent field
+# drops its own line rather than blanking the panel. The stats server is hit
+# on /health ONLY — every /stats.json request resets the counter the kiosk
+# watchdog (hosts/Go3/kiosk-watchdog.nix) reads as "the dashboard page is
+# alive", so a TUI refresh there would hide a dead page for ten more minutes.
+# /health reports that counter without touching it.
+GO3_STATUS_SCRIPT = """
+echo "uptime_s=$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+echo "gen=$(readlink /run/current-system 2>/dev/null)"
+echo "cage=$(systemctl is-active cage-tty1 2>/dev/null || true)"
+echo "chromium=$(pgrep -c chromium 2>/dev/null || echo 0)"
+echo "page_silence=$(curl -fsS --max-time 3 http://127.0.0.1:18090/health 2>/dev/null | jq -r '.seconds_since_stats_request // "null"' 2>/dev/null)"
+for d in /sys/class/power_supply/BAT*; do
+  [ -r "$d/capacity" ] || continue
+  echo "bat_pct=$(cat "$d/capacity")"; echo "bat_status=$(cat "$d/status" 2>/dev/null)"; break
+done
+echo "stage=$(cat /run/go3-display/state 2>/dev/null)"
+echo "brightness=$(cat /sys/class/backlight/intel_backlight/brightness 2>/dev/null)"
+echo "max_brightness=$(cat /sys/class/backlight/intel_backlight/max_brightness 2>/dev/null)"
+echo "wifi=$(nmcli -t -f active,signal dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
+echo "camera_wake=$(journalctl -q -u go3-camera-wake -n 1 -g 'motion: delta' --no-pager -o short-iso 2>/dev/null | cut -d' ' -f1)"
+"""
+
+# hosts/Go3/kiosk-watchdog.nix `maxSilence`: past this the watchdog restarts
+# the kiosk, so a longer silence is already a fault.
+GO3_PAGE_MAX_SILENCE_S = 600
+# hosts/Hearth/go3-battery-alert.nix `thresholdPct`: the level at which Hearth
+# alerts on a discharging kiosk.
+GO3_BATTERY_ALERT_PCT = 25
+# The same explicit set as the Hearth alert's "on mains". `Unknown` is in
+# neither set there (it holds), so it renders dim here rather than green.
+_GO3_ON_MAINS = {"Charging", "Full", "Not charging"}
+_GO3_STAGE_COLOURS = {"awake": "green", "dim": "yellow", "off": "dim"}
+
+
 def _parse_system_stats(
     text: str,
 ) -> tuple[
@@ -109,6 +147,143 @@ def _parse_system_stats(
                 seen_mounts.add(mount)
                 disks.append((mount, int(used), int(total)))
     return cpu_pct, mem_total_kb, mem_avail_kb, temps, disks
+
+
+def _parse_go3_status(text: str) -> dict[str, str]:
+    """Split GO3_STATUS_SCRIPT's `key=value` lines into a dict.
+
+    Malformed lines and empty values are dropped, so a field whose tool or
+    file was missing simply has no key — the renderer omits that line.
+    """
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key and value.strip():
+            fields[key] = value.strip()
+    return fields
+
+
+def _go3_peer() -> dict | None:
+    """What this machine's tailnet view says about Go3: {"online", "last_seen"}.
+
+    Only consulted once ssh has failed. `LastSeen` is the year-0001 zero date
+    while a peer is online, so callers show it only when `online` is False.
+    None on any failure — no tailscale, a timeout, bad JSON, or no Go3 peer.
+    """
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        status = json.loads(result.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return None
+    for peer in (status.get("Peer") or {}).values():
+        if str(peer.get("HostName", "")).lower() == "go3":
+            return {
+                "online": bool(peer.get("Online")),
+                "last_seen": str(peer.get("LastSeen", "")),
+            }
+    return None
+
+
+def _format_duration(seconds: int) -> str:
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days:
+        return f"{days}d {hours}h {minutes}m"
+    return f"{hours}h {minutes}m"
+
+
+def _go3_generation(path: str) -> str:
+    """`/nix/store/<hash>-nixos-system-Go3-26.05.20260825.f4f6986` → `f4f6986`,
+    falling back to the store hash's first 7 characters."""
+    name = path.rstrip("/").rsplit("/", 1)[-1]
+    if "-nixos-system-" in name:
+        version = name.rsplit("-", 1)[-1]
+        if "." in version:
+            return version.rsplit(".", 1)[-1]
+    return name[:7]
+
+
+def _render_go3(fields: dict[str, str]) -> list[str]:
+    """Rich-markup lines for the go3 panel; each is omitted when its keys are."""
+    lines: list[str] = []
+
+    up = []
+    if fields.get("uptime_s", "").isdigit():
+        up.append(_format_duration(int(fields["uptime_s"])))
+    if "gen" in fields:
+        up.append(f"gen {_go3_generation(fields['gen'])}")
+    if up:
+        lines.append("up      " + "   ".join(up))
+
+    if "cage" in fields or "chromium" in fields or "page_silence" in fields:
+        kiosk = []
+        if "cage" in fields:
+            colour = "green" if fields["cage"] == "active" else "red"
+            kiosk.append(f"cage [{colour}]{fields['cage']}[/{colour}]")
+        if "chromium" in fields:
+            count = fields["chromium"]
+            kiosk.append(f"chromium [red]{count}[/red]" if count == "0" else f"chromium {count}")
+        silence = fields.get("page_silence")
+        if silence is None:
+            kiosk.append("[dim]stats server down[/dim]")
+        elif silence == "null":
+            kiosk.append("[red]page never polled[/red]")
+        else:
+            try:
+                seconds = float(silence)
+            except ValueError:
+                kiosk.append(f"[dim]page {silence}[/dim]")
+            else:
+                colour = "green" if seconds <= GO3_PAGE_MAX_SILENCE_S else "yellow"
+                kiosk.append(f"[{colour}]page polled {seconds:.1f}s ago[/{colour}]")
+        lines.append("kiosk   " + "   ".join(kiosk))
+
+    pct_text = fields.get("bat_pct", "")
+    if pct_text.isdigit():
+        pct = int(pct_text)
+        status = fields.get("bat_status", "")
+        if status in _GO3_ON_MAINS:
+            colour = "green"
+        elif status == "Discharging":
+            colour = "red" if pct < GO3_BATTERY_ALERT_PCT else "yellow"
+        else:
+            colour = "dim"
+        lines.append(f"battery [{colour}]{pct}%  {status or '?'}[/{colour}]")
+        lines.append("  " + render_bar(pct / 100, colour))
+
+    if "stage" in fields or "brightness" in fields:
+        stage = fields.get("stage")
+        if stage is None:
+            panel = "[dim](no state file)[/dim]"
+        else:
+            colour = _GO3_STAGE_COLOURS.get(stage, "red")
+            panel = f"[{colour}]{stage}[/{colour}]"
+        level = fields.get("brightness", "")
+        top = fields.get("max_brightness", "")
+        if level.isdigit() and top.isdigit() and int(top) > 0:
+            panel += f"   backlight {level}/{top} ({round(int(level) / int(top) * 100)}%)"
+        lines.append("panel   " + panel)
+
+    wake = fields.get("camera_wake")
+    if wake:
+        # 2026-09-29T19:37:28-07:00 → 2026-09-29 19:37
+        lines.append(f"camera  last wake {wake[:16].replace('T', ' ')}")
+    else:
+        lines.append("camera  [dim]no motion wake in journal[/dim]")
+
+    if fields.get("wifi", "").isdigit():
+        signal = int(fields["wifi"])
+        colour = "green" if signal >= 50 else "yellow" if signal >= 30 else "red"
+        lines.append(f"wifi    [{colour}]{signal}%[/{colour}]")
+
+    return lines
 
 
 #  UNKNOWN is not a fault: tun devices like tailscale0 always report it while
@@ -309,6 +484,7 @@ class NetworkWidget(Static):
     DEFAULT_CSS = f"""
     NetworkWidget {{
         {WIDGET_BORDER_CSS}
+        {HALF_WIDTH_CSS}
     }}
     """
 
@@ -336,6 +512,59 @@ class NetworkWidget(Static):
         # Fall back to the raw output rather than an empty panel if the shape
         # is ever something the parser does not recognise.
         lines = _parse_network(text) or [text.strip() or "(no output)"]
+        self.app.call_from_thread(self.update, "\n".join(lines))
+
+
+class Go3StatusWidget(Static):
+    """The Go3 wall kiosk at a glance: reachable, kiosk/page alive, battery,
+    panel stage, last camera wake, Wi-Fi — one read-only ssh round trip over
+    the `go3` alias, no sudo. Refreshes with the other panels (mount, `r`,
+    screen resume) and never on a timer, to spare the kiosk's radio.
+    """
+
+    DEFAULT_CSS = f"""
+    Go3StatusWidget {{
+        {WIDGET_BORDER_CSS}
+        {HALF_WIDTH_CSS}
+    }}
+    """
+
+    def on_mount(self) -> None:
+        self.border_title = "go3"
+        self.refresh_data()
+
+    def refresh_data(self) -> None:
+        self.update(REFRESHING)
+        self.run_status()
+
+    @work(thread=True)
+    def run_status(self) -> None:
+        try:
+            result = ssh.run("bash", "-c", GO3_STATUS_SCRIPT, host=ssh.GO3_HOST, timeout=15)
+        except ssh.SshError as exc:
+            self.app.call_from_thread(self.update, f"[red]{escape(str(exc))}[/red]")
+            return
+        fields = _parse_go3_status(result.stdout)
+        if result.returncode != 0 and not fields:
+            # ssh.run returns rather than raises when the connection fails (Go3
+            # off, sshd down, name unresolvable): one honest line, then what the
+            # tailnet knows.
+            reason = (result.stderr.strip().splitlines() or ["ssh failed"])[-1]
+            lines = [f"[red]unreachable[/red]  {escape(reason)}"]
+            peer = _go3_peer()
+            if peer is None:
+                lines.append("[dim]tailnet: no peer info (tailscale status failed)[/dim]")
+            elif peer["online"]:
+                lines.append(
+                    "[yellow]tailnet: online — sshd not answering "
+                    "(booting? nightly 03:30 reboot?)[/yellow]"
+                )
+            else:
+                seen = peer["last_seen"][:16].replace("T", " ")
+                lines.append(f"[red]tailnet: offline, last seen {seen}[/red]")
+            self.app.call_from_thread(self.update, "\n".join(lines))
+            return
+        lines = _render_go3(fields) or [escape(result.stdout.strip()) or "(no output)"]
         self.app.call_from_thread(self.update, "\n".join(lines))
 
 

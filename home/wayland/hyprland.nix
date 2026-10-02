@@ -188,10 +188,12 @@ in {
           # come back through IPC. The two $mod cycles above are deliberately
           # kept -- they are a working blind switcher, so a broken picker can
           # never leave the session stuck. The Alt RELEASE that commits the
-          # selection is detected by the overlay itself
-          # (quickshell/WindowSwitcher.qml), deliberately NOT by a bindr:
-          # Hyprland never delivers a release bind for a modifier that took
-          # part in another bind, and Alt+Tab always is one (PR #228).
+          # selection is NOT a bindr: a release bind on Alt is shadowed once
+          # the ALT+Tab bind has fired (KeybindManager.cpp shadowKeybinds,
+          # PR #228). The non-consuming `global` binds in `bindn` below are
+          # exempt and carry Alt's state to the bar; the key-up on the
+          # overlay's own surface (quickshell/WindowSwitcher.qml) is the
+          # fallback.
           # Return and Esc while Alt is held are the two ALT binds above,
           # routed through hypr-alt-return / hypr-alt-escape, which ask the
           # bar whether the overlay is open and fall through to kitty /
@@ -209,6 +211,20 @@ in {
           ", XF86MonBrightnessUp, exec, ${lib.getExe pkgs.brightnessctl} -c backlight set +5%"
           ", XF86MonBrightnessDown, exec, ${lib.getExe pkgs.brightnessctl} -c backlight set 5%-"
         ];
+      # Alt state for the alt-tab switcher (quickshell/shell.qml GlobalShortcut
+      # "quickshell:alt"). Non-consuming: the Alt press still reaches apps, and
+      # the release is forwarded regardless. `global` binds are never shadowed
+      # by the ALT+Tab bind, which is exactly why a plain bindr on Alt never
+      # fired after Alt+Tab (PR #228). Four lines because press matching is
+      # exact-modmask, and the mask at an Alt press excludes Alt itself but
+      # includes a held Shift. Inert on a host whose bar has not registered the
+      # shortcut.
+      bindn = [
+        ", Alt_L, global, quickshell:alt"
+        "SHIFT, Alt_L, global, quickshell:alt"
+        ", Alt_R, global, quickshell:alt"
+        "SHIFT, Alt_R, global, quickshell:alt"
+      ];
       bindm = [
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"

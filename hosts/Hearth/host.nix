@@ -103,7 +103,15 @@ in {
   fileSystems."/mnt/cold" = {
     device = "/dev/disk/by-uuid/22C21140C2111A1D";
     fsType = "ntfs";
+    # noauto: an auto entry is WantedBy=local-fs.target, and every
+    # DefaultDependencies=yes unit pulls local-fs.target, so with COLD parked
+    # each timer tick re-queued a 10s mount attempt plus a Jellyfin start.
+    # Who mounts it instead: at boot jellyfin and syncthing via
+    # RequiresMountsFor=/mnt/cold (both multi-user.target), on late spin-up or
+    # replug the udev rule in disk.nix, by hand `hearth-disk resume`. Not
+    # x-systemd.automount: a parked disk would hang every path access 10s.
     options = [
+      "noauto"
       "nofail"
       "x-systemd.device-timeout=10s"
       "uid=0"
