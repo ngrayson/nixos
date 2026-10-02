@@ -2485,7 +2485,10 @@ ShellRoot {
 
 			WlrLayershell.layer: WlrLayer.Overlay
 			WlrLayershell.namespace: "qs-window-switcher-" + modelData.name
-			WlrLayershell.keyboardFocus: (switcherOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+			// `regrabbing` drops to None for one short tick so Hyprland re-focuses
+			// the overlay after a preview handed the keyboard to a window
+			// (WindowSwitcher.qml, onActiveFocusChanged).
+			WlrLayershell.keyboardFocus: (switcherOpen && isCenterScreen && !switcher.regrabbing) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
 			anchors.top: true
 			anchors.bottom: true

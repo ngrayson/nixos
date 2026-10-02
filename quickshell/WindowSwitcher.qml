@@ -61,13 +61,13 @@ Item {
 	// windows do, so the previous good answer is the right fallback.
 	property var monitorRectsCache: []
 
-	// Live preview state. The preview is a REVEAL, never a focus: while this
-	// overlay holds exclusive keyboard focus Hyprland 0.55.4 refuses every
-	// window focus (FocusState.cpp:107-110 rawWindowFocus), and the overlay
-	// must keep that exclusivity to receive the Alt release. So stepping
-	// switches the highlighted window's workspace in on its own monitor and
-	// raises it if floating; keyboard focus and Hyprland's focus history are
-	// untouched until the commit focuses exactly once.
+	// Live preview state. The preview is a REVEAL: stepping switches the
+	// highlighted window's workspace in on its own monitor and raises it if
+	// floating. On the side monitors that leaves keyboard focus and Hyprland's
+	// focus history alone. On the overlay's OWN monitor Hyprland 0.55.4 hands
+	// the keyboard to the revealed workspace's window anyway (measured
+	// 2026-10-02, see the re-grab below), so the overlay takes it straight
+	// back and the row order is frozen while open (rebuild()).
 	//
 	// monitorSnapshot: name -> { workspaceId, focused }, taken at open.
 	// flippedMonitors: name -> ORIGINAL workspace id, only monitors the
@@ -167,6 +167,8 @@ Item {
 		} else {
 			// A late tick must never flip a workspace after the overlay is gone.
 			previewTimer.stop();
+			regrabTimer.stop();
+			root.regrabbing = false;
 			// The IPC dismiss paths close us without going through cancel(),
 			// so the restore has to live here too. A commit keeps the target
 			// monitor's reveal; it restored the others itself.
@@ -430,6 +432,22 @@ Item {
 		if (haveFocusHistory)
 			list.sort((a, b) => a.focusHistory - b.focusHistory);
 
+		// Row order is frozen for the life of an open overlay. A center-monitor
+		// preview really does move Hyprland's focus (see the re-grab below),
+		// which rewrites focusHistoryID, and the settle rebuilds would then
+		// re-sort the rows under the highlight. Keep the order the first
+		// populated rebuild chose; windows that appeared since go at the end.
+		if (hadWindows) {
+			const rank = {};
+			for (let k = 0; k < root.windows.length; ++k)
+				rank[root.windows[k].address] = k;
+			const known = list.filter(e => e.address in rank);
+			const fresh = list.filter(e => !(e.address in rank));
+			known.sort((a, b) => rank[a.address] - rank[b.address]);
+			list.length = 0;
+			Array.prototype.push.apply(list, known.concat(fresh));
+		}
+
 		root.windows = list;
 
 		if (hadWindows && previousAddress) {
@@ -557,10 +575,11 @@ Item {
 		// where focuswindow's own warpCursor() puts the cursor anyway.
 		if (warp)
 			Hyprland.dispatch("movecursor " + warp.x + " " + warp.y);
-		// Focus happens only here, never during the preview: Hyprland refuses
-		// a window focus while this overlay holds exclusive keyboard focus
-		// (FocusState.cpp:107-110), so the preview reveals and the commit
-		// focuses. HyprlandToplevel has no activate() in Quickshell 0.3.0.
+		// The one deliberate focus. A focuswindow during the preview is refused
+		// while this overlay holds exclusive keyboard focus (FocusState.cpp:
+		// 107-110); the only focus changes before this are the ones Hyprland
+		// makes itself on a center-monitor flip (see the re-grab).
+		// HyprlandToplevel has no activate() in Quickshell 0.3.0.
 		Hyprland.dispatch("focuswindow address:" + entry.address);
 	}
 
@@ -650,6 +669,37 @@ Item {
 	//
 	// `armed` is what keeps mouse-browse honest: only request() sets it, so
 	// an Alt tap while browsing via `toggle` is inert (verified: armed=false).
+	// Take the keyboard back whenever it is taken from us while open.
+	//
+	// Measured on Tawa 2026-10-02 (Hyprland 0.55.4): a preview that switches
+	// the workspace on the overlay's OWN monitor hands keyboard focus to that
+	// workspace's window despite the exclusive layer -- the whole surface goes
+	// inactive (Window.active false, wl_keyboard.leave), and hyprctl's active
+	// window changes. Usually it bounced back within ~16 ms, but once stayed
+	// away for 9 s, and an Alt release in that gap went to the window, so the
+	// switcher never committed. Flips on the other monitors never did this.
+	//
+	// The re-grab drops the layer's keyboard interactivity to None for one
+	// short tick and restores Exclusive; Hyprland treats the second commit as a
+	// fresh exclusive surface and focuses it (shell.qml binds keyboardFocus to
+	// `regrabbing`).
+	property bool regrabbing: false
+
+	Timer {
+		id: regrabTimer
+		interval: 30
+		repeat: false
+		onTriggered: root.regrabbing = false
+	}
+
+	onActiveFocusChanged: {
+		if (root.active && !root.activeFocus && !root.regrabbing) {
+			console.log("switcher: regrab t=" + Date.now());
+			root.regrabbing = true;
+			regrabTimer.restart();
+		}
+	}
+
 	Keys.onReleased: event => {
 		if (event.key !== Qt.Key_Alt)
 			return;
