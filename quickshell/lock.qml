@@ -58,12 +58,9 @@ ShellRoot {
 			// `hyprctl dispatch dpms on` from another machine.
 			//
 			// Cheap, because lockContext is one shared object: every surface
-			// mirrors the same typed text and the same failure shake. Keyboard
-			// focus still lands on exactly one surface, via `primary`.
-			readonly property bool isPrimaryOutput: {
-				const c = CenterOutput.screen();
-				return c && screen && c.name === screen.name;
-			}
+			// mirrors the same typed text and the same failure shake. Hyprland
+			// gives keys to the surface under the cursor, and every surface
+			// accepts them, so typing works whichever output the cursor is on.
 
 			color: Theme.bg
 
@@ -72,7 +69,6 @@ ShellRoot {
 				context: lockContext
 				preview: false
 				showUi: true
-				primary: lockSurface.isPrimaryOutput
 			}
 		}
 	}
