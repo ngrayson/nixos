@@ -2,7 +2,7 @@
 # The package and module live in pkgs/scry; this file only supplies the secret and turns it on.
 # secrets/scry.env holds CONVEYOR_API_URL, CONVEYOR_USER_TOKEN, CONVEYOR_PROJECT_ID,
 # DISCORD_WEBHOOK_URL, NOTION_TOKEN (`sops secrets/scry.env`). Never print it.
-# On demand: `sudo scry-now`.
+# On demand: `sudo scry-now`. File a task in Nick's Tasks: `sudo scry-task <text>` (hearth-tui wraps it).
 {config, ...}: {
   imports = [../../pkgs/scry/module.nix];
 

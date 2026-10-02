@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, RichLog, Static
+from textual.widgets import Button, Input, RichLog, Static
 
 from hearth_tui import ssh
 from hearth_tui.disk_action import DiskAction, confirm_message, render_rows
@@ -203,5 +204,102 @@ class DiskActionModal(ModalScreen[None]):
     def _finish(self) -> None:
         self._phase = "done"
         close = self.query_one("#disk-close", Button)
+        close.display = True
+        close.focus()
+
+
+class ScryTaskModal(ModalScreen[None]):
+    """File one task in Nick's Tasks (Notion) via `scry-task` on Hearth.
+
+    Same input → running → done shape as DiskActionModal. The grammar and the
+    Notion schema live once, in pkgs/scry/task.mjs; this dialog only hands the
+    typed line over ssh and shows the URL (or the error) it gets back. The
+    Notion token never leaves Hearth.
+    """
+
+    DEFAULT_CSS = f"""
+    ScryTaskModal {{
+        align: center middle;
+    }}
+    ScryTaskModal #scry-dialog {{
+        {DIALOG_CSS}
+        width: 70%;
+        max-width: 90;
+    }}
+    ScryTaskModal #scry-hint {{
+        margin-bottom: 1;
+    }}
+    ScryTaskModal #scry-log {{
+        height: auto;
+        max-height: 8;
+        margin: 1 0;
+    }}
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Close", show=False),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._phase = "input"
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="scry-dialog"):
+            yield Static(
+                "[b]Scry — file a task in Nick's Tasks (Notion)[/b]\n"
+                "[dim]p0-p3  #area  due:2026-10-04|oct 4|fri|+3d|tomorrow  @agent|@collab[/dim]",
+                id="scry-hint",
+            )
+            yield Input(placeholder="Replace COLD drive p2 #hearth due:fri", id="scry-text")
+            yield RichLog(id="scry-log", wrap=True, markup=True)
+            yield Button("Close", id="scry-close", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#scry-log", RichLog).display = False
+        self.query_one("#scry-close", Button).display = False
+        self.query_one("#scry-text", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        text = event.value.strip()
+        if not text or self._phase != "input":
+            return
+        self._phase = "running"
+        event.input.disabled = True
+        log = self.query_one("#scry-log", RichLog)
+        log.display = True
+        log.write("[b]filing…[/b]")
+        self.file_task(text)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.action_cancel()
+
+    def action_cancel(self) -> None:
+        # Inert while filing: the row may already exist, so leaving before the
+        # URL comes back would hide whether it did.
+        if self._phase == "running":
+            return
+        self.dismiss(None)
+
+    @work(thread=True)
+    def file_task(self, text: str) -> None:
+        log = self.query_one("#scry-log", RichLog)
+        try:
+            # ssh._remote_command shlex-joins the text into one argv element,
+            # so quotes, `#` and `@` reach scry-task intact.
+            result = ssh.run("scry-task", text, sudo=True, timeout=30)
+            if result.returncode == 0:
+                msg = f"[green]filed[/green] {result.stdout.strip()}"
+            else:
+                err = (result.stderr or result.stdout).strip() or "scry-task failed"
+                msg = f"[red]{escape(err)}[/red]"
+        except ssh.SshError as exc:
+            msg = f"[red]{escape(str(exc))}[/red]"
+        self.app.call_from_thread(log.write, msg)
+        self.app.call_from_thread(self._finish)
+
+    def _finish(self) -> None:
+        self._phase = "done"
+        close = self.query_one("#scry-close", Button)
         close.display = True
         close.focus()

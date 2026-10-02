@@ -10,6 +10,9 @@
 #
 # `scry-now` is installed as a command for on-demand runs: it starts scry.service (so the run gets the
 # service's EnvironmentFile and sandbox) and prints that run's log. Needs root, like any unit start.
+#
+# `scry-task <text>` files one row in Nick's Tasks (Notion) from inbox-grammar text (task.mjs) and
+# prints its URL; hearth-tui's "Scry — file a task" calls it over ssh. Also root, for the same reason.
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.scry;
@@ -19,14 +22,14 @@ let
     # Only what the build reads, so README/module edits do not rebuild the package.
     src = lib.fileset.toSource {
       root = ./.;
-      fileset = lib.fileset.unions [ ./package.json ./package-lock.json ./digest.mjs ./preload.cjs ];
+      fileset = lib.fileset.unions [ ./package.json ./package-lock.json ./digest.mjs ./task.mjs ./preload.cjs ];
     };
     npmDepsHash = "sha256-FZA+we/8wPU8fJHLD9K9BHICPB7h9jGgJtNoRIBpF5E=";
     dontNpmBuild = true;
     # cv.mjs (a general-purpose Conveyor CLI) is a dev tool and stays out of the installed package.
     installPhase = ''
       mkdir -p $out/lib/scry
-      cp -r digest.mjs preload.cjs package.json node_modules $out/lib/scry/
+      cp -r digest.mjs task.mjs preload.cjs package.json node_modules $out/lib/scry/
     '';
   };
   digest = pkgs.writeShellScript "scry-digest" ''
@@ -63,6 +66,16 @@ let
     journalctl -u scry.service --since "$since" --no-pager -o cat
     exit $rc
   '';
+  # One row in Nick's Tasks (Notion) from inbox-grammar text. Runs in a transient unit so the
+  # secret file is read by systemd as root and the node process gets the same sandbox as scry.service.
+  # --pipe hands the unit's stdout/stderr back to the caller; --wait returns its exit code.
+  taskRunner = pkgs.writeShellScriptBin "scry-task" ''
+    [ $# -gt 0 ] || { echo "usage: scry-task <text> [p0-p3] [#area] [due:<date>] [@agent|@collab]" >&2; exit 2; }
+    exec systemd-run --quiet --wait --pipe --collect \
+      -p DynamicUser=yes -p EnvironmentFile=${cfg.environmentFile} \
+      -p PrivateTmp=yes -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes \
+      ${pkgs.nodejs}/bin/node ${scry}/lib/scry/task.mjs "$@"
+  '';
 in
 {
   options.services.scry = {
@@ -89,7 +102,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ runner ];
+    environment.systemPackages = [ runner taskRunner ];
 
     systemd.services.scry = {
       description = "Scrying Orb: scry digest (Conveyor + Notion → Discord)";
