@@ -39,6 +39,9 @@
 
   # BindsTo stops jellyfin when COLD unmounts. WantedBy the mount starts it
   # again on remount/replug. Keep the module's wantedBy = multi-user.target.
+  # WantedBy also drags a Jellyfin start job along with every mount start job,
+  # which is fine only because the fstab entry is noauto (host.nix): nothing
+  # enqueues the mount while COLD is parked.
   systemd.services.jellyfin = {
     after = ["mnt-cold.mount"];
     bindsTo = ["mnt-cold.mount"];
