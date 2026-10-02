@@ -3,19 +3,26 @@
 Every remote call goes through the `Host hearth` alias defined in
 `~/.ssh/config.d/hearth` (home/programs/ssh-hearth.nix) — OpenSSH on port 22,
 the same trust boundary scripts/hearth-deploy.sh and the `hearth-unmount`
-alias already use. Never hardcode Hearth's LAN IP or the Tailscale MagicDNS
-name here.
+alias already use. The one exception is the home screen's go3 panel, which
+passes `host=GO3_HOST` to `run()` to read the wall kiosk over the `Host go3`
+alias (home/programs/ssh-go3.nix) instead. Never hardcode an IP or a
+Tailscale MagicDNS name here.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import shlex
 import subprocess
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 HOST = "hearth"
+# The Go3 kiosk, via the `Host go3` alias from home/programs/ssh-go3.nix.
+# GO3_SSH_TARGET is the same override scripts/go3-deploy.sh honours, and is
+# how the unreachable path is exercised without touching the kiosk.
+GO3_HOST = os.environ.get("GO3_SSH_TARGET", "go3")
 
 
 class SshError(Exception):
@@ -42,15 +49,17 @@ def _remote_command(args: tuple[str, ...], sudo: bool) -> str:
     return shlex.join(remote)
 
 
-def run(*args: str, sudo: bool = False, timeout: float = 15) -> subprocess.CompletedProcess:
-    """Run a short-lived command on Hearth and capture its output."""
+def run(
+    *args: str, sudo: bool = False, timeout: float = 15, host: str = HOST
+) -> subprocess.CompletedProcess:
+    """Run a short-lived command on Hearth (or `host`) and capture its output."""
     cmd = [
         "ssh",
         "-o",
         "BatchMode=yes",
         "-o",
         "ConnectTimeout=8",
-        HOST,
+        host,
         _remote_command(args, sudo),
     ]
     try:
@@ -65,9 +74,9 @@ def run(*args: str, sudo: bool = False, timeout: float = 15) -> subprocess.Compl
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise SshError(f"{HOST}: timed out after {timeout}s running {args[0]}") from exc
+        raise SshError(f"{host}: timed out after {timeout}s running {args[0]}") from exc
     except OSError as exc:
-        raise SshError(f"{HOST}: {exc}") from exc
+        raise SshError(f"{host}: {exc}") from exc
 
 
 async def stream(*args: str, sudo: bool = False) -> AsyncIterator[str]:

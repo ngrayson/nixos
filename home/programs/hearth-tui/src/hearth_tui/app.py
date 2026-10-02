@@ -4,6 +4,8 @@ Wraps the SSH commands already run against Hearth (scripts/hearth-healthcheck.sh
 hearth-disk, scripts/hearth-deploy.sh, restic, journalctl, scry-task) as Textual screens
 instead of re-deriving their logic — see each screen module's docstring.
 Run from Tawa/Theseus; talks to Hearth over the `hearth` SSH alias (hearth_tui.ssh).
+The home screen's go3 panel also reads the Go3 wall kiosk, read-only, over the
+`go3` alias.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from hearth_tui.screens.deploy import DeployScreen
 from hearth_tui.screens.logs import LogsScreen
 from hearth_tui.widgets import (
     DiskStatusWidget,
+    Go3StatusWidget,
     HealthcheckWidget,
     MenuList,
     NetworkWidget,
@@ -32,8 +35,9 @@ from hearth_tui.widgets import (
 )
 
 # One entry per screen. Children add to this dict and to MENU_ITEMS —
-# a one-line change each, per the pack's plan. Status/restic/disk status are
-# home-screen widgets, not screens — see hearth_tui.widgets.
+# a one-line change each, per the pack's plan. Status/restic/disk status and
+# the go3 kiosk panel are home-screen widgets, not screens — see
+# hearth_tui.widgets.
 SCREENS: dict[str, type[Screen]] = {
     "deploy": DeployScreen,
     "logs": LogsScreen,
@@ -85,7 +89,9 @@ class MainMenu(Screen):
                 with Vertical(id="disk-system-col"):
                     yield DiskStatusWidget()
                     yield SystemWidget()
-            yield NetworkWidget()
+            with Horizontal():
+                yield NetworkWidget()
+                yield Go3StatusWidget()
             with Horizontal():
                 yield ResticRunWidget()
                 yield ResticSnapshotsWidget()
@@ -112,6 +118,7 @@ class MainMenu(Screen):
         self.query_one(DiskStatusWidget).refresh_data()
         self.query_one(SystemWidget).refresh_data()
         self.query_one(NetworkWidget).refresh_data()
+        self.query_one(Go3StatusWidget).refresh_data()
         self.query_one(ResticRunWidget).refresh_data()
         self.query_one(ResticSnapshotsWidget).refresh_data()
 

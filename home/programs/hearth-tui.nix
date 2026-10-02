@@ -6,6 +6,9 @@
 # Every screen wraps an existing script (scripts/hearth-healthcheck.sh,
 # hearth-disk, scripts/hearth-deploy.sh) instead of re-deriving its logic in
 # Python, so the TUI can never drift from what those scripts actually gate.
+#
+# The home screen's go3 panel also reads the Go3 kiosk over the `go3` alias
+# (home/programs/ssh-go3.nix): one read-only ssh round trip, no sudo.
 {pkgs, ...}: let
   hearth-tui = pkgs.python3Packages.buildPythonApplication {
     pname = "hearth-tui";
