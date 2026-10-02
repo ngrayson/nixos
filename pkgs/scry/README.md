@@ -17,7 +17,10 @@ New Conveyor projects and Notion areas show up automatically.
 
 ## Format
 
-Discord markdown headers: `# 🔮 Scrying Orb — <date>`, then `# General` (your Notion
+Discord markdown headers: `# 🔮 Scrying Orb — <date>`, then `# Due soon` (the
+next `maxItems` Notion tasks with a due date, sub-tasks included, soonest first
+with a long date and a relative countdown; overdue ones get a ⚠; omitted when
+nothing is dated), then `# General` (your Notion
 tasks), then `# Projects` with one `## [<project>](<board link>) — <counts>`
 per Conveyor project and the items waiting on you directly beneath it, oldest
 first: open decisions, your no-agent cards, open incidents, verify-live,

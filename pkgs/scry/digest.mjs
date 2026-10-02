@@ -172,6 +172,23 @@ const renderNotion = (t) => {
   return `- ${link(t.title, t.url)}${subs}${bits ? ` [${bits}]` : ""}${when}`;
 };
 
+// # Due soon — the next MAX dated Notion tasks (sub-tasks included, Type=Agent excluded), soonest first,
+// same-day ties broken by priority. Overdue ones float to the top and get a ⚠.
+const stamp = (due, style) => {
+  const unix = due.includes("T") ? Math.floor(new Date(due).getTime() / 1000)
+    : (([y, m, d]) => Math.floor(Date.UTC(y, m - 1, d, 19) / 1000))(due.split("-").map(Number));
+  return `<t:${unix}:${style}>`;
+};
+const dueSoon = notion.tasks
+  .filter((t) => t.due && t.assignee !== "Agent")
+  .sort((a, b) => a.due.localeCompare(b.due) || (PRI[a.priority] ?? 9) - (PRI[b.priority] ?? 9))
+  .slice(0, MAX);
+if (dueSoon.length) {
+  lines.push(`# Due soon`);
+  for (const t of dueSoon)
+    lines.push(`- ${dayDiff(t.due.slice(0, 10)) < 0 ? "⚠ " : ""}${link(t.title, t.url)} — ${stamp(t.due, "D")} (${stamp(t.due, "R")})`);
+}
+
 // # General — Notion tasks (yours / collab), at the top.
 if (ntasks.length || !notion.enabled) {
   lines.push(`# General`);
