@@ -1,7 +1,7 @@
 """hearth-tui: a terminal dashboard for the Hearth home server.
 
 Wraps the SSH commands already run against Hearth (scripts/hearth-healthcheck.sh,
-hearth-disk, scripts/hearth-deploy.sh, restic, journalctl) as Textual screens
+hearth-disk, scripts/hearth-deploy.sh, restic, journalctl, scry-task) as Textual screens
 instead of re-deriving their logic — see each screen module's docstring.
 Run from Tawa/Theseus; talks to Hearth over the `hearth` SSH alias (hearth_tui.ssh).
 """
@@ -18,7 +18,7 @@ from textual.widgets import Footer, Header, ListItem, ListView, Static
 
 from hearth_tui import ssh
 from hearth_tui.disk_action import ACTION_LABELS, PENDING_LABEL, DiskAction, decide_disk_action
-from hearth_tui.modals import DiskActionModal
+from hearth_tui.modals import DiskActionModal, ScryTaskModal
 from hearth_tui.screens.deploy import DeployScreen
 from hearth_tui.screens.logs import LogsScreen
 from hearth_tui.widgets import (
@@ -39,13 +39,14 @@ SCREENS: dict[str, type[Screen]] = {
     "logs": LogsScreen,
 }
 
-# (name, label) — display order for the main menu. "disk" is not in SCREENS:
-# it opens a modal over the home screen instead, and its label is rewritten
-# from live status (see MainMenu.on_disk_status_widget_status_ready).
+# (name, label) — display order for the main menu. "disk" and "scry" are not in
+# SCREENS: each opens a modal over the home screen instead. The disk label is
+# rewritten from live status (see MainMenu.on_disk_status_widget_status_ready).
 MENU_ITEMS: list[tuple[str, str]] = [
     ("disk", PENDING_LABEL),
     ("deploy", "Deploy — hearth-deploy.sh actions"),
     ("logs", "Logs — live journalctl tail"),
+    ("scry", "Scry — file a task in Notion"),
 ]
 
 
@@ -129,6 +130,8 @@ class MainMenu(Screen):
         name = event.item.name
         if name == "disk":
             self.app.push_screen(DiskActionModal(self._disk_action, self._disk_rows))
+        elif name == "scry":
+            self.app.push_screen(ScryTaskModal())
         elif name in SCREENS:
             self.app.push_screen(SCREENS[name]())
 
