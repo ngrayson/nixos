@@ -180,10 +180,21 @@ ShellRoot {
 	signal windowSwitcherStep(int delta)
 
 	// Routed the same way as the step signal above, and banked by the switcher
-	// until its window list exists. The Alt-RELEASE gesture is detected inside
-	// WindowSwitcher.qml on its own focused surface, NOT here -- this signal
-	// carries the `commit` IPC, which is the tooling and test entry point.
+	// until its window list exists. The Alt-RELEASE gesture does NOT come
+	// through here: it arrives as the key-up on the overlay's own focused
+	// surface, and as windowSwitcherAltReleased below from Hyprland's global
+	// bind. This signal carries the `commit` IPC, which is tooling and tests.
 	signal windowSwitcherCommit()
+
+	// Alt key-up as reported by Hyprland's non-consuming global bind (see the
+	// altKey GlobalShortcut and home/wayland/hyprland.nix), routed like the
+	// step signal.
+	signal windowSwitcherAltReleased()
+
+	// True once the bar has seen any edge of the `quickshell:alt` shortcut.
+	// Without the binds (a host that has not switched yet) it stays false and
+	// the switcher ignores Alt state entirely.
+	property bool altStateKnown: false
 
 	// The center switcher's focus-recency list (WindowSwitcher.focusOrder),
 	// mirrored here so `ipc call switcher order` can print it without opening
@@ -1015,6 +1026,25 @@ ShellRoot {
 		// Return type required or quickshell will not register this for `ipc call power toggle`.
 		function toggle(): void {
 			shellRoot.powerMenuVisible = !shellRoot.powerMenuVisible;
+		}
+	}
+
+	// Alt state straight from Hyprland: `bindn = , Alt_L, global, quickshell:alt`
+	// (and the SHIFT / Alt_R variants) in home/wayland/hyprland.nix. `n` keeps
+	// the press reaching apps; `global` cannot be shadowed by the Alt+Tab bind
+	// the way a bindr is (KeybindManager.cpp shadowKeybinds; PR #228). Both
+	// edges arrive even when the overlay has no keyboard focus, which is the
+	// whole point. Registered ONCE per bar instance, here and never inside the
+	// per-screen Variants: a second registrant of the same appid:name gets a
+	// protocol error and dies, so count instances before and after every reload.
+	GlobalShortcut {
+		id: altKey
+		name: "alt"
+		description: "Alt held/released, read by the alt-tab switcher"
+		onPressed: shellRoot.altStateKnown = true
+		onReleased: {
+			shellRoot.altStateKnown = true;
+			shellRoot.windowSwitcherAltReleased();
 		}
 	}
 
@@ -2520,6 +2550,8 @@ ShellRoot {
 				anchors.fill: parent
 				active: windowSwitcherWin.switcherOpen && windowSwitcherWin.isCenterScreen
 				tracksFocus: windowSwitcherWin.isCenterScreen
+				altHeld: altKey.pressed
+				altStateKnown: shellRoot.altStateKnown
 				onDismissed: shellRoot.windowSwitcherVisible = false
 				onFocusOrderChanged: {
 					if (windowSwitcherWin.isCenterScreen)
@@ -2541,6 +2573,11 @@ ShellRoot {
 					function onWindowSwitcherCommit(): void {
 						if (windowSwitcherWin.isCenterScreen)
 							switcher.requestCommit();
+					}
+
+					function onWindowSwitcherAltReleased(): void {
+						if (windowSwitcherWin.isCenterScreen)
+							switcher.altReleased();
 					}
 				}
 			}
