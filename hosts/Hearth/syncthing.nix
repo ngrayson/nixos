@@ -196,10 +196,15 @@ in {
     };
   };
 
-  # Syncthing's state and both synced trees live on COLD.
+  # Syncthing's state and both synced trees live on COLD. Same wiring as
+  # jellyfin.nix: BindsTo stops Syncthing when COLD unmounts or vanishes,
+  # WantedBy the mount starts it again on remount/replug. Keep the module's
+  # wantedBy = multi-user.target.
   systemd.services.syncthing = {
     after = ["mnt-cold.mount"];
     wants = ["mnt-cold.mount"];
+    bindsTo = ["mnt-cold.mount"];
+    wantedBy = ["mnt-cold.mount"];
     unitConfig.RequiresMountsFor = ["/mnt/cold"];
 
     # The upstream module only creates dataDir for its own `syncthing` user
