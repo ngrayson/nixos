@@ -53,6 +53,26 @@ Item {
 	// lands on the previous window rather than on nothing.
 	property bool pendingCommit: false
 
+	// Alt's state as Hyprland reports it (shell.qml's altKey GlobalShortcut).
+	// altHeld defaults TRUE -- never infer "released" without evidence -- and
+	// altStateKnown stays false until an edge has been seen, so on a host
+	// without the binds neither can turn Alt+Tab into a blind cycle.
+	property bool altHeld: true
+	property bool altStateKnown: false
+	property real altReleasedAt: 0
+	// How recent an Alt release must be for request() to bank a commit on it.
+	// A window at all, because altHeld can read false while Alt is in fact
+	// held: a press made under a submap or with an extra modifier matches no
+	// bind and never reports. It must sit far above the measured worst
+	// request -> focus-in delay, and no human does Alt-up, Alt-down, Tab and
+	// an IPC round trip inside it.
+	property int altUpWindowMs: 300
+
+	// Diagnostics: which path committed (logged by activateCurrent()), and
+	// whether this open has logged its first focus-in yet.
+	property string commitSource: ""
+	property bool focusLogged: false
+
 	// Last monitor rectangles that were actually usable. refreshMonitors() is
 	// asynchronous and the model reads back empty or all-zero for a while
 	// after it is called, so recomputing from scratch on every rebuild would
@@ -218,6 +238,7 @@ Item {
 
 	onActiveChanged: {
 		if (root.active) {
+			root.focusLogged = false;
 			Hyprland.refreshMonitors();
 			// Before rebuild(), so the snapshot predates any preview.
 			root.snapshotMonitors();
@@ -257,6 +278,7 @@ Item {
 			// Never let anything banked against this open leak into the next one.
 			root.pendingSteps = 0;
 			root.pendingCommit = false;
+			root.commitSource = "";
 			root.armed = false;
 		}
 	}
@@ -582,6 +604,8 @@ Item {
 		// pendingSteps), and the tap has to commit the row the steps chose.
 		if (root.pendingCommit) {
 			root.pendingCommit = false;
+			if (!root.commitSource)
+				root.commitSource = "banked";
 			root.activateCurrent();
 		}
 	}
@@ -603,16 +627,53 @@ Item {
 	// mouse-browse opened with `toggle`.
 	function request(delta: int): void {
 		root.armed = true;
+		const now = Date.now();
 		console.log("switcher: request delta=" + delta + " active=" + root.active
-			+ " windows=" + root.windows.length + " t=" + Date.now());
-		if (root.active && root.windows.length > 0)
+			+ " windows=" + root.windows.length
+			+ " altHeld=" + root.altHeld + " known=" + root.altStateKnown
+			+ " sinceAltUp=" + (root.altReleasedAt > 0 ? now - root.altReleasedAt : -1)
+			+ " t=" + now);
+		// The tap that beat us: Alt already went up before this IPC arrived.
+		// Only trust it with evidence -- an edge seen since the bar started and a
+		// release inside the window -- so a missing bind or a stale state can
+		// never turn Alt+Tab into a blind cycle.
+		const altUp = root.altStateKnown && !root.altHeld
+			&& (now - root.altReleasedAt) <= root.altUpWindowMs;
+		if (root.active && root.windows.length > 0) {
 			root.step(delta);
-		else
+			if (altUp) {
+				root.commitSource = "alt-before-request";
+				root.requestCommit();
+			}
+		} else {
 			root.pendingSteps += delta;
+			// Banked BEFORE activation on purpose: shell.qml next() flips visible
+			// right after this call, rebuild() applies the steps then this
+			// commit, and the inactive branch of onActiveChanged still clears it
+			// on every close.
+			if (altUp) {
+				root.pendingCommit = true;
+				root.commitSource = "alt-before-request";
+			}
+		}
 	}
 
-	// Entry point for the QML Alt-release handler above, and for the `commit`
-	// IPC (tooling and tests). Banks ONLY while active: an inactive overlay
+	// Alt key-up from Hyprland's global bind. Arrives whether or not the
+	// overlay holds the keyboard, which is what catches the release that beats
+	// the surface's focus (the Keys.onReleased path below never hears it).
+	function altReleased(): void {
+		root.altReleasedAt = Date.now();
+		if (!root.active || !root.armed)
+			return;
+		console.log("switcher: Alt released(global) windows=" + root.windows.length
+			+ " t=" + Date.now());
+		root.commitSource = "alt-global";
+		root.requestCommit();
+	}
+
+	// Entry point for the QML Alt-release handler above, for altReleased() and
+	// the alt-before-request bank in request(), and for the `commit` IPC
+	// (tooling and tests). Banks ONLY while active: an inactive overlay
 	// must never carry a commit into its next open, and a release that beats
 	// the window list is applied by rebuild() once the list arrives.
 	function requestCommit(): void {
@@ -626,6 +687,9 @@ Item {
 
 	function activateCurrent(): void {
 		const entry = root.windows[root.currentIndex];
+		console.log("switcher: commit " + (entry ? entry.address : "none")
+			+ " via=" + (root.commitSource || "direct") + " t=" + Date.now());
+		root.commitSource = "";
 		previewTimer.stop();
 		root.committing = true;
 		// Every flipped monitor except the target's goes back; the target's
@@ -762,14 +826,23 @@ Item {
 	//
 	// A Hyprland `bindr` on Alt cannot do this: measured dead on Tawa
 	// 2026-09-06 in every arrangement (root map, inside a submap, and with no
-	// submap at all) because Alt took part in the Alt+Tab bind. See PR #228.
+	// submap at all). The reason is shadowing, not a modifier policy: once
+	// ALT+Tab fires, every bind on a key still held is shadowed
+	// (KeybindManager.cpp shadowKeybinds). `global` and transparent binds are
+	// exempt, which is what the altKey GlobalShortcut relies on. See PR #228.
 	//
 	// Measured here 2026-09-07 across 4 controlled gestures plus 11 earlier
 	// ones: the release arrives with activeFocus=true, at 17 ms after the
-	// keypress for the fastest tap and 1348 ms for a deliberate hold. The
-	// quick-tap gap the plan feared (release beating the surface's focus)
-	// did not occur at 17 ms; if it ever does, the overlay simply stays open
-	// on the correct row and Return, a click, or another Alt+Tab finishes it.
+	// keypress for the fastest tap and 1348 ms for a deliberate hold.
+	//
+	// The quick-tap gap DOES occur (Nick, 2026-10-02): Hyprland focuses an
+	// exclusive layer only once it maps, and an Alt key-up before that goes to
+	// the previously focused app, so this handler never hears it and the
+	// overlay stays open. The fix is Alt's state reported by Hyprland itself
+	// (altReleased() and the alt-before-request bank in request(), fed by
+	// shell.qml's altKey GlobalShortcut); this handler stays as the fallback.
+	// Every commit path ends in dismissed(), which flips `active` false at
+	// once, so a release seen by both paths commits exactly once.
 	//
 	// `armed` is what keeps mouse-browse honest: only request() sets it, so
 	// an Alt tap while browsing via `toggle` is inert (verified: armed=false).
@@ -797,6 +870,11 @@ Item {
 	}
 
 	onActiveFocusChanged: {
+		if (root.active && root.activeFocus && !root.focusLogged) {
+			root.focusLogged = true;
+			console.log("switcher: focus-in altHeld=" + root.altHeld
+				+ " known=" + root.altStateKnown + " t=" + Date.now());
+		}
 		if (root.active && !root.activeFocus && !root.regrabbing) {
 			console.log("switcher: regrab t=" + Date.now());
 			root.regrabbing = true;
@@ -814,6 +892,7 @@ Item {
 		if (!root.armed)
 			return;
 		event.accepted = true;
+		root.commitSource = "keys";
 		root.requestCommit();
 	}
 
