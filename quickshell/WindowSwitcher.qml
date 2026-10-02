@@ -84,12 +84,79 @@ Item {
 	// not undo the target monitor's reveal on the way out.
 	property bool committing: false
 
+	// Focus recency, most recent first, as canonical `0x` addresses. This is
+	// the row order, not Hyprland's focusHistoryID: Quickshell's copy of that
+	// field is a snapshot that only an async j/clients refresh updates, and
+	// rebuild() reads it on the same tick it asks for the refresh, so it
+	// ordered rows as of BEFORE the last Alt+Tab. Hyprland.activeToplevel is
+	// set synchronously from the socket2 activewindowv2 event Quickshell
+	// already parses, so tracking it costs one array move per focus change
+	// and no IPC.
+	//
+	// Only the center instance tracks (shell.qml sets tracksFocus); it is the
+	// only one that ever opens.
+	property bool tracksFocus: true
+	property var focusOrder: []
+	// focusOrder as it stood at open. rebuild() sorts by this.
+	property var openOrder: []
+	// Focus events are ignored while open and until this time after close.
+	// A center-monitor preview moves Hyprland's focus (see the re-grab
+	// below), and those activewindowv2 events can still be arriving after
+	// the overlay is gone; recording them would put a previewed window, not
+	// the one you came from, at Alt+Tab's first stop. The close records its
+	// outcome itself (activateCurrent()), then quietTimer re-syncs with
+	// whatever Hyprland actually focused.
+	property real quietUntil: 0
+
+	function focusOrderWith(address: string): var {
+		const next = root.focusOrder.filter(a => a !== address);
+		next.unshift(address);
+		if (next.length > 256)
+			next.length = 256;
+		return next;
+	}
+
+	function touchFocused(): void {
+		const t = Hyprland.activeToplevel;
+		// Null right after a closewindow.
+		if (!t || !t.address)
+			return;
+		const address = root.normalizeAddress(t.address);
+		if (root.focusOrder.length > 0 && root.focusOrder[0] === address)
+			return;
+		// Reassign, never splice in place: a var property only notifies on
+		// assignment.
+		root.focusOrder = root.focusOrderWith(address);
+	}
+
+	Connections {
+		target: Hyprland
+		enabled: root.tracksFocus
+
+		function onActiveToplevelChanged(): void {
+			if (!root.active && Date.now() >= root.quietUntil)
+				root.touchFocused();
+		}
+	}
+
+	Timer {
+		id: quietTimer
+		interval: 400
+		repeat: false
+		onTriggered: {
+			if (!root.active)
+				root.touchFocused();
+		}
+	}
+
 	// Warm the Hyprland connection at startup so the first Alt+Tab of a
 	// session has data ready rather than an empty card. Monitors are warmed
 	// for the same reason: the offscreen test needs them on the FIRST open.
 	Component.onCompleted: {
 		Hyprland.refreshToplevels();
 		Hyprland.refreshMonitors();
+		if (root.tracksFocus)
+			root.touchFocused();
 	}
 
 	// A window that MOVED does not change the set of windows, so
@@ -157,6 +224,9 @@ Item {
 			root.flippedMonitors = ({});
 			root.previewedAddress = "";
 			root.committing = false;
+			quietTimer.stop();
+			// Before rebuild(), which sorts by it.
+			root.openOrder = root.focusOrder.slice();
 			root.rebuild();
 			root.forceActiveFocus();
 			settleTimer.fires = 0;
@@ -175,6 +245,12 @@ Item {
 			if (!root.committing)
 				root.restoreMonitors("");
 			root.committing = false;
+			root.openOrder = [];
+			// A commit already recorded its target; a cancel leaves the order
+			// as it was. Either way, sync with Hyprland once the preview's
+			// focus events have drained.
+			root.quietUntil = Date.now() + quietTimer.interval;
+			quietTimer.restart();
 			root.flippedMonitors = ({});
 			root.previewedAddress = "";
 			root.windows = [];
@@ -395,16 +471,14 @@ Item {
 
 		const values = Hyprland.toplevels ? Hyprland.toplevels.values : [];
 		const list = [];
-		let haveFocusHistory = values.length > 0;
 
 		for (let i = 0; i < values.length; ++i) {
 			const t = values[i];
 			const ipc = t.lastIpcObject || ({});
 			const fh = ipc["focusHistoryID"];
-			if (typeof fh !== "number")
-				haveFocusHistory = false;
 
 			list.push({
+				index: i,
 				address: root.normalizeAddress(t.address),
 				title: t.title || "",
 				cls: ipc["class"] || "",
@@ -424,13 +498,36 @@ Item {
 			});
 		}
 
-		// Most-recently-focused first. `focusHistoryID` is 0 for the currently
-		// focused window and counts upward; HyprlandToplevel.activated is NOT
-		// usable for this (it read false for every window on a live session).
-		// When any window lacks the field, keep Hyprland.toplevels' own order
-		// rather than inventing a sort out of a partial signal.
-		if (haveFocusHistory)
-			list.sort((a, b) => a.focusHistory - b.focusHistory);
+		// Most-recently-focused first, by the tracker's order at open (see
+		// focusOrder). A window the tracker has never seen was last focused
+		// before every window it has, so those go after, ordered by the
+		// focusHistoryID snapshot -- stale, but the only signal for them --
+		// and a window that has not even got that (just opened, empty
+		// lastIpcObject) goes last instead of disabling the sort for all.
+		// Ties keep Hyprland.toplevels' order.
+		const order = root.openOrder;
+		let fallback = 0;
+		for (let i = 0; i < list.length; ++i) {
+			const e = list[i];
+			const pos = order.indexOf(e.address);
+			if (pos < 0)
+				++fallback;
+			e.sortKey = pos >= 0 ? pos
+				: order.length + (e.focusHistory >= 0 ? e.focusHistory : 100000);
+		}
+		list.sort((a, b) => (a.sortKey - b.sortKey) || (a.index - b.index));
+
+		// Drop closed windows from the tracker. Never on an empty read: the
+		// model is transiently empty after a refresh, and that would wipe the
+		// whole history.
+		if (values.length > 0) {
+			const live = {};
+			for (let i = 0; i < list.length; ++i)
+				live[list[i].address] = true;
+			const kept = root.focusOrder.filter(a => a in live);
+			if (kept.length !== root.focusOrder.length)
+				root.focusOrder = kept;
+		}
 
 		// Row order is frozen for the life of an open overlay. A center-monitor
 		// preview really does move Hyprland's focus (see the re-grab below),
@@ -474,6 +571,8 @@ Item {
 			root.currentIndex = 0;
 			return;
 		}
+		console.log("switcher: order " + list.slice(0, 3).map(e => root.labelFor(e)).join(" | ")
+			+ " fallback=" + fallback + " t=" + Date.now());
 		const steps = root.pendingSteps === 0 ? 1 : root.pendingSteps;
 		root.pendingSteps = 0;
 		root.currentIndex = n > 1 ? ((steps % n) + n) % n : 0;
@@ -536,6 +635,11 @@ Item {
 		// Where the cursor has to end up. Offscreen rows are overridden below
 		// with the rescue position.
 		let warp = root.centreOf(entry ? entry.at : null, entry ? entry.size : null);
+		// Record the commit itself, before the close: the focus events that
+		// follow are ignored for a moment (see quietUntil), so this is what
+		// puts the target first and the window you came from second.
+		if (entry && entry.address)
+			root.focusOrder = root.focusOrderWith(entry.address);
 		root.dismissed();
 		if (!entry || !entry.address)
 			return;
