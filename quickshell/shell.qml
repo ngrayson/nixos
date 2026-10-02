@@ -925,6 +925,55 @@ ShellRoot {
 		}
 	}
 
+	// Not a session lock: an Overlay layer-shell window per output that draws
+	// LockSurface in preview mode. Esc (and a correct password) dismisses; the
+	// Timer below is the unconditional backstop. The bar has no idea whether
+	// the session is really locked (that is lock.qml's business), and it does
+	// not need to: under ext-session-lock the compositor shows no layer
+	// surfaces and the bind that opens this cannot fire.
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: previewWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+
+			screen: modelData
+			visible: shellRoot.lockPreview
+			color: Theme.bg
+			exclusionMode: ExclusionMode.Ignore
+			// Every preview surface is focusable so Esc works from any output;
+			// Exclusive stays on the main output only -- an exclusive grab on
+			// every output at once trades a stuck preview for a stuck desktop
+			// (PR #183).
+			focusable: shellRoot.lockPreview
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-lock-preview-" + modelData.name
+			WlrLayershell.keyboardFocus: shellRoot.lockPreview ? (isCenterScreen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand) : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			LockSurface {
+				anchors.fill: parent
+				context: lockContext
+				preview: true
+				// Chrome on every output, exactly like lock.qml. The pre-#194
+				// preview drew it on the main output only, a holdover from
+				// before PR #166 that made the preview lie about what the lock
+				// looks like.
+				showUi: shellRoot.lockPreview
+				onDismissRequested: shellRoot.lockPreview = false
+			}
+		}
+	}
 
 	// Backstop: the preview clears itself after two minutes. Esc widened to
 	// every output above is the intended exit, but a layer-shell surface only
