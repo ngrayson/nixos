@@ -125,10 +125,13 @@ Interim: **172.16.141.38/24** pinned on the `GiGstreem` NM profile, DNS
 static lease, Pi-hole as LAN DNS.
 
 ### H2 — Storage (HDD tier) — **shipped**
-COLD at `/mnt/cold`, `nofail` + `x-systemd.device-timeout=10s`; dirs
+COLD at `/mnt/cold`, `noauto` + `nofail` + `x-systemd.device-timeout=10s`
+(mounted at boot by Jellyfin/Syncthing's `RequiresMountsFor` and on replug by
+udev, never wanted by `local-fs.target`, so a parked COLD is not re-pulled by
+every timer); dirs
 `media/{movies,tv,music}` and `share/`. `hearth-disk park` before unplugging —
-park runtime-masks `mnt-cold.mount` across the unmount because
-`local-fs.target` re-pulls it otherwise — `hearth-deploy health` is expected to
+park runtime-masks `mnt-cold.mount` across the unmount because its
+`RequiresMountsFor` consumers re-pull it otherwise — `hearth-deploy health` is expected to
 fail while parked; `hearth-ingest` and `restic-backups-hearth` condition-skip
 while parked (`ConditionPathIsMountPoint=/mnt/cold`) rather than fail. Its NTFS
 semantics constrain everything that writes there: §8.

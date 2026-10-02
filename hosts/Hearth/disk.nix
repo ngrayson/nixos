@@ -1,11 +1,12 @@
 # COLD park/resume: operator script + udisks2 + udev remount on plug-in.
 # man systemd-fstab-generator does not list x-systemd.device-bound, so do not
 # pass it. Replug starts mnt-cold.mount via udev; park is the graceful unplug.
-# park runtime-masks mnt-cold.mount for the unmount->power-off window: the
-# fstab-generated mount is WantedBy=local-fs.target and Required by every
-# RequiresMountsFor consumer, so the first unit to start after the unmount
-# (a per-minute timer, udisks2's own D-Bus activation) re-pulls the mount and
-# Jellyfin with it. /run/systemd/system (runtime masks) outranks
+# The fstab entry is noauto (host.nix), so local-fs.target no longer wants
+# the mount and unrelated units stop re-pulling it. park still runtime-masks
+# mnt-cold.mount for the unmount->power-off window: it is Required by every
+# RequiresMountsFor consumer (ingest/restic timers, a future unit), and any of
+# those starting after the unmount would re-pull the mount and Jellyfin with
+# it. /run/systemd/system (runtime masks) outranks
 # /run/systemd/generator, so the mask beats the generated unit. resume and
 # status clean up a mask left behind by an interrupted park.
 {pkgs, ...}: let
@@ -245,7 +246,9 @@ in {
   environment.systemPackages = [hearth-disk];
 
   # systemd will not retry mnt-cold.mount after a missed nofail wait, so udev
-  # starts it when the UUID appears (late spin-up or replug).
+  # starts it when the UUID appears (late spin-up or replug). With noauto this
+  # rule, jellyfin/syncthing's RequiresMountsFor at boot and `hearth-disk
+  # resume` are the only things that ever start the mount.
   services.udev.extraRules = ''
     ACTION=="add", ENV{ID_FS_UUID}=="${coldUuid}", TAG+="systemd", ENV{SYSTEMD_WANTS}+="mnt-cold.mount"
   '';

@@ -180,10 +180,26 @@ ShellRoot {
 	signal windowSwitcherStep(int delta)
 
 	// Routed the same way as the step signal above, and banked by the switcher
-	// until its window list exists. The Alt-RELEASE gesture is detected inside
-	// WindowSwitcher.qml on its own focused surface, NOT here -- this signal
-	// carries the `commit` IPC, which is the tooling and test entry point.
+	// until its window list exists. The Alt-RELEASE gesture does NOT come
+	// through here: it arrives as the key-up on the overlay's own focused
+	// surface, and as windowSwitcherAltReleased below from Hyprland's global
+	// bind. This signal carries the `commit` IPC, which is tooling and tests.
 	signal windowSwitcherCommit()
+
+	// Alt key-up as reported by Hyprland's non-consuming global bind (see the
+	// altKey GlobalShortcut and home/wayland/hyprland.nix), routed like the
+	// step signal.
+	signal windowSwitcherAltReleased()
+
+	// True once the bar has seen any edge of the `quickshell:alt` shortcut.
+	// Without the binds (a host that has not switched yet) it stays false and
+	// the switcher ignores Alt state entirely.
+	property bool altStateKnown: false
+
+	// The center switcher's focus-recency list (WindowSwitcher.focusOrder),
+	// mirrored here so `ipc call switcher order` can print it without opening
+	// the overlay.
+	property var windowSwitcherOrder: []
 
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
 	// moves windows and a bare right-drag resizes them, so knowing it is on is
@@ -920,6 +936,55 @@ ShellRoot {
 		}
 	}
 
+	// Not a session lock: an Overlay layer-shell window per output that draws
+	// LockSurface in preview mode. Esc (and a correct password) dismisses; the
+	// Timer below is the unconditional backstop. The bar has no idea whether
+	// the session is really locked (that is lock.qml's business), and it does
+	// not need to: under ext-session-lock the compositor shows no layer
+	// surfaces and the bind that opens this cannot fire.
+	Variants {
+		model: Quickshell.screens
+
+		PanelWindow {
+			id: previewWin
+			required property var modelData
+			readonly property bool isCenterScreen: {
+				const c = CenterOutput.screen();
+				return c && modelData && c.name === modelData.name;
+			}
+
+			screen: modelData
+			visible: shellRoot.lockPreview
+			color: Theme.bg
+			exclusionMode: ExclusionMode.Ignore
+			// Every preview surface is focusable so Esc works from any output;
+			// Exclusive stays on the main output only -- an exclusive grab on
+			// every output at once trades a stuck preview for a stuck desktop
+			// (PR #183).
+			focusable: shellRoot.lockPreview
+
+			WlrLayershell.layer: WlrLayer.Overlay
+			WlrLayershell.namespace: "qs-lock-preview-" + modelData.name
+			WlrLayershell.keyboardFocus: shellRoot.lockPreview ? (isCenterScreen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand) : WlrKeyboardFocus.None
+
+			anchors.top: true
+			anchors.bottom: true
+			anchors.left: true
+			anchors.right: true
+
+			LockSurface {
+				anchors.fill: parent
+				context: lockContext
+				preview: true
+				// Chrome on every output, exactly like lock.qml. The pre-#194
+				// preview drew it on the main output only, a holdover from
+				// before PR #166 that made the preview lie about what the lock
+				// looks like.
+				showUi: shellRoot.lockPreview
+				onDismissRequested: shellRoot.lockPreview = false
+			}
+		}
+	}
 
 	// Backstop: the preview clears itself after two minutes. Esc widened to
 	// every output above is the intended exit, but a layer-shell surface only
@@ -1013,6 +1078,25 @@ ShellRoot {
 		}
 	}
 
+	// Alt state straight from Hyprland: `bindn = , Alt_L, global, quickshell:alt`
+	// (and the SHIFT / Alt_R variants) in home/wayland/hyprland.nix. `n` keeps
+	// the press reaching apps; `global` cannot be shadowed by the Alt+Tab bind
+	// the way a bindr is (KeybindManager.cpp shadowKeybinds; PR #228). Both
+	// edges arrive even when the overlay has no keyboard focus, which is the
+	// whole point. Registered ONCE per bar instance, here and never inside the
+	// per-screen Variants: a second registrant of the same appid:name gets a
+	// protocol error and dies, so count instances before and after every reload.
+	GlobalShortcut {
+		id: altKey
+		name: "alt"
+		description: "Alt held/released, read by the alt-tab switcher"
+		onPressed: shellRoot.altStateKnown = true
+		onReleased: {
+			shellRoot.altStateKnown = true;
+			shellRoot.windowSwitcherAltReleased();
+		}
+	}
+
 	IpcHandler {
 		target: "switcher"
 
@@ -1067,6 +1151,20 @@ ShellRoot {
 				return false;
 			shellRoot.windowSwitcherCommit();
 			return true;
+		}
+
+		// Read-only: the switcher's tracked focus recency, most recent first,
+		// one `address<TAB>class` per line. Does not open the overlay. Compare
+		// with `hyprctl clients -j | jq -r 'sort_by(.focusHistoryID)[].address'`.
+		function order(): string {
+			const cls = {};
+			const values = Hyprland.toplevels ? Hyprland.toplevels.values : [];
+			for (let i = 0; i < values.length; ++i) {
+				const a = values[i].address || "";
+				const ipc = values[i].lastIpcObject || ({});
+				cls[a.indexOf("0x") === 0 ? a : "0x" + a] = ipc["class"] || "";
+			}
+			return shellRoot.windowSwitcherOrder.map(a => a + "\t" + (cls[a] || "")).join("\n");
 		}
 
 		// Alt+Esc via hypr-alt-escape: same shape, close without changing focus.
@@ -2485,7 +2583,10 @@ ShellRoot {
 
 			WlrLayershell.layer: WlrLayer.Overlay
 			WlrLayershell.namespace: "qs-window-switcher-" + modelData.name
-			WlrLayershell.keyboardFocus: (switcherOpen && isCenterScreen) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+			// `regrabbing` drops to None for one short tick so Hyprland re-focuses
+			// the overlay after a preview handed the keyboard to a window
+			// (WindowSwitcher.qml, onActiveFocusChanged).
+			WlrLayershell.keyboardFocus: (switcherOpen && isCenterScreen && !switcher.regrabbing) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
 			anchors.top: true
 			anchors.bottom: true
@@ -2497,7 +2598,14 @@ ShellRoot {
 
 				anchors.fill: parent
 				active: windowSwitcherWin.switcherOpen && windowSwitcherWin.isCenterScreen
+				tracksFocus: windowSwitcherWin.isCenterScreen
+				altHeld: altKey.pressed
+				altStateKnown: shellRoot.altStateKnown
 				onDismissed: shellRoot.windowSwitcherVisible = false
+				onFocusOrderChanged: {
+					if (windowSwitcherWin.isCenterScreen)
+						shellRoot.windowSwitcherOrder = switcher.focusOrder;
+				}
 
 				// Guard on isCenterScreen rather than `active`: the bank has to
 				// be fillable BEFORE the overlay becomes visible, and the
@@ -2514,6 +2622,11 @@ ShellRoot {
 					function onWindowSwitcherCommit(): void {
 						if (windowSwitcherWin.isCenterScreen)
 							switcher.requestCommit();
+					}
+
+					function onWindowSwitcherAltReleased(): void {
+						if (windowSwitcherWin.isCenterScreen)
+							switcher.altReleased();
 					}
 				}
 			}

@@ -53,6 +53,26 @@ Item {
 	// lands on the previous window rather than on nothing.
 	property bool pendingCommit: false
 
+	// Alt's state as Hyprland reports it (shell.qml's altKey GlobalShortcut).
+	// altHeld defaults TRUE -- never infer "released" without evidence -- and
+	// altStateKnown stays false until an edge has been seen, so on a host
+	// without the binds neither can turn Alt+Tab into a blind cycle.
+	property bool altHeld: true
+	property bool altStateKnown: false
+	property real altReleasedAt: 0
+	// How recent an Alt release must be for request() to bank a commit on it.
+	// A window at all, because altHeld can read false while Alt is in fact
+	// held: a press made under a submap or with an extra modifier matches no
+	// bind and never reports. It must sit far above the measured worst
+	// request -> focus-in delay, and no human does Alt-up, Alt-down, Tab and
+	// an IPC round trip inside it.
+	property int altUpWindowMs: 300
+
+	// Diagnostics: which path committed (logged by activateCurrent()), and
+	// whether this open has logged its first focus-in yet.
+	property string commitSource: ""
+	property bool focusLogged: false
+
 	// Last monitor rectangles that were actually usable. refreshMonitors() is
 	// asynchronous and the model reads back empty or all-zero for a while
 	// after it is called, so recomputing from scratch on every rebuild would
@@ -61,12 +81,102 @@ Item {
 	// windows do, so the previous good answer is the right fallback.
 	property var monitorRectsCache: []
 
+	// Live preview state. The preview is a REVEAL: stepping switches the
+	// highlighted window's workspace in on its own monitor and raises it if
+	// floating. On the side monitors that leaves keyboard focus and Hyprland's
+	// focus history alone. On the overlay's OWN monitor Hyprland 0.55.4 hands
+	// the keyboard to the revealed workspace's window anyway (measured
+	// 2026-10-02, see the re-grab below), so the overlay takes it straight
+	// back and the row order is frozen while open (rebuild()).
+	//
+	// monitorSnapshot: name -> { workspaceId, focused }, taken at open.
+	// flippedMonitors: name -> ORIGINAL workspace id, only monitors the
+	// preview actually changed. currentWorkspaceByMonitor: what we last
+	// dispatched per monitor -- Hyprland.dispatch() does not update
+	// Quickshell's model, so re-reading Hyprland.monitors after a flip would
+	// return the pre-flip workspace.
+	property var monitorSnapshot: ({})
+	property string focusedMonitorAtOpen: ""
+	property var flippedMonitors: ({})
+	property var currentWorkspaceByMonitor: ({})
+	property string previewedAddress: ""
+	// Set by activateCurrent() so the inactive branch of onActiveChanged does
+	// not undo the target monitor's reveal on the way out.
+	property bool committing: false
+
+	// Focus recency, most recent first, as canonical `0x` addresses. This is
+	// the row order, not Hyprland's focusHistoryID: Quickshell's copy of that
+	// field is a snapshot that only an async j/clients refresh updates, and
+	// rebuild() reads it on the same tick it asks for the refresh, so it
+	// ordered rows as of BEFORE the last Alt+Tab. Hyprland.activeToplevel is
+	// set synchronously from the socket2 activewindowv2 event Quickshell
+	// already parses, so tracking it costs one array move per focus change
+	// and no IPC.
+	//
+	// Only the center instance tracks (shell.qml sets tracksFocus); it is the
+	// only one that ever opens.
+	property bool tracksFocus: true
+	property var focusOrder: []
+	// focusOrder as it stood at open. rebuild() sorts by this.
+	property var openOrder: []
+	// Focus events are ignored while open and until this time after close.
+	// A center-monitor preview moves Hyprland's focus (see the re-grab
+	// below), and those activewindowv2 events can still be arriving after
+	// the overlay is gone; recording them would put a previewed window, not
+	// the one you came from, at Alt+Tab's first stop. The close records its
+	// outcome itself (activateCurrent()), then quietTimer re-syncs with
+	// whatever Hyprland actually focused.
+	property real quietUntil: 0
+
+	function focusOrderWith(address: string): var {
+		const next = root.focusOrder.filter(a => a !== address);
+		next.unshift(address);
+		if (next.length > 256)
+			next.length = 256;
+		return next;
+	}
+
+	function touchFocused(): void {
+		const t = Hyprland.activeToplevel;
+		// Null right after a closewindow.
+		if (!t || !t.address)
+			return;
+		const address = root.normalizeAddress(t.address);
+		if (root.focusOrder.length > 0 && root.focusOrder[0] === address)
+			return;
+		// Reassign, never splice in place: a var property only notifies on
+		// assignment.
+		root.focusOrder = root.focusOrderWith(address);
+	}
+
+	Connections {
+		target: Hyprland
+		enabled: root.tracksFocus
+
+		function onActiveToplevelChanged(): void {
+			if (!root.active && Date.now() >= root.quietUntil)
+				root.touchFocused();
+		}
+	}
+
+	Timer {
+		id: quietTimer
+		interval: 400
+		repeat: false
+		onTriggered: {
+			if (!root.active)
+				root.touchFocused();
+		}
+	}
+
 	// Warm the Hyprland connection at startup so the first Alt+Tab of a
 	// session has data ready rather than an empty card. Monitors are warmed
 	// for the same reason: the offscreen test needs them on the FIRST open.
 	Component.onCompleted: {
 		Hyprland.refreshToplevels();
 		Hyprland.refreshMonitors();
+		if (root.tracksFocus)
+			root.touchFocused();
 	}
 
 	// A window that MOVED does not change the set of windows, so
@@ -109,18 +219,66 @@ Item {
 		}
 	}
 
+	// Debounce so the quick Alt+Tab tap (commit 17 ms after the press) never
+	// previews at all, and a held Tab does not flip a workspace per repeat.
+	Timer {
+		id: previewTimer
+		interval: 70
+		repeat: false
+		onTriggered: {
+			if (root.active)
+				root.previewCurrent();
+		}
+	}
+
+	onCurrentIndexChanged: {
+		if (root.active)
+			previewTimer.restart();
+	}
+
 	onActiveChanged: {
 		if (root.active) {
+			root.focusLogged = false;
 			Hyprland.refreshMonitors();
+			// Before rebuild(), so the snapshot predates any preview.
+			root.snapshotMonitors();
+			root.flippedMonitors = ({});
+			root.previewedAddress = "";
+			root.committing = false;
+			quietTimer.stop();
+			// Before rebuild(), which sorts by it.
+			root.openOrder = root.focusOrder.slice();
 			root.rebuild();
 			root.forceActiveFocus();
 			settleTimer.fires = 0;
 			settleTimer.restart();
+			// currentIndex may already equal the row rebuild() chose, in which
+			// case no change signal arrives to start the preview.
+			previewTimer.restart();
 		} else {
+			// A late tick must never flip a workspace after the overlay is gone.
+			previewTimer.stop();
+			regrabTimer.stop();
+			root.regrabbing = false;
+			// The IPC dismiss paths close us without going through cancel(),
+			// so the restore has to live here too. A commit keeps the target
+			// monitor's reveal; it restored the others itself.
+			if (!root.committing)
+				root.restoreMonitors("");
+			root.committing = false;
+			root.openOrder = [];
+			// A commit already recorded its target; a cancel leaves the order
+			// as it was. Either way, sync with Hyprland once the preview's
+			// focus events have drained.
+			root.quietUntil = Date.now() + quietTimer.interval;
+			quietTimer.restart();
+			root.flippedMonitors = ({});
+			root.previewedAddress = "";
 			root.windows = [];
 			// Never let anything banked against this open leak into the next one.
 			root.pendingSteps = 0;
 			root.pendingCommit = false;
+			root.commitSource = "";
 			root.armed = false;
 		}
 	}
@@ -195,6 +353,102 @@ Item {
 		return rects;
 	}
 
+	// Per-monitor active workspace and focus at open, from the same
+	// lastIpcObject read monitorRects() uses. A transiently empty model keeps
+	// the previous snapshot rather than an empty one (same rule as
+	// monitorRectsCache).
+	function snapshotMonitors(): void {
+		const mons = Hyprland.monitors ? Hyprland.monitors.values : [];
+		const snap = {};
+		let focused = "";
+		let count = 0;
+		for (let i = 0; i < mons.length; ++i) {
+			const m = mons[i].lastIpcObject || ({});
+			const ws = m["activeWorkspace"];
+			if (typeof m["name"] !== "string" || !ws || typeof ws["id"] !== "number")
+				continue;
+			snap[m["name"]] = { workspaceId: ws["id"], focused: m["focused"] === true };
+			if (m["focused"] === true)
+				focused = m["name"];
+			count += 1;
+		}
+		if (count === 0)
+			return;
+		root.monitorSnapshot = snap;
+		root.focusedMonitorAtOpen = focused;
+		const cur = {};
+		for (const name in snap)
+			cur[name] = snap[name].workspaceId;
+		root.currentWorkspaceByMonitor = cur;
+	}
+
+	// Reveal the highlighted row beneath the overlay. Special workspaces
+	// (id < 0) and offscreen rows get no preview: there is nothing visible to
+	// reveal, and rescue stays a commit-time action.
+	function previewCurrent(): void {
+		const entry = root.windows[root.currentIndex];
+		if (!entry || !entry.address || entry.address === root.previewedAddress)
+			return;
+		if (entry.offscreen || entry.workspaceId < 0)
+			return;
+		root.previewedAddress = entry.address;
+		const mon = entry.monitor;
+		const cur = root.currentWorkspaceByMonitor;
+		if (mon && typeof cur[mon] === "number" && cur[mon] !== entry.workspaceId) {
+			const flipped = root.flippedMonitors;
+			if (!(mon in flipped))
+				flipped[mon] = root.monitorSnapshot[mon].workspaceId;
+			root.flippedMonitors = flipped;
+			cur[mon] = entry.workspaceId;
+			root.currentWorkspaceByMonitor = cur;
+			Hyprland.dispatch("workspace " + entry.workspaceId);
+		}
+		if (entry.floating)
+			Hyprland.dispatch("alterzorder top,address:" + entry.address);
+		console.log("switcher: preview " + entry.address + " ws=" + entry.workspaceId
+			+ " mon=" + mon + " t=" + Date.now());
+	}
+
+	// Put back every monitor the preview flipped, except `exceptMonitor`.
+	// `workspace <id>` also focuses the owner monitor, so the monitor that was
+	// focused at open goes LAST and focus ends where it started. Z-order is not
+	// restored -- no dispatcher can -- so a raised floating window stays raised.
+	function restoreMonitors(exceptMonitor: string): void {
+		const flipped = root.flippedMonitors;
+		const cur = root.currentWorkspaceByMonitor;
+		const focusedName = root.focusedMonitorAtOpen;
+		let restoredAny = false;
+		let restoredFocused = false;
+		const names = Object.keys(flipped).filter(n => n !== exceptMonitor);
+		names.sort((a, b) => (a === focusedName ? 1 : 0) - (b === focusedName ? 1 : 0));
+		for (let i = 0; i < names.length; ++i) {
+			const name = names[i];
+			Hyprland.dispatch("workspace " + flipped[name]);
+			cur[name] = flipped[name];
+			restoredAny = true;
+			if (name === focusedName)
+				restoredFocused = true;
+		}
+		const kept = {};
+		if (exceptMonitor && exceptMonitor in flipped)
+			kept[exceptMonitor] = flipped[exceptMonitor];
+		root.flippedMonitors = kept;
+		root.currentWorkspaceByMonitor = cur;
+		// Monitor focus follows the last workspace dispatch; on a cancel, hand
+		// it back explicitly when the focused-at-open monitor was not flipped.
+		// The window focus this attempts is refused while the overlay is up.
+		if (!exceptMonitor && restoredAny && !restoredFocused && focusedName)
+			Hyprland.dispatch("focusmonitor " + focusedName);
+	}
+
+	// Esc and click-outside go through here. Alt+Esc and the IPC dismiss paths
+	// close the overlay directly and restore in onActiveChanged instead.
+	function cancel(): void {
+		previewTimer.stop();
+		root.restoreMonitors("");
+		root.dismissed();
+	}
+
 	function focusedRect(rects: var): var {
 		for (let i = 0; i < rects.length; ++i) {
 			if (rects[i].focused)
@@ -239,22 +493,26 @@ Item {
 
 		const values = Hyprland.toplevels ? Hyprland.toplevels.values : [];
 		const list = [];
-		let haveFocusHistory = values.length > 0;
 
 		for (let i = 0; i < values.length; ++i) {
 			const t = values[i];
 			const ipc = t.lastIpcObject || ({});
 			const fh = ipc["focusHistoryID"];
-			if (typeof fh !== "number")
-				haveFocusHistory = false;
 
 			list.push({
+				index: i,
 				address: root.normalizeAddress(t.address),
 				title: t.title || "",
 				cls: ipc["class"] || "",
 				workspace: t.workspace ? t.workspace.name : "",
 				monitor: t.monitor ? t.monitor.name : "",
 				focusHistory: typeof fh === "number" ? fh : -1,
+				// Preview and commit-warp inputs. workspaceId < 0 is a special
+				// workspace (or unknown) and is never previewed.
+				workspaceId: (ipc["workspace"] && typeof ipc["workspace"]["id"] === "number") ? ipc["workspace"]["id"] : -1,
+				floating: ipc["floating"] === true,
+				at: ipc["at"],
+				size: ipc["size"],
 				// HyprlandToplevel has no x/y/width/height in Quickshell
 				// 0.3.0 -- those are HyprlandMonitor properties. Geometry is
 				// only reachable through lastIpcObject, as two-element arrays.
@@ -262,13 +520,52 @@ Item {
 			});
 		}
 
-		// Most-recently-focused first. `focusHistoryID` is 0 for the currently
-		// focused window and counts upward; HyprlandToplevel.activated is NOT
-		// usable for this (it read false for every window on a live session).
-		// When any window lacks the field, keep Hyprland.toplevels' own order
-		// rather than inventing a sort out of a partial signal.
-		if (haveFocusHistory)
-			list.sort((a, b) => a.focusHistory - b.focusHistory);
+		// Most-recently-focused first, by the tracker's order at open (see
+		// focusOrder). A window the tracker has never seen was last focused
+		// before every window it has, so those go after, ordered by the
+		// focusHistoryID snapshot -- stale, but the only signal for them --
+		// and a window that has not even got that (just opened, empty
+		// lastIpcObject) goes last instead of disabling the sort for all.
+		// Ties keep Hyprland.toplevels' order.
+		const order = root.openOrder;
+		let fallback = 0;
+		for (let i = 0; i < list.length; ++i) {
+			const e = list[i];
+			const pos = order.indexOf(e.address);
+			if (pos < 0)
+				++fallback;
+			e.sortKey = pos >= 0 ? pos
+				: order.length + (e.focusHistory >= 0 ? e.focusHistory : 100000);
+		}
+		list.sort((a, b) => (a.sortKey - b.sortKey) || (a.index - b.index));
+
+		// Drop closed windows from the tracker. Never on an empty read: the
+		// model is transiently empty after a refresh, and that would wipe the
+		// whole history.
+		if (values.length > 0) {
+			const live = {};
+			for (let i = 0; i < list.length; ++i)
+				live[list[i].address] = true;
+			const kept = root.focusOrder.filter(a => a in live);
+			if (kept.length !== root.focusOrder.length)
+				root.focusOrder = kept;
+		}
+
+		// Row order is frozen for the life of an open overlay. A center-monitor
+		// preview really does move Hyprland's focus (see the re-grab below),
+		// which rewrites focusHistoryID, and the settle rebuilds would then
+		// re-sort the rows under the highlight. Keep the order the first
+		// populated rebuild chose; windows that appeared since go at the end.
+		if (hadWindows) {
+			const rank = {};
+			for (let k = 0; k < root.windows.length; ++k)
+				rank[root.windows[k].address] = k;
+			const known = list.filter(e => e.address in rank);
+			const fresh = list.filter(e => !(e.address in rank));
+			known.sort((a, b) => rank[a.address] - rank[b.address]);
+			list.length = 0;
+			Array.prototype.push.apply(list, known.concat(fresh));
+		}
 
 		root.windows = list;
 
@@ -296,6 +593,8 @@ Item {
 			root.currentIndex = 0;
 			return;
 		}
+		console.log("switcher: order " + list.slice(0, 3).map(e => root.labelFor(e)).join(" | ")
+			+ " fallback=" + fallback + " t=" + Date.now());
 		const steps = root.pendingSteps === 0 ? 1 : root.pendingSteps;
 		root.pendingSteps = 0;
 		root.currentIndex = n > 1 ? ((steps % n) + n) % n : 0;
@@ -305,6 +604,8 @@ Item {
 		// pendingSteps), and the tap has to commit the row the steps chose.
 		if (root.pendingCommit) {
 			root.pendingCommit = false;
+			if (!root.commitSource)
+				root.commitSource = "banked";
 			root.activateCurrent();
 		}
 	}
@@ -326,16 +627,53 @@ Item {
 	// mouse-browse opened with `toggle`.
 	function request(delta: int): void {
 		root.armed = true;
+		const now = Date.now();
 		console.log("switcher: request delta=" + delta + " active=" + root.active
-			+ " windows=" + root.windows.length + " t=" + Date.now());
-		if (root.active && root.windows.length > 0)
+			+ " windows=" + root.windows.length
+			+ " altHeld=" + root.altHeld + " known=" + root.altStateKnown
+			+ " sinceAltUp=" + (root.altReleasedAt > 0 ? now - root.altReleasedAt : -1)
+			+ " t=" + now);
+		// The tap that beat us: Alt already went up before this IPC arrived.
+		// Only trust it with evidence -- an edge seen since the bar started and a
+		// release inside the window -- so a missing bind or a stale state can
+		// never turn Alt+Tab into a blind cycle.
+		const altUp = root.altStateKnown && !root.altHeld
+			&& (now - root.altReleasedAt) <= root.altUpWindowMs;
+		if (root.active && root.windows.length > 0) {
 			root.step(delta);
-		else
+			if (altUp) {
+				root.commitSource = "alt-before-request";
+				root.requestCommit();
+			}
+		} else {
 			root.pendingSteps += delta;
+			// Banked BEFORE activation on purpose: shell.qml next() flips visible
+			// right after this call, rebuild() applies the steps then this
+			// commit, and the inactive branch of onActiveChanged still clears it
+			// on every close.
+			if (altUp) {
+				root.pendingCommit = true;
+				root.commitSource = "alt-before-request";
+			}
+		}
 	}
 
-	// Entry point for the QML Alt-release handler above, and for the `commit`
-	// IPC (tooling and tests). Banks ONLY while active: an inactive overlay
+	// Alt key-up from Hyprland's global bind. Arrives whether or not the
+	// overlay holds the keyboard, which is what catches the release that beats
+	// the surface's focus (the Keys.onReleased path below never hears it).
+	function altReleased(): void {
+		root.altReleasedAt = Date.now();
+		if (!root.active || !root.armed)
+			return;
+		console.log("switcher: Alt released(global) windows=" + root.windows.length
+			+ " t=" + Date.now());
+		root.commitSource = "alt-global";
+		root.requestCommit();
+	}
+
+	// Entry point for the QML Alt-release handler above, for altReleased() and
+	// the alt-before-request bank in request(), and for the `commit` IPC
+	// (tooling and tests). Banks ONLY while active: an inactive overlay
 	// must never carry a commit into its next open, and a release that beats
 	// the window list is applied by rebuild() once the list arrives.
 	function requestCommit(): void {
@@ -349,6 +687,23 @@ Item {
 
 	function activateCurrent(): void {
 		const entry = root.windows[root.currentIndex];
+		console.log("switcher: commit " + (entry ? entry.address : "none")
+			+ " via=" + (root.commitSource || "direct") + " t=" + Date.now());
+		root.commitSource = "";
+		previewTimer.stop();
+		root.committing = true;
+		// Every flipped monitor except the target's goes back; the target's
+		// stays revealed so the screen being looked at does not flip away and
+		// back.
+		root.restoreMonitors(entry ? entry.monitor : "");
+		// Where the cursor has to end up. Offscreen rows are overridden below
+		// with the rescue position.
+		let warp = root.centreOf(entry ? entry.at : null, entry ? entry.size : null);
+		// Record the commit itself, before the close: the focus events that
+		// follow are ignored for a moment (see quietUntil), so this is what
+		// puts the target first and the window you came from second.
+		if (entry && entry.address)
+			root.focusOrder = root.focusOrderWith(entry.address);
 		root.dismissed();
 		if (!entry || !entry.address)
 			return;
@@ -365,8 +720,10 @@ Item {
 		// 2. Focusing a window that sits outside every monitor without moving
 		//    it is a no-op the user cannot see. Selecting it can only sensibly
 		//    mean "bring it back".
-		if (root.isAddressOffscreen(entry.address, entry.offscreen))
-			root.rescueToAddress(entry.address);
+		if (root.isAddressOffscreen(entry.address, entry.offscreen)) {
+			const p = root.rescueToAddress(entry.address);
+			warp = p ? root.centreOf([p.x, p.y], entry.size) : null;
+		}
 		// ...and check again once a refresh has actually landed. Neither the
 		// snapshot nor the live read above can be trusted for a very fast
 		// commit: Hyprland.dispatch() does not update Quickshell's model, so
@@ -378,11 +735,30 @@ Item {
 		Hyprland.refreshToplevels();
 		root.pendingRescueAddress = entry.address;
 		rescueCheckTimer.restart();
-		// Explicit dispatch rather than the Wayland handle's activate(): this
-		// is the same call path an offscreen-rescue follow-up needs, and it
-		// shows up in hyprctl logs. HyprlandToplevel itself has no activate()
-		// in Quickshell 0.3.0 -- that method is on HyprlandWorkspace.
+		// Warp the cursor into the target BEFORE the focus. When the overlay
+		// unmaps, Hyprland refocuses the window under the cursor
+		// (LayerSurface.cpp onUnmap -> refocusLastWindow -> mouseMoveUnified)
+		// before focuswindow arrives; after a preview that is a bystander,
+		// which would land in the focus history ahead of the target. It is
+		// where focuswindow's own warpCursor() puts the cursor anyway.
+		if (warp)
+			Hyprland.dispatch("movecursor " + warp.x + " " + warp.y);
+		// The one deliberate focus. A focuswindow during the preview is refused
+		// while this overlay holds exclusive keyboard focus (FocusState.cpp:
+		// 107-110); the only focus changes before this are the ones Hyprland
+		// makes itself on a center-monitor flip (see the re-grab).
+		// HyprlandToplevel has no activate() in Quickshell 0.3.0.
 		Hyprland.dispatch("focuswindow address:" + entry.address);
+	}
+
+	// Centre of an `at`/`size` pair, or null when either is not numeric.
+	function centreOf(at: var, size: var): var {
+		if (!at || !size || at.length < 2 || size.length < 2)
+			return null;
+		if (typeof at[0] !== "number" || typeof at[1] !== "number"
+			|| typeof size[0] !== "number" || typeof size[1] !== "number")
+			return null;
+		return { x: Math.round(at[0] + size[0] / 2), y: Math.round(at[1] + size[1] / 2) };
 	}
 
 	// Live offscreen test for one address, used at commit time. Falls back to
@@ -428,15 +804,16 @@ Item {
 	// the entire reason it is used: making Hyprland 0.55.4 re-tile a floating
 	// window segfaulted the compositor and destroyed a session on 2026-09-06
 	// (dragBegin -> dragEnd -> changeFloatingMode -> CDwindleAlgorithm::addTarget).
-	function rescueToAddress(address: string): void {
+	function rescueToAddress(address: string): var {
 		const target = root.focusedRect(root.monitorRects());
 		if (!target || !address)
-			return;
+			return null;
 		// Inset rather than placed at the origin, so the window lands well
 		// inside the output instead of flush against its edge.
 		const x = Math.round(target.x + target.w * 0.1);
 		const y = Math.round(target.y + target.h * 0.1);
 		Hyprland.dispatch("movewindowpixel exact " + x + " " + y + ",address:" + address);
+		return { x: x, y: y };
 	}
 
 	// Letting go of Alt commits the highlighted row. Hyprland forwards a key
@@ -449,17 +826,62 @@ Item {
 	//
 	// A Hyprland `bindr` on Alt cannot do this: measured dead on Tawa
 	// 2026-09-06 in every arrangement (root map, inside a submap, and with no
-	// submap at all) because Alt took part in the Alt+Tab bind. See PR #228.
+	// submap at all). The reason is shadowing, not a modifier policy: once
+	// ALT+Tab fires, every bind on a key still held is shadowed
+	// (KeybindManager.cpp shadowKeybinds). `global` and transparent binds are
+	// exempt, which is what the altKey GlobalShortcut relies on. See PR #228.
 	//
 	// Measured here 2026-09-07 across 4 controlled gestures plus 11 earlier
 	// ones: the release arrives with activeFocus=true, at 17 ms after the
-	// keypress for the fastest tap and 1348 ms for a deliberate hold. The
-	// quick-tap gap the plan feared (release beating the surface's focus)
-	// did not occur at 17 ms; if it ever does, the overlay simply stays open
-	// on the correct row and Return, a click, or another Alt+Tab finishes it.
+	// keypress for the fastest tap and 1348 ms for a deliberate hold.
+	//
+	// The quick-tap gap DOES occur (Nick, 2026-10-02): Hyprland focuses an
+	// exclusive layer only once it maps, and an Alt key-up before that goes to
+	// the previously focused app, so this handler never hears it and the
+	// overlay stays open. The fix is Alt's state reported by Hyprland itself
+	// (altReleased() and the alt-before-request bank in request(), fed by
+	// shell.qml's altKey GlobalShortcut); this handler stays as the fallback.
+	// Every commit path ends in dismissed(), which flips `active` false at
+	// once, so a release seen by both paths commits exactly once.
 	//
 	// `armed` is what keeps mouse-browse honest: only request() sets it, so
 	// an Alt tap while browsing via `toggle` is inert (verified: armed=false).
+	// Take the keyboard back whenever it is taken from us while open.
+	//
+	// Measured on Tawa 2026-10-02 (Hyprland 0.55.4): a preview that switches
+	// the workspace on the overlay's OWN monitor hands keyboard focus to that
+	// workspace's window despite the exclusive layer -- the whole surface goes
+	// inactive (Window.active false, wl_keyboard.leave), and hyprctl's active
+	// window changes. Usually it bounced back within ~16 ms, but once stayed
+	// away for 9 s, and an Alt release in that gap went to the window, so the
+	// switcher never committed. Flips on the other monitors never did this.
+	//
+	// The re-grab drops the layer's keyboard interactivity to None for one
+	// short tick and restores Exclusive; Hyprland treats the second commit as a
+	// fresh exclusive surface and focuses it (shell.qml binds keyboardFocus to
+	// `regrabbing`).
+	property bool regrabbing: false
+
+	Timer {
+		id: regrabTimer
+		interval: 30
+		repeat: false
+		onTriggered: root.regrabbing = false
+	}
+
+	onActiveFocusChanged: {
+		if (root.active && root.activeFocus && !root.focusLogged) {
+			root.focusLogged = true;
+			console.log("switcher: focus-in altHeld=" + root.altHeld
+				+ " known=" + root.altStateKnown + " t=" + Date.now());
+		}
+		if (root.active && !root.activeFocus && !root.regrabbing) {
+			console.log("switcher: regrab t=" + Date.now());
+			root.regrabbing = true;
+			regrabTimer.restart();
+		}
+	}
+
 	Keys.onReleased: event => {
 		if (event.key !== Qt.Key_Alt)
 			return;
@@ -470,13 +892,14 @@ Item {
 		if (!root.armed)
 			return;
 		event.accepted = true;
+		root.commitSource = "keys";
 		root.requestCommit();
 	}
 
 	Shortcut {
 		enabled: root.active
 		sequence: "Esc"
-		onActivated: root.dismissed()
+		onActivated: root.cancel()
 	}
 
 	Shortcut {
@@ -505,7 +928,7 @@ Item {
 
 	MouseArea {
 		anchors.fill: parent
-		onClicked: root.dismissed()
+		onClicked: root.cancel()
 	}
 
 	Rectangle {
