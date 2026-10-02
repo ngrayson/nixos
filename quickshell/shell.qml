@@ -185,6 +185,11 @@ ShellRoot {
 	// carries the `commit` IPC, which is the tooling and test entry point.
 	signal windowSwitcherCommit()
 
+	// The center switcher's focus-recency list (WindowSwitcher.focusOrder),
+	// mirrored here so `ipc call switcher order` can print it without opening
+	// the overlay.
+	property var windowSwitcherOrder: []
+
 	// Hyprland's resize-move mode (SUPER+A). While it is on, a bare left-drag
 	// moves windows and a bare right-drag resizes them, so knowing it is on is
 	// not cosmetic -- ordinary clicking behaves differently everywhere.
@@ -1067,6 +1072,20 @@ ShellRoot {
 				return false;
 			shellRoot.windowSwitcherCommit();
 			return true;
+		}
+
+		// Read-only: the switcher's tracked focus recency, most recent first,
+		// one `address<TAB>class` per line. Does not open the overlay. Compare
+		// with `hyprctl clients -j | jq -r 'sort_by(.focusHistoryID)[].address'`.
+		function order(): string {
+			const cls = {};
+			const values = Hyprland.toplevels ? Hyprland.toplevels.values : [];
+			for (let i = 0; i < values.length; ++i) {
+				const a = values[i].address || "";
+				const ipc = values[i].lastIpcObject || ({});
+				cls[a.indexOf("0x") === 0 ? a : "0x" + a] = ipc["class"] || "";
+			}
+			return shellRoot.windowSwitcherOrder.map(a => a + "\t" + (cls[a] || "")).join("\n");
 		}
 
 		// Alt+Esc via hypr-alt-escape: same shape, close without changing focus.
@@ -2500,7 +2519,12 @@ ShellRoot {
 
 				anchors.fill: parent
 				active: windowSwitcherWin.switcherOpen && windowSwitcherWin.isCenterScreen
+				tracksFocus: windowSwitcherWin.isCenterScreen
 				onDismissed: shellRoot.windowSwitcherVisible = false
+				onFocusOrderChanged: {
+					if (windowSwitcherWin.isCenterScreen)
+						shellRoot.windowSwitcherOrder = switcher.focusOrder;
+				}
 
 				// Guard on isCenterScreen rather than `active`: the bank has to
 				// be fillable BEFORE the overlay becomes visible, and the
