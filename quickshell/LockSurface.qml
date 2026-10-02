@@ -5,19 +5,19 @@ import Quickshell.Io
 import Quickshell.Services.UPower
 
 // SDDM-like lock chrome on login-bg.png. Shared by WlSessionLock and the Esc-dismissable preview overlay.
-Item {
+FocusScope {
 	id: root
+	focus: true
 
 	required property LockContext context
 	property bool preview: false
 	property bool showUi: true
-	// Split out of showUi deliberately. showUi is "draw the chrome", primary is
-	// "take the keys". The real lock now draws a prompt on every output, but
-	// only one surface may forceActiveFocus() — under ext-session-lock the
-	// compositor routes input, and surfaces fighting over focus is the failure
-	// mode that split buys us out of. LockContext is shared, so the non-primary
-	// prompts still mirror the typed text and the failure shake.
-	property bool primary: true
+	// Every surface holds focus on its own passwordBox. Qt focus is per-window,
+	// so surfaces cannot fight over it; Hyprland alone picks which lock surface
+	// gets keys -- the one under the cursor (InputManager.cpp, isSessionLocked
+	// branch of mouseMoveUnified). LockContext is shared, so a key landing on a
+	// blanked side output still shows as a dot on the lit main one. Do not gate
+	// focus per output again: a surface without a focus item drops every key.
 
 	readonly property color voidColor: Theme.bg
 	readonly property color depthColor: Theme.depth
@@ -293,7 +293,7 @@ Item {
 				radius: 8
 				color: root.surfaceColor
 				border.width: 1
-				border.color: passwordBox.activeFocus ? root.accentColor : Qt.rgba(surfaceSolid.r, surfaceSolid.g, surfaceSolid.b, 0.5)
+				border.color: passwordBox.activeFocus || root.context.currentText.length > 0 ? root.accentColor : Qt.rgba(surfaceSolid.r, surfaceSolid.g, surfaceSolid.b, 0.5)
 
 				TextInput {
 					id: passwordBox
@@ -309,7 +309,7 @@ Item {
 					font.pixelSize: 15
 					enabled: !root.context.unlockInProgress
 					inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
-					focus: root.primary
+					focus: true
 
 					Text {
 						anchors.fill: parent
@@ -317,7 +317,7 @@ Item {
 						text: "Password"
 						color: root.mutedColor
 						font.pixelSize: 15
-						visible: passwordBox.text.length === 0 && !passwordBox.activeFocus
+						visible: passwordBox.text.length === 0 && !passwordBox.activeFocus && root.context.currentText.length === 0
 					}
 
 					onTextChanged: {
@@ -526,6 +526,26 @@ Item {
 		}
 	}
 
+	// Reached only when passwordBox is NOT the active focus item (keys it does
+	// not take also propagate up, hence the early return). Focus the field and
+	// keep the keystroke, so the first character is never lost.
+	Keys.onPressed: event => {
+		if (passwordBox.activeFocus)
+			return;
+		root.handleKey(event);
+		if (event.accepted || !passwordBox.enabled)
+			return;
+		passwordBox.forceActiveFocus();
+		if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+			root.context.tryUnlock();
+			event.accepted = true;
+		} else if (event.text.length > 0 && event.text.charCodeAt(0) >= 0x20
+				&& !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+			passwordBox.insert(passwordBox.length, event.text);
+			event.accepted = true;
+		}
+	}
+
 	// Live on EVERY preview surface, not just the one drawing the chrome.
 	// showUi means "render the password box"; it must not also decide whether
 	// Esc works, or the outputs without chrome become inescapable.
@@ -544,16 +564,15 @@ Item {
 		}
 	}
 
-	// The chrome work (avatar retry, fade poke, caps query) is per-surface and
-	// stays gated on showUi. Only the focus grab is gated on primary.
+	// The chrome work (avatar retry, fade poke, caps query) and the focus grab
+	// are per-surface and gated on showUi.
 	onShowUiChanged: {
 		if (showUi) {
 			root.faceTry = 0;
 			root.pokeUi();
 			capsQuery.running = false;
 			capsQuery.running = true;
-			if (root.primary)
-				passwordBox.forceActiveFocus();
+			passwordBox.forceActiveFocus();
 		}
 	}
 
@@ -561,8 +580,7 @@ Item {
 		if (showUi) {
 			root.pokeUi();
 			capsQuery.running = true;
-			if (root.primary)
-				passwordBox.forceActiveFocus();
+			passwordBox.forceActiveFocus();
 		}
 	}
 }
