@@ -60,8 +60,10 @@ integration needs Notion's *Insert content* capability to create pages.
 - `/task title:… [priority] [area] [due] [who]` files a row and replies, visible only to you, with
   the link. Area autocompletes from Nick's Areas.
 - `/scry` posts the digest now.
-- Any message from the owner in the inbox channel becomes a task using the inline tokens above. The
-  bot reacts ✅ and replies with the link, or reacts ❌ and gives the reason.
+- In the inbox channel, react to a message with **:crylaugh:** (`bot.captureEmoji`) to file it as a
+  task using the inline tokens above. The bot reacts ✅ and replies with the link, or reacts ❌ and
+  gives the reason. Plain messages are left alone, so the channel can hold other captures too. A
+  message the bot has already marked ✅ is never filed twice.
 - Only `bot.ownerId` may use any of it. Everyone else gets "not for you".
 
 Setup (once):

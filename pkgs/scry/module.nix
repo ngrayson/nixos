@@ -15,7 +15,8 @@
 # prints its URL; hearth-tui's "Scry — file a task" calls it over ssh. Also root, for the same reason.
 #
 # `services.scry.bot` runs bot.mjs as scry-bot.service: a Discord gateway bot (outbound websocket,
-# no inbound port) with /task, /scry and an optional inbox channel. Needs DISCORD_BOT_TOKEN in the
+# no inbound port) with /task, /scry and an optional inbox channel where the owner's capture-emoji
+# reaction (default :crylaugh:) files a message. Needs DISCORD_BOT_TOKEN in the
 # same environmentFile; the guild/owner/channel ids are not secrets and live in the host config.
 { config, lib, pkgs, ... }:
 let
@@ -116,7 +117,12 @@ in
       inboxChannelId = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "Channel whose messages from the owner become tasks (inbox grammar). null disables inbox mode.";
+        description = "Channel where a message the owner reacts to with captureEmoji becomes a task (inbox grammar). null disables inbox mode.";
+      };
+      captureEmoji = lib.mkOption {
+        type = lib.types.str;
+        default = "crylaugh";
+        description = "Name of the (custom or unicode) emoji whose reaction by the owner files a message in the inbox channel.";
       };
     };
   };
@@ -160,6 +166,7 @@ in
       environment = {
         DISCORD_GUILD_ID = cfg.bot.guildId;
         DISCORD_OWNER_ID = cfg.bot.ownerId;
+        DISCORD_CAPTURE_EMOJI = cfg.bot.captureEmoji;
         SCRY_MAX_ITEMS = toString cfg.maxItems;
         # Its own state dir: two DynamicUser units must not share /var/lib/scry.
         SCRY_OUT = "/var/lib/scry-bot";
