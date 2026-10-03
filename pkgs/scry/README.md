@@ -52,6 +52,25 @@ Example: `sudo scry-task "Replace COLD drive p2 #hearth due:fri"`. The
 integration needs Notion's *Insert content* capability to create pages.
 `task.mjs` exports the parser and `createTask` for the future Discord bot.
 
+## Bot
+
+`services.scry.bot` runs `bot.mjs` as `scry-bot.service` on Hearth. It's a Discord gateway bot
+(outbound websocket only, no inbound port) that shares `task.mjs`'s grammar and Notion schema:
+
+- `/task title:… [priority] [area] [due] [who]` files a row and replies, visible only to you, with
+  the link. Area autocompletes from Nick's Areas.
+- `/scry` posts the digest now.
+- Any message from the owner in the inbox channel becomes a task using the inline tokens above. The
+  bot reacts ✅ and replies with the link, or reacts ❌ and gives the reason.
+- Only `bot.ownerId` may use any of it. Everyone else gets "not for you".
+
+Setup (once):
+1. In the Developer Portal, open the app, go to Bot, and enable the **Message Content** intent.
+2. Invite the bot with scopes `bot applications.commands` and permissions Send Messages, Read
+   Message History, Add Reactions and Create Public Threads.
+3. Add `DISCORD_BOT_TOKEN=…` to the environment file (`secrets/scry.env`, via `sops`).
+4. Set `guildId`, `ownerId` and optionally `inboxChannelId` in the host config. They aren't secrets.
+
 ## Notion setup (once)
 
 1. notion.so/profile/integrations → new internal integration "plate", read +
@@ -69,6 +88,7 @@ Without `NOTION_TOKEN` the digest still runs (Conveyor only) and says so.
 |---|---|
 | `digest.mjs` | the digest; `--post` sends to Discord |
 | `task.mjs` | one Notion task from inbox-grammar text; behind `scry-task` |
+| `bot.mjs` | Discord bot: `/task`, `/scry`, inbox channel; runs as `scry-bot.service` |
 | `cv.mjs` | tiny CLI over the Conveyor MCP: `node cv.mjs list`, `node cv.mjs call <tool> '<json>'` |
 | `preload.cjs` | routes the MCP's websocket through `HTTPS_PROXY` when set; no-op on Hearth |
 | `module.nix` | NixOS module: `services.scry` — systemd timer + `scry-now` command |
