@@ -1,9 +1,12 @@
 // Scrying Orb — Discord bot: /task (→ Notion), /scry (post the digest), inbox-channel capture.
 // Gateway (outbound websocket) only; no inbound port.
 //   /task <title> [priority] [area] [due] [who]   → one row in Nick's Tasks
-//   any message from the owner in the inbox channel → same, with inline tokens: p0-p3, #area, due:<date|fri|+3d>, @agent|@collab
+//   the owner reacts :crylaugh: to a message in the inbox channel → that message becomes a task, with
+//   inline tokens: p0-p3, #area, due:<date|fri|+3d>, @agent|@collab. Plain messages are left alone, so
+//   the channel can also carry other captures (Nick files Conveyor tasks there too).
 // Env (same file as digest.mjs): NOTION_TOKEN, DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_OWNER_ID
-// (only this user may create tasks), optional DISCORD_INBOX_CHANNEL_ID. The grammar and the Notion
+// (only this user may create tasks), optional DISCORD_INBOX_CHANNEL_ID and DISCORD_CAPTURE_EMOJI
+// (emoji name, default "crylaugh"). The grammar and the Notion
 // schema come from task.mjs, so scry-task, hearth-tui and this bot file tasks identically.
 import { Client, GatewayIntentBits, Partials, REST, Routes, SlashCommandBuilder, MessageFlags } from "discord.js";
 import { existsSync, readFileSync } from "node:fs";
@@ -22,8 +25,9 @@ if (existsSync(join(here, ".env")))
 for (const k of ["NOTION_TOKEN", "DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID", "DISCORD_OWNER_ID"]) if (!env[k]) throw new Error(`missing ${k}`);
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
-  partials: [Partials.Message, Partials.Channel],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.MessageContent],
+  // Reactions on messages sent before the bot (re)connected arrive as partials and are fetched on demand.
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
 const taskCommand = new SlashCommandBuilder()
   .setName("task").setDescription("File a task in Nick's Tasks (Notion)")
@@ -42,10 +46,11 @@ const runDigest = () => new Promise((resolve, reject) =>
 
 client.once("clientReady", async () => {
   await new REST().setToken(env.DISCORD_BOT_TOKEN).put(Routes.applicationGuildCommands(client.user.id, env.DISCORD_GUILD_ID), { body: [taskCommand.toJSON(), scryCommand.toJSON()] });
-  console.log(`ready as ${client.user.tag}; /task and /scry registered in guild ${env.DISCORD_GUILD_ID}; inbox ${env.DISCORD_INBOX_CHANNEL_ID ? "on" : "off"}`);
+  console.log(`ready as ${client.user.tag}; /task and /scry registered in guild ${env.DISCORD_GUILD_ID}; inbox ${env.DISCORD_INBOX_CHANNEL_ID ? `on (:${CAPTURE_EMOJI}: reactions)` : "off"}`);
 });
 
 const isOwner = (id) => id === env.DISCORD_OWNER_ID;
+const CAPTURE_EMOJI = env.DISCORD_CAPTURE_EMOJI || "crylaugh";
 const summary = (t, url) => `✅ [${t.title}](<${url}>)` + [t.priority, t.area && `#${t.area}`, t.due && `due ${t.due}`, t.who && t.who !== "Nick" && t.who].filter(Boolean).map((x) => ` · ${x}`).join("");
 
 client.on("interactionCreate", async (i) => {
@@ -73,9 +78,25 @@ client.on("interactionCreate", async (i) => {
   }
 });
 
-client.on("messageCreate", async (m) => {
-  if (!env.DISCORD_INBOX_CHANNEL_ID || m.channelId !== env.DISCORD_INBOX_CHANNEL_ID) return;
-  if (m.author.bot || !isOwner(m.author.id)) return;
+// Inbox capture: only a message the owner reacts to with the capture emoji is filed. Its author can be
+// anyone; the owner's reaction is the authorisation. The bot's own ✅ marks a message as already
+// filed, so a second reaction (or removing and re-adding one) never files it twice.
+client.on("messageReactionAdd", async (reaction, user) => {
+  if (!env.DISCORD_INBOX_CHANNEL_ID || reaction.message.channelId !== env.DISCORD_INBOX_CHANNEL_ID) return;
+  if (user.bot || !isOwner(user.id)) return;
+  try {
+    if (reaction.partial) await reaction.fetch();
+  } catch {
+    return;
+  }
+  if (reaction.emoji.name !== CAPTURE_EMOJI) return;
+  let m;
+  try {
+    m = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
+  } catch {
+    return;
+  }
+  if (m.reactions.cache.get("✅")?.me) return;
   try {
     const t = parseInbox(m.content);
     const url = await createTask(t);
