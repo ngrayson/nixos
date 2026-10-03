@@ -129,7 +129,9 @@ COLD at `/mnt/cold`, `noauto` + `nofail` + `x-systemd.device-timeout=10s`
 (mounted at boot by Jellyfin/Syncthing's `RequiresMountsFor` and on replug by
 udev, never wanted by `local-fs.target`, so a parked COLD is not re-pulled by
 every timer); dirs
-`media/{movies,tv,music}` and `share/`. `hearth-disk park` before unplugging —
+`media/{movies,tv,music}` and `share/`. `hearth-disk park` before unplugging;
+replug remounts via udev and restarts Jellyfin and Syncthing
+(`WantedBy=mnt-cold.mount` on both), `resume` is the by-hand path —
 park runtime-masks `mnt-cold.mount` across the unmount because its
 `RequiresMountsFor` consumers re-pull it otherwise — `hearth-deploy health` is expected to
 fail while parked; `hearth-ingest` and `restic-backups-hearth` condition-skip
