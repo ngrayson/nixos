@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Modal from "../components/Modal.jsx";
 import { widget } from "../lib/config.js";
 import { Empty, Fact, Heading, ICO, Icon } from "../lib/icons.jsx";
@@ -111,7 +111,9 @@ function placeDetail(loc) {
 }
 
 function fetchJson(url) {
-  return fetch(url).then((res) => {
+  // no-store: the forecast URL is identical on every refresh, so without it
+  // Chromium may answer a re-fetch from its HTTP cache instead of Open-Meteo.
+  return fetch(url, { cache: "no-store" }).then((res) => {
     if (!res.ok) throw new Error(`${url} ${res.status}`);
     return res.json();
   });
@@ -147,6 +149,10 @@ function loadPlace(loc, unit) {
 }
 
 const AQI_REFRESH_MS = 600000;
+// Open-Meteo updates `current` every 15 minutes. Without a refresh the Go3 kiosk,
+// which loads the page once after its 03:30 reboot, showed that morning's reading
+// all day. 3 locations x 96/day = 288 requests per open tab, far under the free tier.
+const FORECAST_REFRESH_MS = 900000;
 
 // aqi.json carries one entry per configured location, each tagged with its
 // index in weather.locations. Match on that index rather than array position:
@@ -392,19 +398,31 @@ export default function Weather({ variant = "combo" }) {
   const [places, setPlaces] = useState(null);
   const [failed, setFailed] = useState(false);
   const [aqiData, setAqiData] = useState(null);
+  const loaded = useRef(false);
 
+  // The forecast re-polls so "current" stays current on a page that is never
+  // reloaded. Only a failure before the first success shows "unavailable"; a
+  // failed refresh keeps the previous forecast on screen.
   useEffect(() => {
-    if (!picked.length) return;
+    if (!picked.length) return undefined;
     let cancelled = false;
-    Promise.all(picked.map(({ loc, index }) => loadPlace(loc, unit).then((p) => ({ ...p, index }))))
-      .then((next) => {
-        if (!cancelled) setPlaces(next);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
+    function poll() {
+      Promise.all(picked.map(({ loc, index }) => loadPlace(loc, unit).then((p) => ({ ...p, index }))))
+        .then((next) => {
+          if (cancelled) return;
+          loaded.current = true;
+          setPlaces(next);
+          setFailed(false);
+        })
+        .catch(() => {
+          if (!cancelled && !loaded.current) setFailed(true);
+        });
+    }
+    poll();
+    const id = setInterval(poll, FORECAST_REFRESH_MS);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, []);
 
