@@ -17,16 +17,18 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
 
 **Timing: now, not after the GCP server.** The Gcp host is specced as an `e2-small` (2 vCPU, 2 GiB; see `scripts/gcp/create-instance.sh`), but a single Small pod needs 7 GiB. A box big enough to host pods costs about $50 a month always-on, and it would still have to run Debian to use the Host runtime.
 
-**Projects**
+**WizOs hosts the VM; other projects consume it.** Nick, 2026-10-05: a VM on Tawa is the wrong place to develop NixOS itself, because a WizOs change is a change to the host. WizOs is the VM's *host*: this flake declares and runs it, and it serves projects whose work finishes inside a pod.
 
-| Project | Use it? | Why |
+| Project | Role | Why |
 |---|---|---|
-| **WizOs** | Yes, first | Its cloud codespace path is already broken ("machine type is not available for this repository"). |
-| **Under the Stars** | Yes, second | Private repo with no toolchain, so a Small pod is plenty. |
-| **foundation** | Not ours to switch | The repo is Logan's, and it bakes on his self-hosted runner. If the image is in GHCR, enabling the project on our instance is enough. If it is a Bake-Locally image, Logan shares his instance instead. |
-| **Sunfall** | No | There's no Conveyor project yet. |
+| **WizOs** | Host | Its cards are verified on the real machines (`os-rebuild switch`, `hearth-deploy`, `go3-deploy`, a bar reload, a replug), which a pod can't do. They stay with the local loop (`/convey-her-watch`) on Tawa. |
+| **Under the Stars** | First consumer | Private repo with no toolchain: a pod can take a card all the way to a PR, and a Small pod is plenty. |
+| **foundation** | Consumer, once Logan agrees | The repo is Logan's and bakes on his self-hosted runner. An instance can serve up to 5 other accounts: if the image is in GHCR, activate the project on this instance; if it is a Bake-Locally image, Logan shares his instead. |
+| **Sunfall** | Later | There's no Conveyor project yet. |
 
-**Pods cannot deploy hosts.** A pod is isolated from Tawa's home directory, SSH keys and compositor by design. That makes pods suitable for evaluation, docs and script cards gated by `nix flake check`. Any card verified by `os-rebuild switch`, `hearth-deploy`, `go3-deploy` or a Quickshell reload stays with the local loop (`/convey-her-watch`) on Tawa.
+**WizOs sub-projects in a pod, such as home.wizt.org.** The dashboard under `hosts/Hearth/intranet` is a plain npm app. A pod can build it and serve a preview for review; only `hearth-intranet-deploy` needs the host. Compute is set **per project only**: there's no sub-board or per-card routing (per the managed-personal-compute guide, 2026-10-05). Turning on Personal Compute for WizOs therefore only affects cards someone starts with Conveyor's **Build** button. The local loop never presses it. If that split is ever wanted, mark pod-safe cards with a tag, have the loop skip them, and press Build on those. Until then, WizOs stays on the local loop.
+
+**Pods cannot deploy hosts.** A pod is isolated from Tawa's home directory, SSH keys and compositor by design. That makes pods suitable for evaluation, docs, scripts and previewable app work, never for host verification.
 
 ## Costs and risks
 
@@ -54,14 +56,14 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
    conveyor-k3 vm setup --instance=tawa --cpus=6 --memory=12 --disk=100
    conveyor-k3 vm link --instance=tawa
    ```
-   In the browser, name the machine `Tawa`, allow **WizOs** and **Under the Stars** only, and set **Max concurrent builds** to 1. Then install it as a service so it survives reboots:
+   In the browser, name the machine `Tawa`, allow only the consumer projects (**Under the Stars** first; foundation once Logan agrees), and set **Max concurrent builds** to 1. Then install it as a service so it survives reboots:
    ```sh
    conveyor-k3 vm stop --instance=tawa
    conveyor-k3 vm service install --instance=tawa
    ```
    Its storage is `~/.local/share/conveyor-k3-vms/tawa`.
 2. **Egress allowlist.** Do this with the VM stopped. Run `conveyor-k3 vm allow --host=<h> --port=443` for each host that `vm setup` hasn't already approved, then `conveyor-k3 vm refresh`. The hosts to check are `cache.nixos.org`, `channels.nixos.org`, `github.com`, `api.github.com`, `objects.githubusercontent.com`, `registry.npmjs.org` and `ghcr.io`.
-3. **Project settings.** In Project Settings → Cloud, set:
+3. **Project settings,** in the consumer project (not WizOs). In its Project Settings → Cloud, set:
    - **Compute:** Personal Compute.
    - **Image Bake Runner:** GitHub Actions, with an empty registry (GHCR) and an empty runner label.
    - **Setup Command:** `.devcontainer/conveyor/setup.sh`.
