@@ -13,6 +13,7 @@
     ./programs/pixel-composer.nix
     ./programs/zsh.nix
     ./programs/claude-skills.nix
+    ./programs/conveyor-k3.nix
     ./programs/git.nix
     ./programs/ssh-hearth.nix
     ./programs/ssh-tawa.nix

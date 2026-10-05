@@ -111,6 +111,12 @@ assembled by Home Manager (`home/programs/claude-skills.nix`).
   `claude-skills.nix` to surface outside this repo; inside this repo project
   scope serves it immediately. A skills dir that first appears mid-session needs
   a CLI restart to load.
+- **Conveyor Personal Compute**: WizOs cloud codespaces are broken, so Build
+  pods run on a Lima VM on Tawa (`common/conveyor-k3.nix`, Tawa only). Pods
+  are isolated from Tawa's keys and compositor, so they suit eval/doc/script
+  cards only. Anything verified by a switch, a deploy or a bar reload stays
+  with `/convey-her-watch`. Decisions and setup:
+  `documentation/conveyor-personal-compute.md`.
 
 Scope: `home/programs/claude-skills.nix`, `.claude/skills/`,
 `scripts/conveyor-skills-update.sh`.
