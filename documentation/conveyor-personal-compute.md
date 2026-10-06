@@ -71,7 +71,17 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
    Bound the bake cadence with `bakeMaxStalenessHours: 24`, `bakeScheduleHourUtc: 9` and `bakeTriggerPaths: ["flake.lock", ".devcontainer/conveyor/**"]`.
 
    Saving needs the **Workflows** and **Packages** permissions on the Conveyor GitHub App. Then press **Bake now** and wait for a green `conveyor-prebake` run.
-4. **Prove it.** Build one doc-only card and check that its pod is placed on Tawa and reaches a PR.
+4. **Pull credentials, for private repos.** The bake bakes the **full repo checkout with history** into the image at `/workspaces/repo`, so a private repo's GHCR package stays private, and the VM's k3s pulls anonymously: the pod sits in `Init:ImagePullBackOff` with `401 Unauthorized`. Making the package public would publish the repo, and Conveyor's codespace secrets are injected *after* the pull (and would expose the token to every build). Instead, give the guest its own credential, a **classic PAT with only `read:packages`** (GHCR does not take fine-grained tokens for pulls). Paste it on stdin, then press Ctrl-D:
+   ```sh
+   LIMA_HOME=~/.local/share/conveyor-k3-vms/<instance>/lima limactl shell <instance> \
+     sudo conveyor-k3 registry add ghcr.io --username <github-user> --password-stdin
+   ```
+   It restarts the guest's k3s. Check with `… sudo conveyor-k3 registry list`, which should show `✓ ghcr.io`. When the PAT expires, the same 401 comes back; re-run this with a new token. The Bake Locally route (a self-hosted runner on Tawa) avoids GHCR entirely, if the PAT ever becomes a burden.
+5. **Prove it.** Build one doc-only card and check that its pod is placed on Tawa and reaches a PR. Read pod state from inside the guest with `LIMA_HOME=… limactl shell <instance> sudo k3s kubectl get pods -A`, which is read-only.
+
+**Status, 2026-10-06:** instance `tesseract` (default 4 CPU / 8 GiB / 64 GiB) serves Under the Stars, with the pod size set to Small. A Small pod (about 7 GiB) is the largest that fits; the default 14 GiB size is refused with `insufficient_capacity`. The first proof was the Stonetop GM-sheet card: its pod was placed on `linux-x64-tesseract` and opened under-the-stars PR #18.
+
+**NixOS gaps found in conveyor-k3 0.1.14** (handled by `common/conveyor-k3.nix`): it runs eight host tools by absolute Debian path (`/usr/bin/{which,ssh,nc,stat,systemctl,loginctl,journalctl}`, `/bin/ps`), and it locates `limactl`, `qemu-system-x86_64`, `qemu-img` and Lima's `ssh-keygen` over a fixed PATH. It also expects UEFI firmware at `<qemu dir>/../share/qemu/edk2-x86_64-code.fd`, and it records the paths it found in the instance's `state.json` and `lima.yaml`. Its wrappers and its user service also pin the setup-time Nix store `node` (tracked on its own card).
 
 ## Operating the instance
 
