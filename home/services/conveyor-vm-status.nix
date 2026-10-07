@@ -330,6 +330,10 @@ in {
       Description = "Conveyor Personal Compute VM state for the Quickshell bar pill";
       # Only hosts that have created an instance; elsewhere no file, no pill.
       ConditionPathIsDirectory = "%h/.local/share/conveyor-k3-vms";
+      # The timer plus every ctl action's refresh can exceed the default
+      # 5-starts-per-10s limit during a stop/start; a cheap idempotent
+      # oneshot gains nothing from rate limiting.
+      StartLimitIntervalSec = 0;
     };
     Service = {
       Type = "oneshot";
