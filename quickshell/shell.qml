@@ -35,7 +35,8 @@ ShellRoot {
 	property bool brightnessPresent: false
 	property int brightnessPercent: 0
 	// Framework EC keyboard backlight (chromeos::kbd_backlight). Left-click on the
-	// brightness pill cycles off → 33% → 100%; the OSD shows the new level.
+	// brightness pill climbs kbdLevels and wraps to off; the OSD shows the new level.
+	readonly property var kbdLevels: [0, 1, 5, 20, 60, 100]
 	property bool kbdBrightnessPresent: false
 	property int kbdBrightnessPercent: 0
 	property bool brightnessOsdPending: false
@@ -1005,12 +1006,20 @@ ShellRoot {
 		}
 	}
 
-	// Mirrors the Framework hardware key: off -> dim -> full.
+	// Mirrors the Framework hardware key's shape (climb, then wrap to off) but with
+	// a dark-room floor. "Next rung above the reading" rather than "index + 1" so a
+	// level set by the EC key (not on this ladder) still steps sensibly.
+	function nextKbdLevel(p: int): int {
+		for (const level of kbdLevels)
+			if (level > p)
+				return level;
+		return 0;
+	}
+
 	function cycleKbdBrightness(): void {
 		if (kbdAction.running)
 			return;
-		const p = kbdBrightnessPercent;
-		const next = p === 0 ? 33 : (p < 67 ? 100 : 0);
+		const next = nextKbdLevel(kbdBrightnessPercent);
 		kbdFeedbackPending = true;
 		kbdAction.command = ["brightnessctl", "-q", "-d", "chromeos::kbd_backlight", "set", next + "%"];
 		kbdAction.running = true;

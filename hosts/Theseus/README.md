@@ -93,7 +93,7 @@ into a card or a commit unredacted. Runs age out after 30 days.
 
 ## Keyboard backlight
 
-Quickshell's bar still talks to `chromeos::kbd_backlight` (Intel Framework path). On Theseus, check `brightnessctl -l` — if the EC device is different (`framework_laptop::kbd_backlight` or similar), say so and we will host-gate the QML device name. Panel brightness keys use `brightnessctl -c backlight`.
+Quickshell's bar still talks to `chromeos::kbd_backlight` (Intel Framework path). On Theseus, check `brightnessctl -l` — if the EC device is different (`framework_laptop::kbd_backlight` or similar), say so and we will host-gate the QML device name. Panel brightness keys use `brightnessctl -c backlight`. Left-clicking the bar's brightness pill climbs the keyboard backlight through off, 1, 5, 20, 60, 100 % and wraps to off; the ladder is `kbdLevels` in `quickshell/shell.qml`.
 
 ## Roblox (Sober)
 
