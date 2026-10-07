@@ -91,5 +91,6 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
 | Service logs | `journalctl --user -u conveyor-k3-vm@tawa -f` |
 | Disk | `conveyor-k3 registry gc` |
 | Pause before gaming | Instance panel → **Accept new work** off. Running pods are untouched. |
+| Day to day | The bar's server pill: hover for state, cards and stats; left-click starts it, or stops it once the running card finishes; right-click opens the panel, logs and **Force stop**. All through `qs-conveyor-vm-ctl` (`home/services/conveyor-vm-status.nix`). |
 
-Never run `limactl stop` on the instance directly. Use `conveyor-k3 vm stop`.
+Never run `limactl stop` on the instance directly. Use the bar pill, `qs-conveyor-vm-ctl stop`, or `conveyor-k3 vm stop`.

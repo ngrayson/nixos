@@ -9,3 +9,4 @@ MediaPopup 1.0 MediaPopup.qml
 CalendarPopup 1.0 CalendarPopup.qml
 WindowSwitcher 1.0 WindowSwitcher.qml
 ClaudeMenu 1.0 ClaudeMenu.qml
+ConveyorVmMenu 1.0 ConveyorVmMenu.qml
