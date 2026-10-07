@@ -13,6 +13,11 @@
 #
 # `scry-task <text>` files one row in Nick's Tasks (Notion) from inbox-grammar text (task.mjs) and
 # prints its URL; hearth-tui's "Scry — file a task" calls it over ssh. Also root, for the same reason.
+#
+# `services.scry.bot` runs bot.mjs as scry-bot.service: a Discord gateway bot (outbound websocket,
+# no inbound port) with /task, /scry and an optional inbox channel where the owner's capture-emoji
+# reaction (default :crylaugh:) files a message. Needs DISCORD_BOT_TOKEN in the
+# same environmentFile; the guild/owner/channel ids are not secrets and live in the host config.
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.scry;
@@ -22,14 +27,14 @@ let
     # Only what the build reads, so README/module edits do not rebuild the package.
     src = lib.fileset.toSource {
       root = ./.;
-      fileset = lib.fileset.unions [ ./package.json ./package-lock.json ./digest.mjs ./task.mjs ./preload.cjs ];
+      fileset = lib.fileset.unions [ ./package.json ./package-lock.json ./digest.mjs ./task.mjs ./bot.mjs ./preload.cjs ];
     };
-    npmDepsHash = "sha256-FZA+we/8wPU8fJHLD9K9BHICPB7h9jGgJtNoRIBpF5E=";
+    npmDepsHash = "sha256-7j7/oa66TXH7AoI3thtzqbFskrLmbJh4+AItAlUDI2k=";
     dontNpmBuild = true;
     # cv.mjs (a general-purpose Conveyor CLI) is a dev tool and stays out of the installed package.
     installPhase = ''
       mkdir -p $out/lib/scry
-      cp -r digest.mjs task.mjs preload.cjs package.json node_modules $out/lib/scry/
+      cp -r digest.mjs task.mjs bot.mjs preload.cjs package.json node_modules $out/lib/scry/
     '';
   };
   digest = pkgs.writeShellScript "scry-digest" ''
@@ -82,7 +87,7 @@ in
     enable = lib.mkEnableOption "weekly Conveyor scry digest to Discord";
     environmentFile = lib.mkOption {
       type = lib.types.path;
-      description = "File with CONVEYOR_API_URL, CONVEYOR_USER_TOKEN, CONVEYOR_PROJECT_ID, DISCORD_WEBHOOK_URL and optionally NOTION_TOKEN (KEY=value lines). Keep it in secrets/.";
+      description = "File with CONVEYOR_API_URL, CONVEYOR_USER_TOKEN, CONVEYOR_PROJECT_ID, DISCORD_WEBHOOK_URL and optionally NOTION_TOKEN, plus DISCORD_BOT_TOKEN when bot.enable (KEY=value lines). Keep it in secrets/.";
     };
     onCalendar = lib.mkOption {
       type = lib.types.str;
@@ -98,6 +103,27 @@ in
       type = lib.types.bool;
       default = true;
       description = "Also post a digest during activation whenever the scry package (digest.mjs or deps) changes.";
+    };
+    bot = {
+      enable = lib.mkEnableOption "the Scrying Orb Discord bot (/task, /scry, inbox channel → Notion)";
+      guildId = lib.mkOption {
+        type = lib.types.str;
+        description = "Discord server the slash commands are registered in.";
+      };
+      ownerId = lib.mkOption {
+        type = lib.types.str;
+        description = "The only Discord user allowed to file tasks or run /scry.";
+      };
+      inboxChannelId = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Channel where a message the owner reacts to with captureEmoji becomes a task (inbox grammar). null disables inbox mode.";
+      };
+      captureEmoji = lib.mkOption {
+        type = lib.types.str;
+        default = "crylaugh";
+        description = "Name of the (custom or unicode) emoji whose reaction by the owner files a message in the inbox channel.";
+      };
     };
   };
 
@@ -126,6 +152,40 @@ in
       serviceConfig = serviceConfig // {
         RemainAfterExit = true;
         ExecStart = onChange;
+      };
+    };
+
+    # Long-running gateway client; Restart=always rides out Discord reconnects and Hearth's network blips.
+    systemd.services.scry-bot = lib.mkIf cfg.bot.enable {
+      description = "Scrying Orb: Discord bot (/task, /scry, inbox → Notion)";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
+      # /scry runs digest.mjs, which spawns the Conveyor MCP server as a bare `node` child.
+      path = [ pkgs.nodejs ];
+      environment = {
+        DISCORD_GUILD_ID = cfg.bot.guildId;
+        DISCORD_OWNER_ID = cfg.bot.ownerId;
+        DISCORD_CAPTURE_EMOJI = cfg.bot.captureEmoji;
+        SCRY_MAX_ITEMS = toString cfg.maxItems;
+        # Its own state dir: two DynamicUser units must not share /var/lib/scry.
+        SCRY_OUT = "/var/lib/scry-bot";
+      } // lib.optionalAttrs (cfg.bot.inboxChannelId != null) {
+        DISCORD_INBOX_CHANNEL_ID = cfg.bot.inboxChannelId;
+      };
+      restartTriggers = [ scry ];
+      serviceConfig = {
+        DynamicUser = true;
+        EnvironmentFile = cfg.environmentFile;
+        ExecStart = "${pkgs.nodejs}/bin/node ${scry}/lib/scry/bot.mjs";
+        StateDirectory = "scry-bot";
+        WorkingDirectory = "/var/lib/scry-bot";
+        Restart = "always";
+        RestartSec = 10;
+        PrivateTmp = true;
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
       };
     };
 

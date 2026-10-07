@@ -111,6 +111,12 @@ assembled by Home Manager (`home/programs/claude-skills.nix`).
   `claude-skills.nix` to surface outside this repo; inside this repo project
   scope serves it immediately. A skills dir that first appears mid-session needs
   a CLI restart to load.
+- **Conveyor Personal Compute**: WizOs *hosts* a Lima VM on Tawa
+  (`common/conveyor-k3.nix`, Tawa only) that runs Build pods for other
+  projects (Under the Stars first). WizOs cards are NOT built there: they
+  change the host and are verified by a switch, a deploy or a bar reload, so
+  they stay with `/convey-her-watch`. Decisions and setup:
+  `documentation/conveyor-personal-compute.md`.
 
 Scope: `home/programs/claude-skills.nix`, `.claude/skills/`,
 `scripts/conveyor-skills-update.sh`.
@@ -305,7 +311,10 @@ start), wifi, bluetooth, screen-warmth (only once the scheduler has a location
 fix), claude (usage on hover, left-click new agent, right-click menu; usage
 comes from `home/services/claude-usage.nix`, which reads Claude Code's
 `~/.claude/.credentials.json` READ-ONLY and never refreshes it -- only Claude
-Code may write that file), brightness, battery, resize-move (only while that
+Code may write that file), conveyor-vm (only while a Conveyor Personal
+Compute instance exists on the host; hover = state + stats, left-click start /
+graceful stop, right-click menu, every action through `qs-conveyor-vm-ctl`
+from `home/services/conveyor-vm-status.nix`), brightness, battery, resize-move (only while that
 mode is on), keep-awake, mic, volume, power. Keep click/scroll/tooltip behavior per icon; do not split those back
 into separate pills. Network-online status polls `git fetch` about every 10
 minutes (`qs-nixos-status --online`); left-click on origin-behind is

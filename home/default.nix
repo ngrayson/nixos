@@ -13,6 +13,7 @@
     ./programs/pixel-composer.nix
     ./programs/zsh.nix
     ./programs/claude-skills.nix
+    ./programs/conveyor-k3.nix
     ./programs/git.nix
     ./programs/ssh-hearth.nix
     ./programs/ssh-tawa.nix
@@ -24,6 +25,7 @@
     ./services/battery-notify.nix
     ./services/calendar-sync.nix
     ./services/claude-usage.nix
+    ./services/conveyor-vm-status.nix
     ./services/tailscale-health.nix
     ./services/polkit-agent.nix
     ./services/nm-applet.nix

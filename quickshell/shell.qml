@@ -35,7 +35,8 @@ ShellRoot {
 	property bool brightnessPresent: false
 	property int brightnessPercent: 0
 	// Framework EC keyboard backlight (chromeos::kbd_backlight). Left-click on the
-	// brightness pill cycles off → 33% → 100%; the OSD shows the new level.
+	// brightness pill climbs kbdLevels and wraps to off; the OSD shows the new level.
+	readonly property var kbdLevels: [0, 1, 5, 20, 60, 100]
 	property bool kbdBrightnessPresent: false
 	property int kbdBrightnessPercent: 0
 	property bool brightnessOsdPending: false
@@ -240,6 +241,14 @@ ShellRoot {
 	property bool claudeMenuVisible: false
 	readonly property string claudeRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/claude-usage`
 
+	// Conveyor Personal Compute VM. home/services/conveyor-vm-status.nix polls
+	// the conveyor-k3 CLI on a user timer and writes this file; every action
+	// goes through qs-conveyor-vm-ctl. No file, or no instance, hides the pill,
+	// which is how it stays off hosts that do not run the VM.
+	property var conveyorVm: ({})
+	property bool conveyorVmMenuVisible: false
+	readonly property string conveyorVmRuntimeDir: `${Quickshell.env("XDG_RUNTIME_DIR")}/conveyor-vm`
+
 	// tailscaled health. home/services/tailscale-health.nix polls the daemon
 	// on a user timer and owns the debounce and the notification; the bar
 	// only reads its JSON and shows a pill while there is something to say.
@@ -429,6 +438,142 @@ ShellRoot {
 			.concat(shellRoot.claudeUsageLines())
 			.concat(["Left-click opens a new agent · right-click for options"])
 			.join("\n");
+	}
+
+	function conveyorVmInstance(): var {
+		const list = shellRoot.conveyorVm?.instances ?? [];
+		return list.length > 0 ? list[0] : null;
+	}
+
+	function conveyorVmVisible(): bool {
+		return (shellRoot.conveyorVm?.ok ?? false) === true && shellRoot.conveyorVmInstance() !== null;
+	}
+
+	// Running-card count, or -1 when the poller could not ask the guest.
+	// Unknown is treated as busy everywhere, never as idle.
+	function conveyorVmCards(): int {
+		const pods = shellRoot.conveyorVmInstance()?.pods;
+		return pods ? (pods.running ?? 0) : -1;
+	}
+
+	function conveyorVmTransition(): string {
+		return shellRoot.conveyorVmInstance()?.pending?.transition ?? "";
+	}
+
+	function conveyorVmUnhealthy(): bool {
+		const i = shellRoot.conveyorVmInstance();
+		if (!i)
+			return false;
+		return (i.errorsCount ?? 0) > 0
+			|| (i.status === "Running" && i.guard && i.guard.status !== "running");
+	}
+
+	function conveyorVmColor(): string {
+		const i = shellRoot.conveyorVmInstance();
+		if (!i)
+			return Theme.muted;
+		if (shellRoot.conveyorVmTransition() !== "")
+			return Theme.accent;
+		if (shellRoot.conveyorVmUnhealthy())
+			return Theme.error;
+		if (i.status !== "Running")
+			return Theme.muted;
+		return shellRoot.conveyorVmCards() > 0 ? Theme.accent : Theme.bright;
+	}
+
+	function conveyorVmIcon(): string {
+		const i = shellRoot.conveyorVmInstance();
+		if (shellRoot.conveyorVmTransition() !== "")
+			return String.fromCodePoint(0xF048D); // nf-md-server_network
+		if (!i || i.status !== "Running")
+			return String.fromCodePoint(0xF048F); // nf-md-server_off
+		return String.fromCodePoint(0xF048B); // nf-md-server
+	}
+
+	function conveyorVmDuration(iso): string {
+		const start = Date.parse(iso ?? "");
+		if (isNaN(start))
+			return "";
+		const mins = Math.max(0, Math.floor((Date.now() - start) / 60000));
+		const h = Math.floor(mins / 60);
+		const d = Math.floor(h / 24);
+		if (d > 0)
+			return d + "d " + (h % 24) + "h";
+		return h > 0 ? h + "h " + (mins % 60) + "m" : mins + "m";
+	}
+
+	// The single source of the VM text: the tooltip joins these and
+	// ConveyorVmMenu renders them one per row, like claudeUsageLines().
+	function conveyorVmLines(): var {
+		const i = shellRoot.conveyorVmInstance();
+		if (!i)
+			return ["No Conveyor VM on this host"];
+		const lines = [];
+		const t = shellRoot.conveyorVmTransition();
+		let state = i.status ?? "Unknown";
+		if (t === "starting")
+			state = "Starting…";
+		else if (t === "stopping")
+			state = "Stopping…";
+		else if (t === "draining")
+			state = "Stopping after the running card";
+		let cards = "";
+		if (i.status === "Running" && t === "") {
+			const n = shellRoot.conveyorVmCards();
+			cards = n < 0 ? " · cards unknown" : n === 0 ? " · idle" : " · " + n + (n === 1 ? " card" : " cards");
+		}
+		lines.push("Conveyor VM " + i.instance + " · " + state + cards);
+
+		const r = i.resources ?? {};
+		const g = i.guard ?? {};
+		const gib = b => (b / 1073741824).toFixed(1);
+		let res = (r.cpus ?? "?") + " CPU · " + (r.memoryGiB ?? "?") + " GiB";
+		if (i.status === "Running" && g.rssKiB)
+			res += " · host RSS " + (g.rssKiB / 1048576).toFixed(1) + " GiB";
+		if (g.diskBytes)
+			res += " · disk " + gib(g.diskBytes) + " / " + (r.diskGiB ?? "?") + " GiB";
+		lines.push(res);
+
+		const up = i.status === "Running" ? shellRoot.conveyorVmDuration(g.startedAt) : "";
+		const h = shellRoot.conveyorVm?.host ?? {};
+		const parts = [];
+		if (up)
+			parts.push("Up " + up);
+		parts.push(i.enrolled && i.linkVerified ? "linked" : "not linked");
+		if (h.allocatedHostMemoryGiB != null && h.memoryBudgetGiB != null)
+			parts.push("host budget " + h.allocatedHostMemoryGiB + " / " + Math.round(h.memoryBudgetGiB) + " GiB");
+		lines.push(parts.join(" · "));
+
+		if ((i.errorsCount ?? 0) > 0)
+			lines.push(i.errorsCount + (i.errorsCount === 1 ? " error" : " errors") + " reported — see logs");
+		else if (i.status === "Running" && g.status && g.status !== "running")
+			lines.push("Resource guard: " + g.status);
+		if (t === "draining")
+			lines.push("Turn off Accept new work in the panel so no new card lands");
+		return lines;
+	}
+
+	function conveyorVmTooltipText(): string {
+		const i = shellRoot.conveyorVmInstance();
+		const t = shellRoot.conveyorVmTransition();
+		let hint;
+		if (t !== "")
+			hint = "Left-click: busy";
+		else if (i && i.status === "Running")
+			hint = shellRoot.conveyorVmCards() === 0 ? "Left-click: stop" : "Left-click: stop after the running card";
+		else
+			hint = "Left-click: start";
+		return shellRoot.conveyorVmLines()
+			.concat([hint + " · right-click: menu"])
+			.join("\n");
+	}
+
+	function conveyorVmLeftClick(): void {
+		const i = shellRoot.conveyorVmInstance();
+		if (!i || shellRoot.conveyorVmTransition() !== "")
+			return;
+		const action = i.status === "Running" ? "stop" : "start";
+		Quickshell.execDetached(["qs-conveyor-vm-ctl", action, "--instance=" + i.instance]);
 	}
 
 	function resizeMoveTooltipText(): string {
@@ -671,6 +816,8 @@ ShellRoot {
 			return sunsetTooltipText();
 		if (kind === "claude")
 			return claudeTooltipText();
+		if (kind === "conveyorvm")
+			return conveyorVmTooltipText();
 		if (kind === "mic")
 			return micTooltipText();
 		if (kind === "audio")
@@ -859,12 +1006,20 @@ ShellRoot {
 		}
 	}
 
-	// Mirrors the Framework hardware key: off -> dim -> full.
+	// Mirrors the Framework hardware key's shape (climb, then wrap to off) but with
+	// a dark-room floor. "Next rung above the reading" rather than "index + 1" so a
+	// level set by the EC key (not on this ladder) still steps sensibly.
+	function nextKbdLevel(p: int): int {
+		for (const level of kbdLevels)
+			if (level > p)
+				return level;
+		return 0;
+	}
+
 	function cycleKbdBrightness(): void {
 		if (kbdAction.running)
 			return;
-		const p = kbdBrightnessPercent;
-		const next = p === 0 ? 33 : (p < 67 ? 100 : 0);
+		const next = nextKbdLevel(kbdBrightnessPercent);
 		kbdFeedbackPending = true;
 		kbdAction.command = ["brightnessctl", "-q", "-d", "chromeos::kbd_backlight", "set", next + "%"];
 		kbdAction.running = true;
@@ -1479,6 +1634,37 @@ ShellRoot {
 		repeat: true
 		running: !claudeStateFile.loaded
 		onTriggered: claudeStateFile.reload()
+	}
+
+	// Conveyor VM state, rewritten atomically by qs-conveyor-vm-status every
+	// ten seconds and by qs-conveyor-vm-ctl around each action. Never written
+	// on hosts without an instance, so the retry just keeps the pill hidden.
+	FileView {
+		id: conveyorVmStateFile
+		path: `${shellRoot.conveyorVmRuntimeDir}/state.json`
+		watchChanges: true
+		printErrors: false
+
+		function parseState(): void {
+			const raw = conveyorVmStateFile.text();
+			if (!raw)
+				return;
+			try {
+				shellRoot.conveyorVm = JSON.parse(raw);
+			} catch (e) {
+				// Mid-write or truncated; the next write brings a whole file.
+			}
+		}
+
+		onLoaded: conveyorVmStateFile.parseState()
+		onFileChanged: conveyorVmStateFile.reload()
+	}
+
+	Timer {
+		interval: 5000
+		repeat: true
+		running: !conveyorVmStateFile.loaded
+		onTriggered: conveyorVmStateFile.reload()
 	}
 
 	// tailscaled health, rewritten atomically by qs-tailscale-health every ten
@@ -2188,6 +2374,43 @@ ShellRoot {
 						}
 
 						StatusPill {
+							id: conveyorVmPill
+							// Only on hosts with a Conveyor Personal Compute VM.
+							visible: shellRoot.conveyorVmVisible()
+							implicitWidth: Math.max(22, conveyorVmRow.implicitWidth + 4)
+							tipKind: "conveyorvm"
+							acceptedButtons: Qt.LeftButton | Qt.RightButton
+							onClicked: mouse => {
+								barWindow.disarmTip();
+								if (mouse.button === Qt.LeftButton)
+									shellRoot.conveyorVmLeftClick();
+								else if (mouse.button === Qt.RightButton)
+									shellRoot.conveyorVmMenuVisible = !shellRoot.conveyorVmMenuVisible;
+							}
+
+							Row {
+								id: conveyorVmRow
+								anchors.centerIn: parent
+								spacing: 2
+
+								Text {
+									color: shellRoot.conveyorVmColor()
+									font.pixelSize: 14
+									font.family: "IosevkaTermSlab NF"
+									text: shellRoot.conveyorVmIcon()
+								}
+
+								Text {
+									visible: shellRoot.conveyorVmCards() > 0 && shellRoot.conveyorVmTransition() === ""
+									anchors.verticalCenter: parent.verticalCenter
+									color: shellRoot.conveyorVmColor()
+									font.pixelSize: 11
+									text: shellRoot.conveyorVmCards()
+								}
+							}
+						}
+
+						StatusPill {
 							id: brightnessPill
 							visible: shellRoot.brightnessPresent
 							tipKind: "brightness"
@@ -2514,6 +2737,33 @@ ShellRoot {
 					lines: shellRoot.claudeUsageLines()
 					plan: shellRoot.claudeUsage?.plan ?? ""
 					onDismissed: shellRoot.claudeMenuVisible = false
+				}
+			}
+
+			// Conveyor VM menu, anchored under its pill and pinned to the
+			// main-monitor bar like the Claude one.
+			PopupWindow {
+				id: conveyorVmDropdown
+				visible: barWindow.isCenterScreen && shellRoot.conveyorVmMenuVisible && shellRoot.conveyorVmVisible()
+				grabFocus: true
+				color: "transparent"
+				implicitWidth: conveyorVmDropdownContent.contentWidth
+				implicitHeight: conveyorVmDropdownContent.contentHeight
+				anchor.window: barWindow
+				anchor.item: conveyorVmPill
+				anchor.edges: Edges.Bottom
+				anchor.gravity: Edges.Bottom
+
+				ConveyorVmMenu {
+					id: conveyorVmDropdownContent
+					anchors.fill: parent
+					active: conveyorVmDropdown.visible
+					lines: shellRoot.conveyorVmLines()
+					instance: shellRoot.conveyorVmInstance()?.instance ?? ""
+					status: shellRoot.conveyorVmInstance()?.status ?? ""
+					transition: shellRoot.conveyorVmTransition()
+					cards: shellRoot.conveyorVmCards()
+					onDismissed: shellRoot.conveyorVmMenuVisible = false
 				}
 			}
 		}

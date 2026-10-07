@@ -50,7 +50,7 @@
         status   Probe device, mount UUID, Jellyfin, and :8096/health (no changes)
         park     Stop Jellyfin/Syncthing, wait <=30s for readers, unmount COLD
                  (mount masked meanwhile), power off the enclosure (not the hub)
-        resume   Mount COLD and start Jellyfin after the drive is plugged in
+        resume   Mount COLD and start Jellyfin and Syncthing (replug normally does this by itself)
       EOF
       }
 
@@ -204,7 +204,7 @@
             fi
           }
         fi
-        printf 'COLD is safe to unplug. Leave the USB hub plugged in (fans). Replug the enclosure, then run resume to remount and start Jellyfin and Syncthing.\n'
+        printf 'COLD is safe to unplug. Leave the USB hub plugged in (fans). Replugging the enclosure remounts it and restarts Jellyfin and Syncthing by itself; run resume if it does not.\n'
       }
 
       cmd_resume() {
@@ -221,9 +221,10 @@
         fi
         systemctl start mnt-cold.mount
         systemctl start jellyfin
-        # RequiresMountsFor stops a unit when its mount goes away but never
-        # starts it again when the mount returns, so this has to be explicit.
-        # After jellyfin, which has already proven the mount is usable.
+        # The mount's WantedBy restarts Syncthing on replug (syncthing.nix);
+        # this explicit start covers resume-by-hand, e.g. after a late
+        # spin-up. A no-op if it is already active. After jellyfin, which has
+        # already proven the mount is usable.
         systemctl start syncthing
         probe_status
       }
