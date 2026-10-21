@@ -6,6 +6,7 @@
 #     onCalendar = "Sat 10:00";                               # host-local time
 #     maxItems = 4;                                           # per-group cap before "…and N more"
 #     runOnChange = true;                                     # also post when the digest package changes
+#     notifyOnFailure = true;                                 # a failed run posts a one-line notice
 #   };
 #
 # `scry-now` is installed as a command for on-demand runs: it starts scry.service (so the run gets the
@@ -18,6 +19,10 @@
 # no inbound port) with /task, /scry and an optional inbox channel where the owner's capture-emoji
 # reaction (default :crylaugh:) files a message. Needs DISCORD_BOT_TOKEN in the
 # same environmentFile; the guild/owner/channel ids are not secrets and live in the host config.
+#
+# `notifyOnFailure` attaches OnFailure=scry-failed@<unit>.service to scry and scry-on-change: a run
+# that dies posts one line to the same Discord webhook instead of failing silently for weeks (the
+# Oct 2026 Notion 404 went unseen for two Saturdays). Fail-open: no webhook or a curl error exits 0.
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.scry;
@@ -62,6 +67,22 @@ let
     ProtectSystem = "strict";
     ProtectHome = true;
   };
+  # Webhook + curl only: it must not depend on Notion or Conveyor, which are what usually fail.
+  # Never prints the webhook URL; any problem is a warning and exit 0 so it cannot cascade.
+  failedNotice = pkgs.writeShellScript "scry-failed" ''
+    unit="''${1:-scry.service}"
+    if [ -z "''${DISCORD_WEBHOOK_URL:-}" ]; then
+      echo "scry-failed: DISCORD_WEBHOOK_URL not set; not posting" >&2
+      exit 0
+    fi
+    content="⚠ $unit failed on ${config.networking.hostName} — journalctl -u $unit -b --no-pager"
+    payload=$(${pkgs.jq}/bin/jq -n --arg c "$content" '{content: $c, username: "Scrying Orb", flags: 4}')
+    ${pkgs.curl}/bin/curl -fsS --max-time 10 -o /dev/null \
+      -H 'Content-Type: application/json' -d "$payload" "$DISCORD_WEBHOOK_URL" \
+      || echo "scry-failed: posting to Discord failed" >&2
+    exit 0
+  '';
+  failureHook = lib.optionalAttrs cfg.notifyOnFailure { OnFailure = [ "scry-failed@%n.service" ]; };
   # The secrets only exist inside the unit, so an on-demand run goes through it rather than
   # calling digest.mjs from a login shell (which would die on "missing CONVEYOR_API_URL").
   runner = pkgs.writeShellScriptBin "scry-now" ''
@@ -104,6 +125,11 @@ in
       default = true;
       description = "Also post a digest during activation whenever the scry package (digest.mjs or deps) changes.";
     };
+    notifyOnFailure = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Post a one-line notice to DISCORD_WEBHOOK_URL when scry.service or scry-on-change.service fails.";
+    };
     bot = {
       enable = lib.mkEnableOption "the Scrying Orb Discord bot (/task, /scry, inbox channel → Notion)";
       guildId = lib.mkOption {
@@ -136,6 +162,7 @@ in
       wants = [ "network-online.target" ];
       # digest.mjs spawns the Conveyor MCP server as a bare `node` child process.
       path = [ pkgs.nodejs ];
+      unitConfig = failureHook;
       inherit serviceConfig;
     };
 
@@ -149,9 +176,27 @@ in
       wantedBy = [ "multi-user.target" ];
       path = [ pkgs.nodejs ];
       restartTriggers = [ scry ];
+      unitConfig = failureHook;
       serviceConfig = serviceConfig // {
         RemainAfterExit = true;
         ExecStart = onChange;
+      };
+    };
+
+    # Template instance = the failed unit's name (%n), so the notice says which run died.
+    systemd.services."scry-failed@" = lib.mkIf cfg.notifyOnFailure {
+      description = "Scrying Orb: report a failed %i run to Discord";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        DynamicUser = true;
+        EnvironmentFile = cfg.environmentFile;
+        ExecStart = "${failedNotice} %i";
+        PrivateTmp = true;
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
       };
     };
 
