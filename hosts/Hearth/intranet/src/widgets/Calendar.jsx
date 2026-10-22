@@ -6,9 +6,16 @@ import { formatTime, useTimeFormat } from "../lib/timeFormat.js";
 
 const GRID_WEEKS = 3;
 const BIG_DAYS = 3;
-// A malformed or unbounded RRULE must not spin forever; the window is 3 weeks
-// so this is far more room than any real feed needs.
+// Occurrences kept per event inside the 3-week window: far more than any real
+// feed needs.
 const MAX_OCCURRENCES = 400;
+// Hard stop on iterations for a malformed or unbounded RRULE. Counted from the
+// series' first date, so it must cover every occurrence BEFORE the window too:
+// a daily series is ~365 a year, and the old 400 cap hid any daily meeting
+// older than about 13 months.
+const MAX_ITERATIONS = 50000;
+// Refetch the merged feed as often as the Hearth fetcher refreshes it.
+const CALENDAR_REFRESH_MS = 900000;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function startOfDay(date) {
@@ -67,7 +74,7 @@ function expand(event, from, to) {
   let guard = 0;
   while ((next = iterator.next())) {
     guard += 1;
-    if (guard > MAX_OCCURRENCES) break;
+    if (guard > MAX_ITERATIONS || out.length >= MAX_OCCURRENCES) break;
     if (next.toJSDate() >= to) break;
     const detail = event.getOccurrenceDetails(next);
     if (detail.endDate.toJSDate() <= from) continue;
@@ -306,24 +313,32 @@ export default function Calendar() {
   const gridStart = addDays(today, -today.getDay());
   const gridEnd = addDays(gridStart, GRID_WEEKS * 7);
 
+  // Refetch on a timer and whenever the grid moves (the week rolls over):
+  // events are only expanded for the window that was visible at parse time, so
+  // a fetch-once card went blank in its last week and never showed new events.
+  const gridKey = gridStart.getTime();
   useEffect(() => {
     let cancelled = false;
-    fetch("/calendar.ics")
-      .then((res) => {
-        if (!res.ok) throw new Error("ics " + res.status);
-        return res.text();
-      })
-      .then((ics) => {
-        if (cancelled) return;
-        setEvents(parseEvents(ics, gridStart, gridEnd));
-      })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
-      });
+    const load = () =>
+      fetch("/calendar.ics", { cache: "no-store" })
+        .then((res) => {
+          if (!res.ok) throw new Error("ics " + res.status);
+          return res.text();
+        })
+        .then((ics) => {
+          if (cancelled) return;
+          setEvents(parseEvents(ics, gridStart, gridEnd));
+        })
+        .catch(() => {
+          // Keep what is on screen; a blip should not blank the card.
+        });
+    load();
+    const id = setInterval(load, CALENDAR_REFRESH_MS);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
-  }, []);
+  }, [gridKey]);
 
   const byDay = new Map();
   for (const event of events) {

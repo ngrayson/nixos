@@ -69,8 +69,11 @@
           keep = []
           depth = 0
           for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-              line = raw.rstrip()
-              if not line:
+              # Keep trailing spaces: RFC 5545 folds can split right after a
+              # space, so "SUMMARY:Dinner with " + " Bob" must stay
+              # "Dinner with Bob" once ical.js unfolds it. Only blank lines go.
+              line = raw
+              if not line.strip():
                   continue
               if line.startswith("BEGIN:VCALENDAR"):
                   depth += 1
