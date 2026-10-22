@@ -117,9 +117,15 @@ assembled by Home Manager (`home/programs/claude-skills.nix`).
   change the host and are verified by a switch, a deploy or a bar reload, so
   they stay with `/convey-her-watch`. Decisions and setup:
   `documentation/conveyor-personal-compute.md`.
+- **Ponytail** is on at `full` in every Claude Code session on Tawa/Theseus
+  (a user-scope plugin in `~/.claude/settings.json`, not Nix-declared). Two
+  rules an agent needs without opening the doc: AGENTS.md wins any conflict
+  with ponytail's ruleset, and run `/ponytail-review branch` before opening a
+  card's PR. Install, uninstall and when to change the level:
+  `documentation/ponytail.md`.
 
 Scope: `home/programs/claude-skills.nix`, `.claude/skills/`,
-`scripts/conveyor-skills-update.sh`.
+`scripts/conveyor-skills-update.sh`, `documentation/ponytail.md`.
 
 ## Hearth deploy
 
