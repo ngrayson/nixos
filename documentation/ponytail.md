@@ -54,7 +54,8 @@ and point `statusLine` at it yourself. Agents never edit `statusLine`.
   Home Manager option before a script.
 - Run `/ponytail-review branch` (or `uncommitted`) before opening a card's PR
   with `mcp__conveyor__create_pull_request`.
-- `/ponytail-audit` runs only when a card asks for it. Deferred shortcuts are
+- `/ponytail-audit` runs only when a card asks for it. Last run:
+  `documentation/ponytail-audit-2026-10-22.md`. Deferred shortcuts are
   marked with `shortcut:` comments, and `/ponytail-debt` lists them.
 
 ## Where it does not run
