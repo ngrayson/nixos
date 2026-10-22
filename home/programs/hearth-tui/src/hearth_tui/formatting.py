@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
+from rich.markup import escape
+
 
 def temp_colour(celsius: float) -> str:
     """Severity colour for a temperature: green < 60°C, yellow 60-79°C, red ≥ 80°C."""
@@ -48,3 +52,38 @@ def parse_ok_fail_lines(text: str) -> list[tuple[bool, str]]:
         elif stripped.startswith("[fail]"):
             rows.append((False, stripped[len("[fail]") :].strip()))
     return rows
+
+
+def snapshot_text(returncode: int, stdout: str, stderr: str) -> str:
+    """Render `restic snapshots --json` for the backup panel.
+
+    The exit code decides first: restic writes its errors to stderr (as an
+    `exit_error` JSON object with --json) and leaves stdout empty, so an
+    unchecked failure used to parse as `[]` and read "(no snapshots yet)" —
+    a parked COLD or a broken repository looked like a fresh, empty one.
+    """
+    if returncode != 0:
+        for line in reversed((stderr or "").splitlines()):
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict) and obj.get("message_type") == "exit_error":
+                msg = obj.get("message") or "repository unavailable — is COLD mounted?"
+                return f"[yellow]{escape(msg.strip())}[/yellow]"
+        last = next((l for l in reversed((stderr or "").splitlines()) if l.strip()), "")
+        return f"[red]restic failed (exit {returncode}): {escape(last.strip()) or 'no error output'}[/red]"
+
+    try:
+        parsed = json.loads(stdout) if stdout.strip() else []
+    except json.JSONDecodeError:
+        return f"[red]{escape((stdout + stderr).strip()) or '(no output)'}[/red]"
+    if not isinstance(parsed, list):
+        return f"[red]Unexpected restic output: {escape(stdout.strip())}[/red]"
+    if not parsed:
+        return "(no snapshots yet)"
+    return "\n".join(
+        f"{snap.get('short_id', '?')}  {snap.get('time', '?')[:19]}  "
+        + ",".join(snap.get("tags", []) or [])
+        for snap in parsed
+    )
