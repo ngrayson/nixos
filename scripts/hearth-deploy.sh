@@ -262,12 +262,35 @@ refuse_shared_deploy_paths() {
   if ! git -C "$NIXOS_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
     git -C "$NIXOS_DIR" fetch origin main:refs/remotes/origin/main || true
   fi
-  hit="$(git -C "$NIXOS_DIR" diff --name-only origin/main..."$tip" -- common home profiles flake.nix flake.lock 2>/dev/null || true)"
-  [[ -z "$hit" ]] && return 0
+  local shared=(common home profiles flake.nix flake.lock)
+  # A failed diff (no origin/main, bad tip) must refuse, not read as "no
+  # shared paths": empty output from a failed command is not a clean answer.
+  if ! hit="$(git -C "$NIXOS_DIR" diff --name-only origin/main..."$tip" -- "${shared[@]}")"; then
+    error "Refusing Hearth deploy: could not compare origin/main...${tip} (is origin/main fetched?)."
+    return 1
+  fi
+  # --from-checkout activates the working tree, not $tip (HEAD): uncommitted
+  # and untracked changes under the shared paths ship too, so check them.
+  # No trailer can excuse them (they have no commit message yet).
+  local dirty=""
+  if (( FROM_CHECKOUT )); then
+    if ! dirty="$(git -C "$NIXOS_DIR" diff --name-only HEAD -- "${shared[@]}" &&
+      git -C "$NIXOS_DIR" ls-files --others --exclude-standard -- "${shared[@]}")"; then
+      error "Refusing Hearth deploy: could not read the checkout's uncommitted changes."
+      return 1
+    fi
+  fi
+  [[ -z "$hit" && -z "$dirty" ]] && return 0
   if [[ "${HEARTH_DEPLOY_ALLOW_SHARED:-0}" == "1" ]]; then
-    warn "Shared-tree paths in origin/main...${tip} (HEARTH_DEPLOY_ALLOW_SHARED=1):"
-    printf '    %s\n' $hit
+    warn "Shared-tree paths in origin/main...${tip} or the checkout (HEARTH_DEPLOY_ALLOW_SHARED=1):"
+    printf '    %s\n' $hit $dirty
     return 0
+  fi
+  if [[ -n "$dirty" ]]; then
+    error "Refusing Hearth deploy: --from-checkout would ship uncommitted shared-tree changes:"
+    printf '    %s\n' $dirty
+    error "Commit them and promote through main first, or HEARTH_DEPLOY_ALLOW_SHARED=1."
+    return 1
   fi
   # Capture, then match: piping git log into grep -q under pipefail lets grep's
   # early exit SIGPIPE git (status 141) and read as "no trailer" most runs.
