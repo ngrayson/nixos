@@ -753,8 +753,10 @@ choose_action() {
 }
 
 run_build() {
-  offer_stage_untracked
-  require_local_intranet_config
+  # Explicit returns, not set -e: the interactive menu calls this as
+  # `run_build || true`, which turns set -e off for everything inside.
+  offer_stage_untracked || return 1
+  require_local_intranet_config || return 1
   heading "Build #Hearth on $(local_hostname)"
   info "nixos-rebuild build --flake ${FLAKE} --impure"
   if (cd "$NIXOS_DIR" && run_logged nixos-rebuild build --flake "$FLAKE" --impure); then
@@ -769,8 +771,9 @@ run_deploy() {
   local action="$1"
   # Shadowed so a source picked for one switch does not leak into later TUI actions.
   local FROM_CHECKOUT="$FROM_CHECKOUT"
-  offer_stage_untracked
-  require_local_intranet_config
+  # Explicit returns, not set -e: the menu calls `run_deploy … || true`.
+  offer_stage_untracked || return 1
+  require_local_intranet_config || return 1
 
   if [[ "$DOC_SSH" != "ok" ]]; then
     run_doctor || true
