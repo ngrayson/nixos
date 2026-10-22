@@ -666,7 +666,6 @@ in rec {
         --invalidate|--invalidate-local)
           CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
           "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
-          "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/fingerprint" "$CACHE/local.json"
           "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
           exit 0
           ;;
@@ -737,18 +736,6 @@ in rec {
       }
     }
 
-    fingerprint() {
-      {
-        printf 'host=%s\n' "$HOST"
-        printf 'current=%s\n' "$("$READLINK" -f /run/current-system 2>/dev/null || true)"
-        printf 'head=%s\n' "$("$GIT" -C "$NIXOS_DIR" rev-parse HEAD 2>/dev/null || printf none)"
-        "$GIT" -C "$NIXOS_DIR" diff --binary HEAD 2>/dev/null || true
-      } | "$SHA" | {
-        read -r h _
-        printf '%s' "$h"
-      }
-    }
-
     print_status() {
       "$J" -nc --argjson rebuild "$1" --argjson updates "$2" --argjson behind "$3" \
         '{rebuild:$rebuild,updates:$updates,behind:$behind}'
@@ -756,7 +743,6 @@ in rec {
 
     rebuild=false
     updates=0
-    fp="v3-$(fingerprint)"
     lh="$(lock_hash)"
     current="$("$READLINK" -f /run/current-system 2>/dev/null || true)"
     head="$("$GIT" -C "$NIXOS_DIR" rev-parse HEAD 2>/dev/null || printf none)"
@@ -778,8 +764,6 @@ in rec {
         '{generation:$generation,head:$head,host:$host}' >"$CACHE/applied.json"
       rebuild=false
     fi
-    "$J" -nc --argjson rebuild "$rebuild" '{rebuild:$rebuild}' >"$CACHE/local.json"
-    printf '%s' "$fp" >"$CACHE/fingerprint"
 
     reuse_inputs=0
     if [ "$FORCE" != 1 ] && [ -f "$CACHE/inputs.json" ]; then
