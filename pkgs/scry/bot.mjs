@@ -56,6 +56,9 @@ const summary = (t, url) => `✅ [${t.title}](<${url}>)` + [t.priority, t.area &
 client.on("interactionCreate", async (i) => {
   try {
     if (i.isAutocomplete() && i.commandName === "task") {
+      // Owner-gated like everything else: the Area names are Nick's private
+      // Notion data, and this branch runs before the owner check below.
+      if (!isOwner(i.user.id)) return i.respond([]);
       const q = i.options.getFocused().toLowerCase();
       return i.respond((await areas()).filter((a) => a.name.toLowerCase().includes(q)).slice(0, 25).map((a) => ({ name: a.name, value: a.name })));
     }
