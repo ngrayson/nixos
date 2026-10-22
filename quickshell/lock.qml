@@ -41,6 +41,21 @@ ShellRoot {
 		}
 	}
 
+	// Read-only state for quickshell-lock (home/hypr/scripts.nix). For about a
+	// second after an unlock this instance is still alive while it quits, so
+	// "an instance exists" is not "the session is locked": the helper must see
+	// "locked" -- the compositor has confirmed the lock (secure) and we are not
+	// on our way out -- before it lets hypr-before-sleep suspend.
+	IpcHandler {
+		target: "lockstate"
+
+		function state(): string {
+			if (lockRoot.quitting)
+				return "quitting";
+			return sessionLock.secure ? "locked" : "locking";
+		}
+	}
+
 	WlSessionLock {
 		id: sessionLock
 		// Unlike the bar's old copy, this starts locked: the instance exists
