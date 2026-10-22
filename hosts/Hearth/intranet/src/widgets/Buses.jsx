@@ -112,7 +112,10 @@ export default function Buses() {
         <>
           {stops.map((r) => {
             const limited = r.status === 429 || r.code === 429;
-            const nowMs = r.currentTime || Date.now();
+            // Count down from the kiosk clock, not r.currentTime (the feed's
+            // fetch time): with that, minutes froze between polls and a
+            // carried-over row could read "8 min" four minutes later.
+            const nowMs = now;
             const rows = r.arrivals || [];
             if (limited && !rows.length) {
               return (
