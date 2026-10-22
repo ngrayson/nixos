@@ -153,6 +153,11 @@ fetch_deploy_pin() {
 }
 
 activation_rev() {
+  # A chosen-but-not-yet-pushed fast-forward activates origin/dev's commit.
+  if [[ -n "${PENDING_FF_REV:-}" ]]; then
+    printf '%s\n' "$PENDING_FF_REV"
+    return
+  fi
   if (( FROM_CHECKOUT )); then
     git -C "$NIXOS_DIR" rev-parse HEAD
   else
@@ -166,11 +171,15 @@ activation_flake() {
     return
   fi
   local rev
-  rev="$(git -C "$NIXOS_DIR" rev-parse origin/deploy/hearth)"
+  rev="$(activation_rev)"
   printf 'git+file://%s?rev=%s#%s' "$NIXOS_DIR" "$rev" "$FLAKE_OUTPUT"
 }
 
 activation_summary() {
+  if [[ -n "${PENDING_FF_REV:-}" ]]; then
+    printf 'origin/dev (%s; deploy/hearth fast-forwarded only after you confirm)' "${PENDING_FF_REV:0:7}"
+    return
+  fi
   if (( FROM_CHECKOUT )); then
     printf 'builder checkout %s (ESCAPE HATCH --from-checkout)' "$(branch_summary)"
     return
@@ -228,7 +237,11 @@ choose_switch_source() {
   esac
 }
 
-fast_forward_deploy_pin_to_dev() {
+# Fast-forward is split in two so a refusal or a declined confirm never moves
+# the remote pin. prepare_* only fetches and records origin/dev's commit in
+# PENDING_FF_REV (activation_rev/flake/summary then target it, so the
+# shared-path guard and the confirm see the real tip); push_* runs after both.
+prepare_fast_forward_to_dev() {
   info "Fetching origin/dev and origin/deploy/hearth"
   git -C "$NIXOS_DIR" fetch origin dev:refs/remotes/origin/dev || {
     error "Could not fetch origin/dev."
@@ -246,10 +259,17 @@ fast_forward_deploy_pin_to_dev() {
     ok "origin/deploy/hearth already at origin/dev ($(git -C "$NIXOS_DIR" rev-parse --short origin/dev))"
     return 0
   fi
+  if ! git -C "$NIXOS_DIR" merge-base --is-ancestor "$pin_rev" "$dev_rev"; then
+    error "deploy/hearth is not an ancestor of origin/dev; cannot fast-forward. Not force-pushing."
+    return 1
+  fi
+  PENDING_FF_REV="$dev_rev"
+}
 
-  info "git push origin origin/dev:refs/heads/deploy/hearth"
-  git -C "$NIXOS_DIR" push origin origin/dev:refs/heads/deploy/hearth || {
-    error "Fast-forward of deploy/hearth to origin/dev failed (pin is not an ancestor, or push was refused). Not force-pushing."
+push_fast_forward_to_dev() {
+  info "git push origin ${PENDING_FF_REV:0:7}:refs/heads/deploy/hearth"
+  git -C "$NIXOS_DIR" push origin "${PENDING_FF_REV}:refs/heads/deploy/hearth" || {
+    error "Fast-forward of deploy/hearth to origin/dev failed (pin moved, or push was refused). Not force-pushing."
     return 1
   }
   git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth
@@ -794,6 +814,7 @@ run_deploy() {
   local action="$1"
   # Shadowed so a source picked for one switch does not leak into later TUI actions.
   local FROM_CHECKOUT="$FROM_CHECKOUT"
+  local PENDING_FF_REV=""
   # Explicit returns, not set -e: the menu calls `run_deploy … || true`.
   offer_stage_untracked || return 1
   require_local_intranet_config || return 1
@@ -811,7 +832,7 @@ run_deploy() {
     choose_switch_source || return 1
     case "$SWITCH_SOURCE" in
       checkout) FROM_CHECKOUT=1 ;;
-      ff-dev) fast_forward_deploy_pin_to_dev || return 1 ;;
+      ff-dev) prepare_fast_forward_to_dev || return 1 ;;
       pin) ;;
       *)
         error "Unknown switch source: ${SWITCH_SOURCE}"
@@ -850,6 +871,12 @@ run_deploy() {
     if ! confirm "Run '${action}' on Hearth from $(activation_summary)? Build stays on $(local_hostname)." "no"; then
       return 0
     fi
+  fi
+
+  # Only now, past the guard and the confirm, move the remote pin.
+  if [[ -n "$PENDING_FF_REV" ]]; then
+    push_fast_forward_to_dev || return 1
+    PENDING_FF_REV=""
   fi
 
   local before=""
