@@ -17,6 +17,8 @@
     src = ./hearth-tui;
     build-system = [pkgs.python3Packages.setuptools];
     dependencies = [pkgs.python3Packages.textual];
+    # tests/ holds the pure-function tests (no SSH, no running app).
+    nativeCheckInputs = [pkgs.python3Packages.pytestCheckHook];
   };
 in {
   home.packages = [hearth-tui];
