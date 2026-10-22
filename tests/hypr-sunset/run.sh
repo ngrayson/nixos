@@ -334,6 +334,25 @@ else
   echo "  (info) strace unavailable; skipping execve count (informational only)"
 fi
 
+# --- concurrent override writers ----------------------------------------------
+# The 30s tick (clearing an elapsed disabledUntil) and hypr-sunset-ctl (gamemode
+# `pause`) both read-modify-write override.json. Unlocked, with one shared
+# .tmp name, the tick's mv can land last with a copy read before the pause and
+# drop `hold`, so warmth pushes resume mid-match. Race them repeatedly.
+echo "concurrent override writers"
+reset_state
+lost=0
+for _ in $(seq 1 60); do
+  echo '{"disabledUntil": 1}' >"$OVERRIDE"
+  run_apply "$NIGHT" >/dev/null 2>&1 &
+  HYPR_SUNSET_NOW="$NIGHT" "$CTL" pause >/dev/null 2>&1 &
+  wait
+  wait_ramp
+  [ "$(jq -r '.hold // false' "$OVERRIDE" 2>/dev/null)" = true ] || lost=$((lost + 1))
+done
+assert_eq "pause racing a tick: hold never lost (60 rounds)" 0 "$lost"
+assert_eq "no stray override temp files" 0 "$(find "$STATE_DIR" -maxdepth 1 -name 'override.json*.tmp' | wc -l | tr -d ' ')"
+
 # --- verdict -----------------------------------------------------------------
 echo
 if [ "$FAILS" -eq 0 ]; then
