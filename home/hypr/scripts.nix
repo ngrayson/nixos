@@ -98,19 +98,50 @@ in rec {
     : "''${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
     ${qsLiveDirSnippet}
     LOCK="$(qs_live_dir)/lock.qml"
-    GREP="${lib.getExe' pkgs.gnugrep "grep"}"
     SLEEP="${lib.getExe' pkgs.coreutils "sleep"}"
+
+    # The lock instance's own answer (lock.qml IpcHandler "lockstate"):
+    # locking | locked | quitting, or empty when no instance is running.
+    lock_state() {
+      env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+        ${qsBin} ipc -p "$LOCK" --any-display call lockstate state 2>/dev/null || true
+    }
+
+    # For about a second after an unlock the old instance is still alive while
+    # it quits. -n below would make our start a no-op against it, and the old
+    # "an instance exists" check reported success, so an unlock followed by a
+    # quick lid close suspended the machine unlocked. Let it finish first.
+    n=0
+    while [ "$(lock_state)" = quitting ]; do
+      n=$((n + 1))
+      if [ "$n" -ge 40 ]; then
+        echo "quickshell-lock: previous lock instance still quitting after 4s" >&2
+        exit 1
+      fi
+      "$SLEEP" 0.1
+    done
 
     # -n makes an already-running lock instance a no-op instead of a second
     # lock attempt. Already locked is success here, not an error.
     env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
       ${qsBin} -d -n -p "$LOCK" || true
 
+    # Success means the compositor has confirmed the lock, not merely that a
+    # process exists.
     n=0
-    until ${qsBin} list -p "$LOCK" --any-display 2>/dev/null | "$GREP" -q "^Instance "; do
+    until [ "$(lock_state)" = locked ]; do
       n=$((n + 1))
       if [ "$n" -ge 50 ]; then
-        echo "quickshell-lock: lock instance did not come up within 5s" >&2
+        state="$(lock_state)"
+        # No answer at all (an older lock.qml without the IPC, or IPC broken)
+        # but an instance is running: fall back to the old existence check
+        # rather than fail every lock. Never worse than before this check.
+        if [ -z "$state" ] && ${qsBin} list -p "$LOCK" --any-display 2>/dev/null \
+          | ${lib.getExe' pkgs.gnugrep "grep"} -q "^Instance "; then
+          echo "quickshell-lock: lock instance up but not answering lockstate; assuming locked" >&2
+          exit 0
+        fi
+        echo "quickshell-lock: session not locked within 5s (state: ''${state:-none})" >&2
         exit 1
       fi
       "$SLEEP" 0.1
@@ -635,7 +666,6 @@ in rec {
         --invalidate|--invalidate-local)
           CACHE="''${XDG_CACHE_HOME:-$HOME/.cache}/qs-nixos-status"
           "${lib.getExe' pkgs.coreutils "mkdir"}" -p "$CACHE"
-          "${lib.getExe' pkgs.coreutils "rm"}" -f "$CACHE/fingerprint" "$CACHE/local.json"
           "${lib.getExe' pkgs.coreutils "date"}" +%s >"$CACHE/bump"
           exit 0
           ;;
@@ -706,18 +736,6 @@ in rec {
       }
     }
 
-    fingerprint() {
-      {
-        printf 'host=%s\n' "$HOST"
-        printf 'current=%s\n' "$("$READLINK" -f /run/current-system 2>/dev/null || true)"
-        printf 'head=%s\n' "$("$GIT" -C "$NIXOS_DIR" rev-parse HEAD 2>/dev/null || printf none)"
-        "$GIT" -C "$NIXOS_DIR" diff --binary HEAD 2>/dev/null || true
-      } | "$SHA" | {
-        read -r h _
-        printf '%s' "$h"
-      }
-    }
-
     print_status() {
       "$J" -nc --argjson rebuild "$1" --argjson updates "$2" --argjson behind "$3" \
         '{rebuild:$rebuild,updates:$updates,behind:$behind}'
@@ -725,7 +743,6 @@ in rec {
 
     rebuild=false
     updates=0
-    fp="v3-$(fingerprint)"
     lh="$(lock_hash)"
     current="$("$READLINK" -f /run/current-system 2>/dev/null || true)"
     head="$("$GIT" -C "$NIXOS_DIR" rev-parse HEAD 2>/dev/null || printf none)"
@@ -747,8 +764,6 @@ in rec {
         '{generation:$generation,head:$head,host:$host}' >"$CACHE/applied.json"
       rebuild=false
     fi
-    "$J" -nc --argjson rebuild "$rebuild" '{rebuild:$rebuild}' >"$CACHE/local.json"
-    printf '%s' "$fp" >"$CACHE/fingerprint"
 
     reuse_inputs=0
     if [ "$FORCE" != 1 ] && [ -f "$CACHE/inputs.json" ]; then

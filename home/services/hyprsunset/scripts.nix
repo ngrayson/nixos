@@ -66,6 +66,18 @@
 
     [ -f "$SETTINGS" ] || echo '{}' >"$SETTINGS"
     [ -f "$OVERRIDE" ] || echo '{}' >"$OVERRIDE"
+
+    # The only way to change override.json. The 30s tick and hypr-sunset-ctl
+    # both read-modify-write it, so the read and the rename sit under one lock,
+    # and the temp name is per process (as publish_state does): unlocked, with
+    # a shared .tmp, a tick racing gamemode's `pause` dropped `hold` (8 of 60
+    # rounds in tests/hypr-sunset/run.sh).
+    override_update() {
+      (
+        ${lib.getExe' pkgs.util-linux "flock"} 9
+        jq "$1" "$OVERRIDE" >"$OVERRIDE.$$.tmp" && mv "$OVERRIDE.$$.tmp" "$OVERRIDE"
+      ) 9>"$OVERRIDE.lock"
+    }
   '';
 
   # jq's // also swallows `false`, which would be wrong for a boolean; every
@@ -346,7 +358,7 @@
       elif [ "$DISABLED_UNTIL" -ne 0 ] 2>/dev/null; then
         # Timed disable has elapsed; clear it so the file does not accumulate
         # stale epochs and the bar stops showing a countdown.
-        jq '.disabledUntil = 0' "$OVERRIDE" >"$OVERRIDE".tmp && mv "$OVERRIDE".tmp "$OVERRIDE"
+        override_update '.disabledUntil = 0'
         DISABLED_UNTIL=0
       fi
 
@@ -513,7 +525,7 @@
 
       NOW="''${HYPR_SUNSET_NOW:-$(date +%s)}"
 
-      write_override() { jq "$1" "$OVERRIDE" >"$OVERRIDE".tmp && mv "$OVERRIDE".tmp "$OVERRIDE"; }
+      write_override() { override_update "$1"; }
       write_setting() { jq "$1" "$SETTINGS" >"$SETTINGS".tmp && mv "$SETTINGS".tmp "$SETTINGS"; }
 
       case "''${1:-}" in

@@ -31,10 +31,17 @@ const transport = new StdioClientTransport({
 });
 const client = new Client({ name: "scry-digest", version: "0.1.0" });
 await client.connect(transport);
-const call = async (name, args = {}) => {
+// A Conveyor failure must fail the run (so scry-failed@ reports it), never read
+// as "no cards": an expired token used to post an empty digest and exit 0.
+// json: false only for tools that may legitimately answer in plain text.
+const call = async (name, args = {}, { json = true } = {}) => {
   const r = await client.callTool({ name, arguments: args });
   const t = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
-  try { return JSON.parse(t); } catch { return t; }
+  if (r.isError) throw new Error(`conveyor ${name} failed: ${t.slice(0, 200)}`);
+  try { return JSON.parse(t); } catch {
+    if (json) throw new Error(`conveyor ${name} returned non-JSON: ${t.slice(0, 200)}`);
+    return t;
+  }
 };
 
 const projects = await call("list_projects");
@@ -48,7 +55,7 @@ for (const p of projects) {
     const rel = (Array.isArray(tasks) ? tasks : []).filter(relevant);
     if (rel.length) buckets[status] = rel;
   }
-  const decisions = await call("list_decisions", { projectId: p.id, status: "open" });
+  const decisions = await call("list_decisions", { projectId: p.id, status: "Open" }, { json: false });
   const incidents = await call("list_tasks", { projectId: p.id, typeFilters: ["incident"], limit: 50 });
   report.push({
     project: p, buckets,
@@ -61,7 +68,7 @@ await client.close();
 // ---- Notion: Nick's Tasks + Nick's Areas (official REST API; NOTION_TOKEN from env) ----
 const NOTION_TASKS_DS = env.NOTION_TASKS_DS || "3e455378-c593-806e-a39b-000b64fe8273";
 const NOTION_AREAS_DS = env.NOTION_AREAS_DS || "5b2a0194-1d20-4eb7-a602-38d35b5566a8";
-const notion = { tasks: [], areas: [], enabled: !!env.NOTION_TOKEN };
+const notion = { tasks: [], areas: [], enabled: !!env.NOTION_TOKEN, error: null };
 if (notion.enabled) {
   const nq = async (ds, body = {}) => {
     const out = [];
@@ -81,14 +88,27 @@ if (notion.enabled) {
   };
   const text = (p) => (p?.title || p?.rich_text || []).map((r) => r.plain_text).join("");
   const sel = (p) => p?.select?.name || p?.status?.name || null;
-  const areas = await nq(NOTION_AREAS_DS);
-  notion.areas = areas.map((r) => ({
-    id: r.id, name: text(r.properties.Name), status: sel(r.properties.Status),
-    next: text(r.properties["Next action"]), notes: text(r.properties["Agent notes"]),
-    touched: r.properties["Last touched"]?.date?.start || null,
-  }));
+  // A Notion failure (most often a database that lost its share with the
+  // integration, e.g. after being moved) must not cost the Conveyor half of the
+  // digest. Areas and tasks fail independently, so each is caught on its own:
+  // a lost Areas share still renders tasks, just without their area tags.
+  const fail = (which, e) => {
+    console.error(`notion ${which} failed:`, e);
+    notion.error ??= `${which}: ${String(e?.message ?? e).slice(0, 160)}`;
+  };
+  try {
+    const areas = await nq(NOTION_AREAS_DS);
+    notion.areas = areas.map((r) => ({
+      id: r.id, name: text(r.properties.Name), status: sel(r.properties.Status),
+      next: text(r.properties["Next action"]), notes: text(r.properties["Agent notes"]),
+      touched: r.properties["Last touched"]?.date?.start || null,
+    }));
+  } catch (e) { fail("areas", e); }
   const areaName = new Map(notion.areas.map((a) => [a.id, a.name]));
-  const rows = await nq(NOTION_TASKS_DS, { filter: { property: "Status", status: { does_not_equal: "Done" } } });
+  let rows = [];
+  try {
+    rows = await nq(NOTION_TASKS_DS, { filter: { property: "Status", status: { does_not_equal: "Done" } } });
+  } catch (e) { fail("tasks", e); }
   notion.tasks = rows.map((r) => ({
     id: r.id, url: r.url,
     title: text(r.properties.Name),
@@ -190,10 +210,11 @@ if (dueSoon.length) {
 }
 
 // # General — Notion tasks (yours / collab), at the top.
-if (ntasks.length || !notion.enabled) {
+if (ntasks.length || !notion.enabled || notion.error) {
   lines.push(`# General`);
+  if (notion.error) lines.push(`-# ⚠ Notion unavailable — ${notion.error}`);
   if (ntasks.length) capped(ntasks, renderNotion);
-  else lines.push(`-# Notion not configured — set NOTION_TOKEN`);
+  else if (!notion.enabled) lines.push(`-# Notion not configured — set NOTION_TOKEN`);
 }
 
 // # Projects — one ## per Conveyor project: linked name + counts, then the items waiting on you.

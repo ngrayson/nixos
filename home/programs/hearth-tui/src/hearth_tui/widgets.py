@@ -25,6 +25,7 @@ from textual.widgets import ListItem, ListView, Static
 from hearth_tui import ssh
 from hearth_tui.formatting import (
     parse_ok_fail_lines,
+    snapshot_text,
     render_bar,
     temp_colour,
     usage_colour,
@@ -774,29 +775,7 @@ class ResticSnapshotsWidget(Static):
         except ssh.SshError as exc:
             self.app.call_from_thread(self.update, f"[red]{exc}[/red]")
             return
-        self._render_snapshots(snap_result.stdout, snap_result.stderr)
-
-    def _render_snapshots(self, stdout: str, stderr: str) -> None:
-        try:
-            parsed = json.loads(stdout) if stdout.strip() else []
-        except json.JSONDecodeError:
-            text = f"[red]{(stdout + stderr).strip() or '(no output)'}[/red]"
-            self.app.call_from_thread(self.update, text)
-            return
-
-        if isinstance(parsed, dict) and parsed.get("message_type") == "exit_error":
-            # e.g. the repo path under /mnt/cold is unreachable — COLD is parked.
-            text = f"[yellow]{parsed.get('message', 'repository unavailable — is COLD mounted?')}[/yellow]"
-        elif isinstance(parsed, list):
-            if not parsed:
-                text = "(no snapshots yet)"
-            else:
-                lines = [
-                    f"{snap.get('short_id', '?')}  {snap.get('time', '?')[:19]}  "
-                    + ",".join(snap.get("tags", []) or [])
-                    for snap in parsed
-                ]
-                text = "\n".join(lines)
-        else:
-            text = f"[red]Unexpected restic output: {stdout.strip()}[/red]"
-        self.app.call_from_thread(self.update, text)
+        self.app.call_from_thread(
+            self.update,
+            snapshot_text(snap_result.returncode, snap_result.stdout, snap_result.stderr),
+        )

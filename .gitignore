@@ -19,3 +19,6 @@ secrets/*.plaintext.yaml
 __pycache__/
 *.pyc
 
+
+# Command logs (e.g. the archived rebuild recipe writes nixos-switch.log to cwd).
+*.log

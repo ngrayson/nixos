@@ -35,6 +35,10 @@ to the PR, and posts set `flags: 4` so Discord shows no link previews.
   which posts once during the switch that changes the scry package (a new
   format or a dependency bump) and records it in `/var/lib/scry/last-format`.
   Reboots and switches that leave the package alone post nothing.
+- `services.scry.notifyOnFailure` (default true) sets
+  `OnFailure=scry-failed@<unit>.service` on both units: a run that dies posts
+  one line (`⚠ scry.service failed on Hearth — journalctl …`) to the same
+  webhook. It uses curl only, never prints the URL, and exits 0 on any problem.
 
 ## Filing a task
 
@@ -83,6 +87,12 @@ Setup (once):
    `NOTION_TASKS_DS` / `NOTION_AREAS_DS` if they're ever recreated.
 
 Without `NOTION_TOKEN` the digest still runs (Conveyor only) and says so.
+
+**Moving a shared database can drop its connection to the integration.** The
+symptom is `notion 404 … object_not_found` in `journalctl -u scry.service`.
+A Notion failure is not fatal: Areas and Tasks are fetched separately, the
+digest still posts, and `# General` carries a `-# ⚠ Notion unavailable — …`
+line until the database is reconnected (page ··· → Connections → plate).
 
 ## Files
 

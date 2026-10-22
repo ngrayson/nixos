@@ -153,6 +153,11 @@ fetch_deploy_pin() {
 }
 
 activation_rev() {
+  # A chosen-but-not-yet-pushed fast-forward activates origin/dev's commit.
+  if [[ -n "${PENDING_FF_REV:-}" ]]; then
+    printf '%s\n' "$PENDING_FF_REV"
+    return
+  fi
   if (( FROM_CHECKOUT )); then
     git -C "$NIXOS_DIR" rev-parse HEAD
   else
@@ -166,11 +171,15 @@ activation_flake() {
     return
   fi
   local rev
-  rev="$(git -C "$NIXOS_DIR" rev-parse origin/deploy/hearth)"
+  rev="$(activation_rev)"
   printf 'git+file://%s?rev=%s#%s' "$NIXOS_DIR" "$rev" "$FLAKE_OUTPUT"
 }
 
 activation_summary() {
+  if [[ -n "${PENDING_FF_REV:-}" ]]; then
+    printf 'origin/dev (%s; deploy/hearth fast-forwarded only after you confirm)' "${PENDING_FF_REV:0:7}"
+    return
+  fi
   if (( FROM_CHECKOUT )); then
     printf 'builder checkout %s (ESCAPE HATCH --from-checkout)' "$(branch_summary)"
     return
@@ -228,7 +237,11 @@ choose_switch_source() {
   esac
 }
 
-fast_forward_deploy_pin_to_dev() {
+# Fast-forward is split in two so a refusal or a declined confirm never moves
+# the remote pin. prepare_* only fetches and records origin/dev's commit in
+# PENDING_FF_REV (activation_rev/flake/summary then target it, so the
+# shared-path guard and the confirm see the real tip); push_* runs after both.
+prepare_fast_forward_to_dev() {
   info "Fetching origin/dev and origin/deploy/hearth"
   git -C "$NIXOS_DIR" fetch origin dev:refs/remotes/origin/dev || {
     error "Could not fetch origin/dev."
@@ -246,10 +259,17 @@ fast_forward_deploy_pin_to_dev() {
     ok "origin/deploy/hearth already at origin/dev ($(git -C "$NIXOS_DIR" rev-parse --short origin/dev))"
     return 0
   fi
+  if ! git -C "$NIXOS_DIR" merge-base --is-ancestor "$pin_rev" "$dev_rev"; then
+    error "deploy/hearth is not an ancestor of origin/dev; cannot fast-forward. Not force-pushing."
+    return 1
+  fi
+  PENDING_FF_REV="$dev_rev"
+}
 
-  info "git push origin origin/dev:refs/heads/deploy/hearth"
-  git -C "$NIXOS_DIR" push origin origin/dev:refs/heads/deploy/hearth || {
-    error "Fast-forward of deploy/hearth to origin/dev failed (pin is not an ancestor, or push was refused). Not force-pushing."
+push_fast_forward_to_dev() {
+  info "git push origin ${PENDING_FF_REV:0:7}:refs/heads/deploy/hearth"
+  git -C "$NIXOS_DIR" push origin "${PENDING_FF_REV}:refs/heads/deploy/hearth" || {
+    error "Fast-forward of deploy/hearth to origin/dev failed (pin moved, or push was refused). Not force-pushing."
     return 1
   }
   git -C "$NIXOS_DIR" fetch origin deploy/hearth:refs/remotes/origin/deploy/hearth
@@ -262,12 +282,35 @@ refuse_shared_deploy_paths() {
   if ! git -C "$NIXOS_DIR" rev-parse --verify origin/main >/dev/null 2>&1; then
     git -C "$NIXOS_DIR" fetch origin main:refs/remotes/origin/main || true
   fi
-  hit="$(git -C "$NIXOS_DIR" diff --name-only origin/main..."$tip" -- common home profiles flake.nix flake.lock 2>/dev/null || true)"
-  [[ -z "$hit" ]] && return 0
+  local shared=(common home profiles flake.nix flake.lock)
+  # A failed diff (no origin/main, bad tip) must refuse, not read as "no
+  # shared paths": empty output from a failed command is not a clean answer.
+  if ! hit="$(git -C "$NIXOS_DIR" diff --name-only origin/main..."$tip" -- "${shared[@]}")"; then
+    error "Refusing Hearth deploy: could not compare origin/main...${tip} (is origin/main fetched?)."
+    return 1
+  fi
+  # --from-checkout activates the working tree, not $tip (HEAD): uncommitted
+  # and untracked changes under the shared paths ship too, so check them.
+  # No trailer can excuse them (they have no commit message yet).
+  local dirty=""
+  if (( FROM_CHECKOUT )); then
+    if ! dirty="$(git -C "$NIXOS_DIR" diff --name-only HEAD -- "${shared[@]}" &&
+      git -C "$NIXOS_DIR" ls-files --others --exclude-standard -- "${shared[@]}")"; then
+      error "Refusing Hearth deploy: could not read the checkout's uncommitted changes."
+      return 1
+    fi
+  fi
+  [[ -z "$hit" && -z "$dirty" ]] && return 0
   if [[ "${HEARTH_DEPLOY_ALLOW_SHARED:-0}" == "1" ]]; then
-    warn "Shared-tree paths in origin/main...${tip} (HEARTH_DEPLOY_ALLOW_SHARED=1):"
-    printf '    %s\n' $hit
+    warn "Shared-tree paths in origin/main...${tip} or the checkout (HEARTH_DEPLOY_ALLOW_SHARED=1):"
+    printf '    %s\n' $hit $dirty
     return 0
+  fi
+  if [[ -n "$dirty" ]]; then
+    error "Refusing Hearth deploy: --from-checkout would ship uncommitted shared-tree changes:"
+    printf '    %s\n' $dirty
+    error "Commit them and promote through main first, or HEARTH_DEPLOY_ALLOW_SHARED=1."
+    return 1
   fi
   # Capture, then match: piping git log into grep -q under pipefail lets grep's
   # early exit SIGPIPE git (status 141) and read as "no trailer" most runs.
@@ -502,13 +545,13 @@ copy_intranet_config_for_restic() {
   local base="$NIXOS_DIR/hosts/Hearth/intranet/config"
   local remote_dir="/var/lib/hearth-intranet/config"
   local widget src copied=0
-  ssh_hearth -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
+  ssh_hearth -n -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
   for widget in clock weather transit health gallery calendar alerts; do
     src="$base/$widget/config.nix"
     [[ -f "$src" ]] || continue
     scp -q "$src" "${TARGET}:/tmp/hearth-${widget}.nix" || return 1
-    ssh_hearth -o BatchMode=yes sudo mv "/tmp/hearth-${widget}.nix" "${remote_dir}/${widget}.nix" || return 1
-    ssh_hearth -o BatchMode=yes sudo chmod 0640 "${remote_dir}/${widget}.nix" || return 1
+    ssh_hearth -n -o BatchMode=yes sudo mv "/tmp/hearth-${widget}.nix" "${remote_dir}/${widget}.nix" || return 1
+    ssh_hearth -n -o BatchMode=yes sudo chmod 0640 "${remote_dir}/${widget}.nix" || return 1
     copied=$((copied + 1))
   done
   ok "Copied ${copied} intranet config.nix file(s) to ${remote_dir} for restic."
@@ -631,7 +674,7 @@ run_doctor() {
   ensure_ssh_include
 
   local ssh_err
-  ssh_err="$(ssh_hearth -o BatchMode=yes -o ConnectTimeout=8 true 2>&1)" || {
+  ssh_err="$(ssh_hearth -n -o BatchMode=yes -o ConnectTimeout=8 true 2>&1)" || {
     DOC_SSH="fail"
     DOC_SSH_KIND=""
     DOC_SUDO="fail"
@@ -733,12 +776,24 @@ choose_action() {
     return
   fi
 
-  printf '\n  [b] Build          [d] Dry-activate    [s] Switch\n'
-  printf '  [o] Boot           [e] Health          [r] Recheck\n'
-  printf '  [h] SSH            [q] Quit\n'
-  printf '\nAction: '
+  # The menu and prompt go to stderr: choose_action runs inside
+  # choice="$(choose_action)", so anything on stdout becomes part of the
+  # choice, and "...Action: Build" never matched a case (every plain-text
+  # pick was "Unknown action").
+  {
+    printf '\n  [b] Build          [d] Dry-activate    [s] Switch\n'
+    printf '  [o] Boot           [e] Health          [r] Recheck\n'
+    printf '  [h] SSH            [q] Quit\n'
+    printf '\nAction: '
+  } >&2
   local reply
-  read -r reply || true
+  # EOF (closed pipe, script, </dev/null) means quit. `|| true` turned it into
+  # an empty reply, and the loop redrew "Unknown action" forever. A final line
+  # with no trailing newline still counts as an answer.
+  if ! read -r reply && [[ -z "$reply" ]]; then
+    printf 'Quit'
+    return
+  fi
   case "$reply" in
     b | B | build | Build) printf 'Build' ;;
     d | D | dry | Dry-activate) printf 'Dry-activate' ;;
@@ -753,8 +808,10 @@ choose_action() {
 }
 
 run_build() {
-  offer_stage_untracked
-  require_local_intranet_config
+  # Explicit returns, not set -e: the interactive menu calls this as
+  # `run_build || true`, which turns set -e off for everything inside.
+  offer_stage_untracked || return 1
+  require_local_intranet_config || return 1
   heading "Build #Hearth on $(local_hostname)"
   info "nixos-rebuild build --flake ${FLAKE} --impure"
   if (cd "$NIXOS_DIR" && run_logged nixos-rebuild build --flake "$FLAKE" --impure); then
@@ -769,8 +826,10 @@ run_deploy() {
   local action="$1"
   # Shadowed so a source picked for one switch does not leak into later TUI actions.
   local FROM_CHECKOUT="$FROM_CHECKOUT"
-  offer_stage_untracked
-  require_local_intranet_config
+  local PENDING_FF_REV=""
+  # Explicit returns, not set -e: the menu calls `run_deploy … || true`.
+  offer_stage_untracked || return 1
+  require_local_intranet_config || return 1
 
   if [[ "$DOC_SSH" != "ok" ]]; then
     run_doctor || true
@@ -785,7 +844,7 @@ run_deploy() {
     choose_switch_source || return 1
     case "$SWITCH_SOURCE" in
       checkout) FROM_CHECKOUT=1 ;;
-      ff-dev) fast_forward_deploy_pin_to_dev || return 1 ;;
+      ff-dev) prepare_fast_forward_to_dev || return 1 ;;
       pin) ;;
       *)
         error "Unknown switch source: ${SWITCH_SOURCE}"
@@ -826,9 +885,15 @@ run_deploy() {
     fi
   fi
 
+  # Only now, past the guard and the confirm, move the remote pin.
+  if [[ -n "$PENDING_FF_REV" ]]; then
+    push_fast_forward_to_dev || return 1
+    PENDING_FF_REV=""
+  fi
+
   local before=""
   if [[ "$action" == "switch" ]]; then
-    before="$(ssh_hearth -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
+    before="$(ssh_hearth -n -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
   fi
 
   heading "${action} on Hearth (build on $(local_hostname), $(activation_summary))"
@@ -862,7 +927,7 @@ run_deploy() {
 
   if [[ "$action" == "switch" ]]; then
     local after=""
-    after="$(ssh_hearth -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
+    after="$(ssh_hearth -n -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
     heading "Remote system"
     printf "  %s\n" "$(short_store "${after:-unknown}")"
     if [[ -n "$before" && -n "$after" && -e "$before" && -e "$after" && "$before" != "$after" ]]; then

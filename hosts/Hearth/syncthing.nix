@@ -66,9 +66,15 @@
         exit 1
       fi
 
+      # The key reaches curl through --config on stdin, never as an argument:
+      # argv is readable by every local user via ps or /proc while curl runs,
+      # and this key is full control of Syncthing. Same pattern as
+      # hearthchime.nix. Never echo it.
+      key_header() { printf 'header = "X-API-Key: %s"\n' "$api_key"; }
+
       # Wait for the REST API to answer before configuring anything.
       for _ in $(seq 1 30); do
-        if curl -sf -H "X-API-Key: $api_key" "$gui/rest/system/ping" >/dev/null; then
+        if key_header | curl -sf --config - "$gui/rest/system/ping" >/dev/null; then
           break
         fi
         sleep 2
@@ -78,7 +84,7 @@
       folder_library=$(cat "$FOLDER_LIBRARY_FILE")
       folder_upload=$(cat "$FOLDER_UPLOAD_FILE")
 
-      api() { curl -sf -H "X-API-Key: $api_key" -H "Content-Type: application/json" "$@"; }
+      api() { key_header | curl -sf --config - -H "Content-Type: application/json" "$@"; }
 
       # Device: the Ultra.cc slot. "dynamic" lets discovery and relays find it.
       device_json=$(jq -n --arg id "$device_id" '{

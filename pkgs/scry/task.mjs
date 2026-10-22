@@ -66,7 +66,14 @@ const iso = (d) => d.toISOString().slice(0, 10);
 export const parseDue = (s) => {
   if (!s) return null;
   s = s.trim().toLowerCase();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Date.UTC rolls an impossible day over ("feb 30" -> Mar 2), so every
+  // explicit date must round-trip or it is refused.
+  const real = (y, mi, d) => { const x = new Date(Date.UTC(y, mi, d)); return x.getUTCMonth() === mi && x.getUTCDate() === d ? x : null; };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, mo, d] = s.split("-").map(Number);
+    if (real(y, mo - 1, d)) return s;
+    throw new Error(`can't read due date "${s}" — no such day`);
+  }
   const t = today();
   if (s === "today") return iso(t);
   if (s === "tomorrow" || s === "tmr") return iso(new Date(t.getTime() + 864e5));
@@ -78,7 +85,11 @@ export const parseDue = (s) => {
   m = s.match(/^([a-z]{3,})\.?\s*(\d{1,2})$/);
   if (m) {
     const mi = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(m[1].slice(0, 3));
-    if (mi >= 0) { let d = new Date(Date.UTC(t.getUTCFullYear(), mi, Number(m[2]))); if (d < t) d = new Date(Date.UTC(t.getUTCFullYear() + 1, mi, Number(m[2]))); return iso(d); }
+    if (mi >= 0) {
+      let d = real(t.getUTCFullYear(), mi, Number(m[2]));
+      if (d && d < t) d = real(t.getUTCFullYear() + 1, mi, Number(m[2]));
+      if (d) return iso(d);
+    }
   }
   throw new Error(`can't read due date "${s}" — try 2026-10-04, oct 4, fri, +3d`);
 };
@@ -88,7 +99,8 @@ export const parseInbox = (text) => {
   const out = { title: text, priority: null, area: null, due: null, who: null };
   const take = (re, f) => { const m = out.title.match(re); if (m) { f(m); out.title = out.title.replace(m[0], " "); } };
   take(/(?:^|\s)(p[0-3])(?=\s|$)/i, (m) => (out.priority = m[1].toUpperCase()));
-  take(/(?:^|\s)#([a-z0-9-]+)/i, (m) => (out.area = m[1]));
+  // Areas start with a letter, so "PR #482" stays part of the title.
+  take(/(?:^|\s)#([a-z][a-z0-9-]*)(?=\s|$)/i, (m) => (out.area = m[1]));
   take(/(?:^|\s)due:(\S+(?:\s\d{1,2})?)/i, (m) => (out.due = parseDue(m[1])));
   take(/(?:^|\s)@(nick|agent|collab(?:oration)?)(?=\s|$)/i, (m) => (out.who = m[1].toLowerCase().startsWith("collab") ? "Collaboration" : m[1][0].toUpperCase() + m[1].slice(1).toLowerCase()));
   out.title = out.title.replace(/\s+/g, " ").trim();

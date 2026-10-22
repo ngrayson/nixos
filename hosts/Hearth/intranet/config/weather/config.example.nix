@@ -18,7 +18,9 @@
   # short: temp, sky, wind, AQI only.
   # Do not put real home coordinates here.
   locations = [];
-  airnowApiKey = "";
+  # airnowApiKey is no longer read from here: the key lives in the sops secret
+  # secrets/hearth-intranet-keys.yaml (key `airnow`), because a value set here
+  # was written into the world-readable Nix store.
   airnowPollSeconds = 600;
   # How far a monitoring station may be from a location and still speak for it.
   # Resolved per pollutant, so a location whose only nearby sites are seasonal

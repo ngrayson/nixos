@@ -21,7 +21,7 @@ Flake outputs: `nixosConfigurations.{Tawa,Theseus,Hearth,Go3,Gcp}`.
 - Hearth source of truth: [hosts/Hearth/plan.md](./hosts/Hearth/plan.md)
 - History / path table: [MIGRATION.md](./MIGRATION.md)
 
-`claude` (Claude Code CLI) is a Nix-store package in `profiles/workstation.nix` — it's on PATH after `os-rebuild switch`, no post-rebuild install step needed. The "Claude Code" VS Code extension is a one-time manual install from the Extensions marketplace (not Nix-declared; no VS Code extensions module exists in this repo).
+`claude` (Claude Code CLI) is a Nix-store package in `profiles/workstation.nix` — it's on PATH after `os-rebuild switch`, no post-rebuild install step needed. The "Claude Code" VS Code extension is a one-time manual install from the Extensions marketplace (not Nix-declared; no VS Code extensions module exists in this repo). The ponytail Claude Code plugin is likewise a one-time `claude plugin install ponytail@ponytail` at user scope; see [documentation/ponytail.md](./documentation/ponytail.md).
 
 `legacy/surface-standalone` is listed in BRANCHING.md as the pre-flake Surface rollback. It is **not** on `origin` today — do not invent the branch.
 

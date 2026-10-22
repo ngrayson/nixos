@@ -1,8 +1,9 @@
-# Template only. Copy to config.nix (gitignored) for the Hearth build.
-# The ICS URLs stay server-side: hearth-intranet-calendar fetches them every
-# 15 min and merges them into /run/hearth-intranet/calendar.ics, which is the
-# only thing the browser reads. Treat each url as a secret — a Google "Secret
-# address in iCal format" grants read access to the whole calendar.
+# Not read by the build any more. The feed list moved to the sops secret
+# secrets/hearth-calendar-feeds.yaml (key `feeds`, a JSON string), because a
+# value read here was written into the world-readable Nix store. Edit with
+# `sops secrets/hearth-calendar-feeds.yaml`. The entry shape is unchanged.
+# Treat each url as a secret: a Google "Secret address in iCal format"
+# grants read access to the whole calendar.
 #
 # calendarIcsUrls entries:
 #   name        display label shown on events from this feed (required)

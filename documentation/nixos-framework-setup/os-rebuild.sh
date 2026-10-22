@@ -594,7 +594,6 @@ notify_status_bar() {
   if [[ -n "$gen" && -n "$head" ]]; then
     printf '{"generation":"%s","head":"%s","host":"%s"}\n' "$gen" "$head" "$NIXOS_HOST" >"$cache/applied.json"
   fi
-  rm -f "$cache/fingerprint" "$cache/local.json"
   date +%s >"$cache/bump"
 }
 

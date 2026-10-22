@@ -30,7 +30,9 @@
   mapQuery = "";
   mapZoom = 10;
   mapProvider = "waze";
-  obaApiKey = "TEST";
+  # obaApiKey is no longer read from here: the key lives in the sops secret
+  # secrets/hearth-intranet-keys.yaml (key `oba`), because a value set here
+  # was written into the world-readable Nix store. Missing means "TEST".
   obaPollSeconds = 60;
   # Arrival rows kept per stop. OBA is asked 60 min ahead, so on a busy stop
   # about 10 is the practical ceiling; fewer show when fewer buses are due.

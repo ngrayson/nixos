@@ -139,8 +139,10 @@ run_deploy() {
       --target-host "$TARGET" \
       --use-remote-sudo); then
     ok "nixos-rebuild ${action} succeeded."
+    # A blank wall behind a "succeeded" deploy is exactly what ensure_kiosk
+    # exists to prevent, so its failure fails the deploy.
     if [[ "$action" == "switch" ]]; then
-      ensure_kiosk || true
+      ensure_kiosk || return 1
     fi
     return 0
   fi

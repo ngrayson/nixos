@@ -3,6 +3,7 @@
 # secrets/scry.env holds CONVEYOR_API_URL, CONVEYOR_USER_TOKEN, CONVEYOR_PROJECT_ID,
 # DISCORD_WEBHOOK_URL, NOTION_TOKEN, DISCORD_BOT_TOKEN (`sops secrets/scry.env`). Never print it.
 # The Discord bot (scry-bot.service) files tasks from /task or the inbox channel.
+# If the digest says "⚠ Notion unavailable", re-share the named Notion DB with the `plate` integration.
 # On demand: `sudo scry-now`. File a task in Nick's Tasks: `sudo scry-task <text>` (hearth-tui wraps it).
 {config, ...}: {
   imports = [../../pkgs/scry/module.nix];

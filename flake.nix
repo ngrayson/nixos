@@ -183,6 +183,39 @@
           touch "$out"
         '';
 
+      # refuse_shared_deploy_paths in scripts/hearth-deploy.sh against a scratch
+      # repo with a bare origin: committed/uncommitted/untracked shared changes,
+      # the trailer and env overrides, and a missing origin/main (must refuse).
+      hearth-deploy-guard-tests =
+        pkgs.runCommand "hearth-deploy-guard-tests" {
+          nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.git pkgs.gnugrep pkgs.gnused pkgs.findutils];
+        } ''
+          export HOME="$(mktemp -d)"
+          bash ${./tests/hearth-deploy/guard.sh} ${./scripts/hearth-deploy.sh} "$(mktemp -d)"
+          touch "$out"
+        '';
+
+      # The Hearth calendar ICS merger (hosts/Hearth/intranet-calendar-merge.py):
+      # folded lines keep their space, wrappers drop, events are tagged by feed.
+      hearth-calendar-tests =
+        pkgs.runCommand "hearth-calendar-tests" {
+          nativeBuildInputs = [pkgs.python3];
+        } ''
+          python3 -W error ${./tests/hearth-calendar/test_merge.py} ${./hosts/Hearth/intranet-calendar-merge.py}
+          touch "$out"
+        '';
+
+      # Scrying Orb inbox/due-date parsing (pkgs/scry/task.mjs); no network.
+      scry-task-tests =
+        pkgs.runCommand "scry-task-tests" {
+          nativeBuildInputs = [pkgs.nodejs];
+        } ''
+          cp ${./pkgs/scry/task.mjs} task.mjs
+          cp ${./pkgs/scry/task.test.mjs} task.test.mjs
+          node --test task.test.mjs
+          touch "$out"
+        '';
+
       # Drives Hearth's Go3 battery alert (hosts/Hearth/go3-battery-alert/
       # script.nix) through its once-per-episode state machine with a fake
       # readout, a fixed clock and a dry run — no Go3, no webhook.

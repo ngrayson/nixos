@@ -25,18 +25,31 @@ PARK_CONFIRM_MESSAGE = (
 RESUME_CONFIRM_MESSAGE = "This mounts /mnt/cold and starts Jellyfin. Continue?"
 
 
+def _row(rows: list[tuple[bool, str]], *prefixes: str) -> bool:
+    """Whether the first row whose message starts with one of `prefixes` passed.
+
+    Missing rows count as failed, so an unreadable status never looks healthy.
+    """
+    for passed, message in rows:
+        if message.startswith(prefixes):
+            return passed
+    return False
+
+
 def decide_disk_action(rows: list[tuple[bool, str]]) -> DiskAction:
     """Pick park, resume, or neither from `hearth-disk status` output.
 
-    Row order comes from `probe_status` in hosts/Hearth/disk.nix: device
-    present, mounted, jellyfin active, jellyfin health. Anything that is not
-    cleanly "mounted and serving" or "plugged in but idle" is reported as
-    unclear rather than guessed at — a park chosen on a misread would stop
-    Jellyfin and unmount the disk.
+    Rows are found by their message text from `probe_status` in
+    hosts/Hearth/disk.nix, never by position: `hearth-disk` prints `[ok]` rows
+    to stdout and `[fail]` rows to stderr, so once the two streams are joined
+    every ok row comes before every fail row and positions no longer match
+    the probe order. Anything that is not cleanly "mounted and serving" or
+    "plugged in but idle" is reported as unclear rather than guessed at — a
+    park chosen on a misread would stop Jellyfin and unmount the disk.
     """
-    device_present = rows[0][0] if len(rows) > 0 else False
-    mounted = rows[1][0] if len(rows) > 1 else False
-    jellyfin_active = rows[2][0] if len(rows) > 2 else False
+    device_present = _row(rows, "device ", "COLD device missing")
+    mounted = _row(rows, "/mnt/cold is mounted", "/mnt/cold is not mounted")
+    jellyfin_active = _row(rows, "Jellyfin is active", "Jellyfin is not active")
 
     if mounted and jellyfin_active:
         return "park"
