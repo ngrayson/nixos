@@ -1,8 +1,19 @@
 # Oneshot + timer: one Hearth poll of Puget Sound OneBusAway (Sound Transit OTD)
 # → /run/hearth-intranet/transit.json. Browsers only read that file.
 # Do not proxy OBA per client (TEST key 429s). Do not call Houston METRO.
-{pkgs, ...}: let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   transitCfg = (import ./intranet/config).transit;
+  # API keys are a sops secret (secrets/hearth-intranet-keys.yaml), read at run
+  # time. Never put them in pollCfg: anything in /nix/store is readable by every
+  # account on Hearth and on the builder. Edit with
+  # `sops secrets/hearth-intranet-keys.yaml`.
+  keysFile = ../../secrets/hearth-intranet-keys.yaml;
+  haveKeys = builtins.pathExists keysFile;
   pollSeconds = let
     n = transitCfg.obaPollSeconds or 60;
   in
@@ -17,7 +28,6 @@
     then 1
     else n;
   pollCfg = pkgs.writeText "hearth-transit-poll.json" (builtins.toJSON {
-    key = transitCfg.obaApiKey or "TEST";
     pollSeconds = pollSeconds;
     arrivalsPerStop = arrivalsPerStop;
     stops = transitCfg.busStops or [];
@@ -33,7 +43,8 @@
 
       cfg = json.load(open(sys.argv[1], encoding="utf-8"))
       out = "/run/hearth-intranet/transit.json"
-      key = cfg.get("key") or "TEST"
+      key_path = os.environ.get("HEARTH_OBA_KEY_FILE", "")
+      key = (open(key_path, encoding="utf-8").read().strip() if key_path else "") or "TEST"
       poll = max(60, int(cfg.get("pollSeconds") or 60))
       per_stop = max(1, int(cfg.get("arrivalsPerStop") or 6))
       stops_in = cfg.get("stops") or []
@@ -205,15 +216,26 @@
     '';
   };
 in {
+  sops.secrets.hearth-intranet-oba-key = lib.mkIf haveKeys {
+    sopsFile = keysFile;
+    key = "oba";
+    owner = "hearth-intranet";
+    group = "hearth-intranet";
+    mode = "0400";
+  };
+
   systemd.services.hearth-intranet-transit = {
     description = "Write Hearth intranet transit.json from OneBusAway";
-    after = ["network-online.target"];
+    after = ["network-online.target" "sops-install-secrets.service"];
     wants = ["network-online.target"];
     serviceConfig = {
       Type = "oneshot";
       User = "hearth-intranet";
       Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-transit";
+      Environment = lib.optionals haveKeys [
+        "HEARTH_OBA_KEY_FILE=${config.sops.secrets.hearth-intranet-oba-key.path}"
+      ];
       # Staggering plus a retry per stop lengthens the worst case; do not let a
       # hung fetch stall polling indefinitely.
       TimeoutStartSec = "90s";
