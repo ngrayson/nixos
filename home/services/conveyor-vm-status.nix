@@ -301,6 +301,18 @@
           trap 'rm -f "$pending"; refresh' EXIT
           refresh
           while true; do
+            # If the VM stopped some other way (resource guard, crash, a manual
+            # `vm stop`), `vm pods` fails forever and n never reaches 0: without
+            # this check the drain loops for good and blocks Start as busy.
+            # Only a definite non-Running status ends it; "operation in
+            # progress" (non-JSON) or a CLI error just waits another pass.
+            vm="$("$CK3" vm status --json --instance="$inst" 2>/dev/null \
+              | python3 -c 'import json,sys; t=sys.stdin.read(); print(json.loads(t[t.find("{"):]).get("status") or "")' \
+              2>/dev/null || true)"
+            if [ -n "$vm" ] && [ "$vm" != Running ]; then
+              note "Conveyor VM $inst is already $vm; pending stop cleared"
+              exit 0
+            fi
             n="$("$CK3" vm pods --instance="$inst" 2>/dev/null \
               | python3 -c 'import json,sys; t=sys.stdin.read(); d=json.loads(t[t.find("{"):]); print(sum(1 for p in d.get("pods",[]) if p.get("phase") in ("Running","Pending")))' \
               2>/dev/null || echo unknown)"
