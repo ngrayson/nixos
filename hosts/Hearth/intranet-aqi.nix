@@ -12,8 +12,19 @@
 # area here — "Seattle-Bellevue-Kent Valley" — spans Everett to Tacoma, so every
 # location was showing the worst station in the region: Kirkland and Seattle both
 # displayed Kent-S 236th's 53 instead of their own ~29 and ~30.
-{pkgs, ...}: let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   weatherCfg = (import ./intranet/config).weather;
+  # API keys are a sops secret (secrets/hearth-intranet-keys.yaml), read at run
+  # time. Never put them in pollCfg: anything in /nix/store is readable by every
+  # account on Hearth and on the builder. Edit with
+  # `sops secrets/hearth-intranet-keys.yaml`.
+  keysFile = ../../secrets/hearth-intranet-keys.yaml;
+  haveKeys = builtins.pathExists keysFile;
   # AirNow observations update roughly hourly, so a fast poll buys nothing and
   # only burns the hourly request budget. Floor it well above the transit poll.
   pollSeconds = let
@@ -34,7 +45,6 @@
     then 1
     else n;
   pollCfg = pkgs.writeText "hearth-aqi-poll.json" (builtins.toJSON {
-    key = weatherCfg.airnowApiKey or "";
     pollSeconds = pollSeconds;
     maxStationMiles = maxStationMiles;
     locations = weatherCfg.locations or [];
@@ -51,7 +61,8 @@
 
       cfg = json.load(open(sys.argv[1], encoding="utf-8"))
       out = "/run/hearth-intranet/aqi.json"
-      key = (cfg.get("key") or "").strip()
+      key_path = os.environ.get("HEARTH_AIRNOW_KEY_FILE", "")
+      key = open(key_path, encoding="utf-8").read().strip() if key_path else ""
       poll = max(300, int(cfg.get("pollSeconds") or 600))
       locations = cfg.get("locations") or []
       max_miles = float(cfg.get("maxStationMiles") or 25)
@@ -424,15 +435,26 @@
     '';
   };
 in {
+  sops.secrets.hearth-intranet-airnow-key = lib.mkIf haveKeys {
+    sopsFile = keysFile;
+    key = "airnow";
+    owner = "hearth-intranet";
+    group = "hearth-intranet";
+    mode = "0400";
+  };
+
   systemd.services.hearth-intranet-aqi = {
     description = "Write Hearth intranet aqi.json from AirNow";
-    after = ["network-online.target"];
+    after = ["network-online.target" "sops-install-secrets.service"];
     wants = ["network-online.target"];
     serviceConfig = {
       Type = "oneshot";
       User = "hearth-intranet";
       Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-aqi";
+      Environment = lib.optionals haveKeys [
+        "HEARTH_AIRNOW_KEY_FILE=${config.sops.secrets.hearth-intranet-airnow-key.path}"
+      ];
       TimeoutStartSec = "90s";
       ProtectSystem = "strict";
       ProtectHome = true;
