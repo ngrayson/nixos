@@ -77,8 +77,11 @@ let
     fi
     content="⚠ $unit failed on ${config.networking.hostName} — journalctl -u $unit -b --no-pager"
     payload=$(${pkgs.jq}/bin/jq -n --arg c "$content" '{content: $c, username: "Scrying Orb", flags: 4}')
-    ${pkgs.curl}/bin/curl -fsS --max-time 10 -o /dev/null \
-      -H 'Content-Type: application/json' -d "$payload" "$DISCORD_WEBHOOK_URL" \
+    # The URL goes in through --config on stdin, never as an argument: argv is
+    # readable by every local user while curl runs (hearthchime.nix does the same).
+    printf 'url = "%s"\n' "$DISCORD_WEBHOOK_URL" \
+      | ${pkgs.curl}/bin/curl -fsS --max-time 10 --config - -o /dev/null \
+        -H 'Content-Type: application/json' -d "$payload" \
       || echo "scry-failed: posting to Discord failed" >&2
     exit 0
   '';
