@@ -545,13 +545,13 @@ copy_intranet_config_for_restic() {
   local base="$NIXOS_DIR/hosts/Hearth/intranet/config"
   local remote_dir="/var/lib/hearth-intranet/config"
   local widget src copied=0
-  ssh_hearth -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
+  ssh_hearth -n -o BatchMode=yes sudo mkdir -p "$remote_dir" || return 1
   for widget in clock weather transit health gallery calendar alerts; do
     src="$base/$widget/config.nix"
     [[ -f "$src" ]] || continue
     scp -q "$src" "${TARGET}:/tmp/hearth-${widget}.nix" || return 1
-    ssh_hearth -o BatchMode=yes sudo mv "/tmp/hearth-${widget}.nix" "${remote_dir}/${widget}.nix" || return 1
-    ssh_hearth -o BatchMode=yes sudo chmod 0640 "${remote_dir}/${widget}.nix" || return 1
+    ssh_hearth -n -o BatchMode=yes sudo mv "/tmp/hearth-${widget}.nix" "${remote_dir}/${widget}.nix" || return 1
+    ssh_hearth -n -o BatchMode=yes sudo chmod 0640 "${remote_dir}/${widget}.nix" || return 1
     copied=$((copied + 1))
   done
   ok "Copied ${copied} intranet config.nix file(s) to ${remote_dir} for restic."
@@ -674,7 +674,7 @@ run_doctor() {
   ensure_ssh_include
 
   local ssh_err
-  ssh_err="$(ssh_hearth -o BatchMode=yes -o ConnectTimeout=8 true 2>&1)" || {
+  ssh_err="$(ssh_hearth -n -o BatchMode=yes -o ConnectTimeout=8 true 2>&1)" || {
     DOC_SSH="fail"
     DOC_SSH_KIND=""
     DOC_SUDO="fail"
@@ -776,12 +776,24 @@ choose_action() {
     return
   fi
 
-  printf '\n  [b] Build          [d] Dry-activate    [s] Switch\n'
-  printf '  [o] Boot           [e] Health          [r] Recheck\n'
-  printf '  [h] SSH            [q] Quit\n'
-  printf '\nAction: '
+  # The menu and prompt go to stderr: choose_action runs inside
+  # choice="$(choose_action)", so anything on stdout becomes part of the
+  # choice, and "...Action: Build" never matched a case (every plain-text
+  # pick was "Unknown action").
+  {
+    printf '\n  [b] Build          [d] Dry-activate    [s] Switch\n'
+    printf '  [o] Boot           [e] Health          [r] Recheck\n'
+    printf '  [h] SSH            [q] Quit\n'
+    printf '\nAction: '
+  } >&2
   local reply
-  read -r reply || true
+  # EOF (closed pipe, script, </dev/null) means quit. `|| true` turned it into
+  # an empty reply, and the loop redrew "Unknown action" forever. A final line
+  # with no trailing newline still counts as an answer.
+  if ! read -r reply && [[ -z "$reply" ]]; then
+    printf 'Quit'
+    return
+  fi
   case "$reply" in
     b | B | build | Build) printf 'Build' ;;
     d | D | dry | Dry-activate) printf 'Dry-activate' ;;
@@ -881,7 +893,7 @@ run_deploy() {
 
   local before=""
   if [[ "$action" == "switch" ]]; then
-    before="$(ssh_hearth -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
+    before="$(ssh_hearth -n -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
   fi
 
   heading "${action} on Hearth (build on $(local_hostname), $(activation_summary))"
@@ -915,7 +927,7 @@ run_deploy() {
 
   if [[ "$action" == "switch" ]]; then
     local after=""
-    after="$(ssh_hearth -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
+    after="$(ssh_hearth -n -o BatchMode=yes readlink -f /run/current-system 2>/dev/null || true)"
     heading "Remote system"
     printf "  %s\n" "$(short_store "${after:-unknown}")"
     if [[ -n "$before" && -n "$after" && -e "$before" && -e "$after" && "$before" != "$after" ]]; then
