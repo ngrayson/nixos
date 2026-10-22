@@ -31,10 +31,17 @@ const transport = new StdioClientTransport({
 });
 const client = new Client({ name: "scry-digest", version: "0.1.0" });
 await client.connect(transport);
-const call = async (name, args = {}) => {
+// A Conveyor failure must fail the run (so scry-failed@ reports it), never read
+// as "no cards": an expired token used to post an empty digest and exit 0.
+// json: false only for tools that may legitimately answer in plain text.
+const call = async (name, args = {}, { json = true } = {}) => {
   const r = await client.callTool({ name, arguments: args });
   const t = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
-  try { return JSON.parse(t); } catch { return t; }
+  if (r.isError) throw new Error(`conveyor ${name} failed: ${t.slice(0, 200)}`);
+  try { return JSON.parse(t); } catch {
+    if (json) throw new Error(`conveyor ${name} returned non-JSON: ${t.slice(0, 200)}`);
+    return t;
+  }
 };
 
 const projects = await call("list_projects");
@@ -48,7 +55,7 @@ for (const p of projects) {
     const rel = (Array.isArray(tasks) ? tasks : []).filter(relevant);
     if (rel.length) buckets[status] = rel;
   }
-  const decisions = await call("list_decisions", { projectId: p.id, status: "open" });
+  const decisions = await call("list_decisions", { projectId: p.id, status: "Open" }, { json: false });
   const incidents = await call("list_tasks", { projectId: p.id, typeFilters: ["incident"], limit: 50 });
   report.push({
     project: p, buckets,
