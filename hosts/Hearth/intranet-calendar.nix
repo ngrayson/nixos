@@ -1,35 +1,33 @@
 # Fetch private ICS feeds on Hearth and merge them into one calendar.ics.
 # The browser only reads /calendar.ics; the URLs never leave this host and are
 # never logged (a Google secret address is read access to the whole calendar).
-{pkgs, ...}: let
-  calendarCfg = (import ./intranet/config).calendar;
-  legacyUrl = calendarCfg.calendarIcsUrl or null;
-  listed = calendarCfg.calendarIcsUrls or [];
-  # calendarIcsUrl (single string) stays supported as one unnamed feed.
-  legacyFeeds =
-    if legacyUrl == null || legacyUrl == ""
-    then []
-    else [{url = toString legacyUrl;}];
-  normalise = feed: {
-    name = feed.name or "";
-    url = toString (feed.url or "");
-    calendarId = feed.calendarId or "";
-  };
-  feeds =
-    builtins.filter (f: f.url != "")
-    (map normalise (listed ++ legacyFeeds));
-  feedsCfg = pkgs.writeText "hearth-calendar-feeds.json" (builtins.toJSON feeds);
+#
+# The feed list is a sops secret (secrets/hearth-calendar-feeds.yaml, key
+# `feeds`, a JSON list of {name, url, calendarId}) read at run time. It must
+# never be interpolated into the build: anything in /nix/store is readable by
+# every account on Hearth and on the builder. Edit it with
+# `sops secrets/hearth-calendar-feeds.yaml`; until that file exists the card
+# shows no events.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  feedsFile = ../../secrets/hearth-calendar-feeds.yaml;
+  haveFeeds = builtins.pathExists feedsFile;
   writer = pkgs.writeShellApplication {
     name = "hearth-intranet-calendar";
     runtimeInputs = [pkgs.coreutils pkgs.python3];
     text = ''
       set -euo pipefail
       mkdir -p /run/hearth-intranet
-      python3 - ${feedsCfg} <<'PY'
+      python3 - <<'PY'
       import json, os, sys, urllib.error, urllib.request
 
-      feeds = json.load(open(sys.argv[1], encoding="utf-8"))
       out = "/run/hearth-intranet/calendar.ics"
+      feeds_path = os.environ.get("HEARTH_CALENDAR_FEEDS_FILE", "")
+      feeds = json.load(open(feeds_path, encoding="utf-8")) if feeds_path else []
 
       if not feeds:
           # No feed configured: drop a stale file so the widget shows nothing.
@@ -132,15 +130,26 @@
     '';
   };
 in {
+  sops.secrets.hearth-calendar-feeds = lib.mkIf haveFeeds {
+    sopsFile = feedsFile;
+    key = "feeds";
+    owner = "hearth-intranet";
+    group = "hearth-intranet";
+    mode = "0400";
+  };
+
   systemd.services.hearth-intranet-calendar = {
     description = "Fetch Hearth intranet calendar.ics";
-    after = ["network-online.target"];
+    after = ["network-online.target" "sops-install-secrets.service"];
     wants = ["network-online.target"];
     serviceConfig = {
       Type = "oneshot";
       User = "hearth-intranet";
       Group = "hearth-intranet";
       ExecStart = "${writer}/bin/hearth-intranet-calendar";
+      Environment = lib.optionals haveFeeds [
+        "HEARTH_CALENDAR_FEEDS_FILE=${config.sops.secrets.hearth-calendar-feeds.path}"
+      ];
       ProtectSystem = "strict";
       ProtectHome = true;
       PrivateTmp = true;
