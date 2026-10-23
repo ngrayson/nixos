@@ -154,7 +154,8 @@ Lid policy beyond `HandleLidSwitchExternalPower = ignore` is open question 4.
 **sops-nix** with an age key per host; private keys and master copies live in
 **Bitwarden Pro**. **Restic (v1)** backs up Jellyfin state, Tailscale identity,
 ACME certs, the host age key and builder `config.nix` copies to
-`/mnt/cold/backups/hearth-restic`, 7 daily + 4 weekly. Acceptance: a fresh
+`/var/lib/restic-repo/hearth` on the NVMe (root 0700; moved off COLD 2026-10-23 so the
+jellyfin group cannot delete it), 7 daily + 4 weekly. Acceptance: a fresh
 install re-keys from Bitwarden alone.
 
 ### H6 — Remote surface (wiztow.org + streaming)
