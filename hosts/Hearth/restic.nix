@@ -1,6 +1,13 @@
-# Encrypted restic of Hearth mutable state. Repo lives on COLD so an NVMe
-# death is a restore, not a household rebuild. Library and /nix/store stay
-# off this repo. Off-box (Tawa/B2) is a follow-on.
+# Encrypted restic of Hearth mutable state. Library and /nix/store stay off
+# this repo.
+#
+# The repo lives on Hearth's NVMe, root-only (0700), Nick's choice on
+# 2026-10-23. It used to sit on COLD, which is NTFS mounted gid=jellyfin
+# umask=0002: every repo file was group-writable, so a compromised Jellyfin
+# (LAN-facing) or Syncthing could delete the only copy, and NTFS cannot give
+# one folder tighter permissions. The trade-off, accepted knowingly: this
+# copy dies with the NVMe. Off-box (Tawa/B2) is still the follow-on that
+# covers that. Backups also no longer depend on COLD being mounted.
 #
 # Password: secrets/hearth-restic-password.yaml (`password:`), encrypted for
 # Tawa+Theseus+Hearth age publics. Nick creates it in Bitwarden and encrypts
@@ -19,6 +26,7 @@ in {
   systemd.tmpfiles.rules = [
     "d /var/lib/hearth-intranet 0755 root root -"
     "d /var/lib/hearth-intranet/config 0750 root root -"
+    "d /var/lib/restic-repo 0700 root root -"
   ];
 
   sops.secrets.hearth-restic-password = lib.mkIf havePassword {
@@ -31,7 +39,7 @@ in {
 
   services.restic.backups.hearth = lib.mkIf havePassword {
     initialize = true;
-    repository = "/mnt/cold/backups/hearth-restic";
+    repository = "/var/lib/restic-repo/hearth";
     passwordFile = config.sops.secrets.hearth-restic-password.path;
     paths = [
       "/var/lib/jellyfin"
@@ -53,20 +61,5 @@ in {
       "--keep-daily 7"
       "--keep-weekly 4"
     ];
-    # Second layer behind the unit's ConditionPathIsMountPoint below: covers
-    # the mount vanishing between the condition check and ExecStartPre.
-    backupPrepareCommand = ''
-      ${pkgs.util-linux}/bin/mountpoint -q /mnt/cold || {
-        echo "COLD is not mounted; skip restic (nofail disk)."
-        exit 1
-      }
-    '';
-  };
-
-  # Same shape as hearth-ingest: a parked COLD condition-skips the daily run
-  # instead of failing it with 'dependency' (and the Persistent= catch-up).
-  systemd.services.restic-backups-hearth = lib.mkIf havePassword {
-    after = ["mnt-cold.mount"];
-    unitConfig.ConditionPathIsMountPoint = "/mnt/cold";
   };
 }
