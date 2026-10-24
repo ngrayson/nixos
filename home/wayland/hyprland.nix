@@ -290,7 +290,9 @@ in {
         # dunst: Home Manager `services.dunst` (systemd user unit), not exec-once.
         # polkit-kde agent: `../services/polkit-agent.nix` (systemd user unit), not exec-once —
         # exec-once pins it to the session's original store path and never restarts it.
-        "${lib.getExe pkgs.quickshell} -d -p ${hs.quickshellLiveDir}"
+        # QS_ROLE=bar lets qs-quickshell-reload find this bar even after a
+        # crash-restart wipes its argv (home/hypr/scripts.nix, bar_orphans).
+        "env QS_ROLE=bar ${lib.getExe pkgs.quickshell} -d -p ${hs.quickshellLiveDir}"
       ];
     };
     extraConfig =

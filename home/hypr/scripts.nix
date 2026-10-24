@@ -123,7 +123,11 @@ in rec {
 
     # -n makes an already-running lock instance a no-op instead of a second
     # lock attempt. Already locked is success here, not an error.
-    env WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" \
+    # QS_ROLE=lock, and never the bar's tag: qs-quickshell-reload sweeps every
+    # live process tagged QS_ROLE=bar, so a lock that inherited it would be
+    # killed on a bar reload -- dropping an active session lock.
+    env -u QS_RELOAD_WORKER WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-}" \
+      XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR}" QS_ROLE=lock \
       ${qsBin} -d -n -p "$LOCK" || true
 
     # Success means the compositor has confirmed the lock, not merely that a
@@ -1186,7 +1190,44 @@ in rec {
       fi
       "$SLEEP" 0.1
     done
+    # Orphans of a crashed bar. Quickshell's crash handler re-execs the bar
+    # through /proc/self/exe with NO arguments, so neither path above can see
+    # it: the registry entry is gone and argv no longer names $SRC. Its
+    # environment survives the re-exec, though, so every bar is launched with
+    # QS_ROLE=bar (here and in Hyprland's exec-once) and anything still alive
+    # with that tag is a leftover bar. Killing one can respawn a replacement
+    # with a new pid, so re-scan until none is left (bounded) rather than
+    # acting on a list taken once. KILL, not TERM: TERM is what the handler
+    # catches and turns into another restart. The lock is launched with
+    # QS_ROLE=lock, so it is never a candidate.
+    bar_orphans() {
+      local env_file pid exe
+      for env_file in /proc/[0-9]*/environ; do
+        pid="''${env_file#/proc/}"
+        pid="''${pid%/environ}"
+        [ "$pid" = "$$" ] && continue
+        exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
+        case "$exe" in
+          */.quickshell-wrapped | */quickshell) ;;
+          *) continue ;;
+        esac
+        if tr "\0" "\n" <"$env_file" 2>/dev/null | "$GREP" -qx 'QS_ROLE=bar'; then
+          printf '%s\n' "$pid"
+        fi
+      done
+    }
+    n=0
+    while pids="$(bar_orphans)"; [ -n "$pids" ]; do
+      # shellcheck disable=SC2086
+      kill -KILL $pids 2>/dev/null || true
+      n=$((n + 1))
+      if [ "$n" -ge 30 ]; then
+        echo "qs-quickshell-reload: bar processes still alive after 3s: $pids" >&2
+        break
+      fi
+      "$SLEEP" 0.1
+    done
     "$SLEEP" 0.2
-    exec "$QS" -d -p "$SRC"
+    exec env QS_ROLE=bar "$QS" -d -p "$SRC"
   '';
 }
