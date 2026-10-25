@@ -1,9 +1,12 @@
 # Hearth restic restore
 
-Encrypted snapshots of **Hearth mutable state** on COLD. The flake still
-builds the OS. This file is the restore runbook.
+Encrypted snapshots of **Hearth mutable state** on Hearth's own NVMe. The
+flake still builds the OS. This file is the restore runbook.
 
-Repo: `/mnt/cold/backups/hearth-restic`  
+Repo: `/var/lib/restic-repo/hearth` (root, `0700`). Until 2026-10-23 it was
+`/mnt/cold/backups/hearth-restic`, which the jellyfin group could delete; that
+old copy (snapshots up to 2026-10-23) is stale and may be removed. This repo
+does not survive an NVMe death; off-box is the follow-on.  
 Unit: `restic-backups-hearth.service` (daily timer, 7 daily + 4 weekly)  
 Password: Bitwarden → `secrets/hearth-restic-password.yaml` (`password:`).
 Never print it. After a Hearth switch that includes the secret, the
@@ -51,10 +54,10 @@ Do **not** restore for:
 
    ```bash
    ssh hearth 'restic=$(systemctl cat restic-backups-hearth.service | grep -o "/nix/store/[^ ]*/bin/restic" | head -1)
-   sudo "$restic" -r /mnt/cold/backups/hearth-restic \
+   sudo "$restic" -r /var/lib/restic-repo/hearth \
      --password-file /run/secrets/hearth-restic-password snapshots
    sudo mkdir -p /root/restic-restore
-   sudo "$restic" -r /mnt/cold/backups/hearth-restic \
+   sudo "$restic" -r /var/lib/restic-repo/hearth \
      --password-file /run/secrets/hearth-restic-password \
      restore latest --target /root/restic-restore
    '
