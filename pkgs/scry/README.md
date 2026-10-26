@@ -18,7 +18,7 @@ New Conveyor projects and Notion areas show up automatically.
 ## Format
 
 Discord markdown headers: `# 🔮 Scrying Orb — <date>`, then `# Due soon` (the
-next `maxItems` Notion tasks with a due date, sub-tasks included, soonest first
+next `maxItems` Notion tasks with a due date, sub-tasks included (Done and Dropped excluded), soonest first
 with a long date and a relative countdown; overdue ones get a ⚠; omitted when
 nothing is dated), then `# General` (your Notion
 tasks), then `# Projects` with one `## [<project>](<board link>) — <counts>`
