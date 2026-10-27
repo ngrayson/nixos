@@ -30,7 +30,10 @@ in {
         lock_cmd = lock;
         before_sleep_cmd = beforeSleep;
         after_sleep_cmd = dpmsOn;
-        ignore_dbus_inhibit = false;
+        # hypridle 0.1.7 rebuilds every idle listener when a D-Bus inhibit drops to 0
+        # while idled, losing the "idled" state, so on-resume (dpms on) never fires.
+        # Wayland idle-inhibit (browsers, mpv, SDL games) is handled by Hyprland and unaffected.
+        ignore_dbus_inhibit = true;
       };
       listener = [
         {
