@@ -73,9 +73,35 @@ NTSYNC needs no variable (see above).
 - `mangohud` is available inside the Steam FHS, but Blizzard's ToS does not
   explicitly permit overlays. Leave it off unless you want it.
 
-## In-game settings (community, verify)
+## Window management (Hyprland)
 
-In `_retail_/WTF/Config.wtf`:
+The game only offers **Windowed** and **Windowed Fullscreen**. Measured on Tawa
+in Windowed Fullscreen: class `steam_app_3773699819`, title "World of Warcraft",
+tiled, `fullscreen: 1` (maximized, not 2), 2526x1374 (gaps and border included),
+tiled next to a tiled "Battle.net" window. Hyprland and the game then fight over
+size, and the cursor is not confined at the screen edge. Two rules in
+`home/wayland/hyprland.nix` fix it: the game window is put into real fullscreen
+when it maps (no border, rounding or shadow), and the Battle.net window floats.
+A live `hyprctl keyword windowrule` test was run first; after it, Nick asked for
+the rules to be written. A read-back of `fullscreen: 2` from `hyprctl` was not
+captured, so check it after a switch:
+
+```sh
+hyprctl -j clients | jq '.[] | select(.class|test("steam_app_3773699819")) | {title,fullscreen,floating}'
+```
+
+The title rule is a prefix match (`^World of Warcraft.*`) because the Classic
+client's exact title was not captured; tighten it if a capture shows it.
+
+## In-game settings
+
+`Config.wtf` is written on first quit, under
+`~/Games/WoW/World of Warcraft/<product>/WTF/` where `<product>` is `_retail_`,
+`_classic_` or `_classic_era_` depending on what you installed (measured on
+Tawa: `_classic_` and `_classic_era_` exist, not retail). Keys are spelled with
+a capital in the files Classic wrote (`GxApi`, `GxMaximize`).
+
+Starting values from a community guide (verify):
 
 ```
 SET gxApi "d3d11"
@@ -83,9 +109,10 @@ SET maxFPS "60"
 SET maxFPSBk "30"
 ```
 
-DX12 is reported as less stable under Proton and ray tracing does not work.
-DXVK 2.x builds shaders asynchronously (GPL), so light stutter in the first
-session is expected.
+Measured: Classic wrote `GxApi "D3D12"` by default. DX12 is reported as less
+stable under Proton and ray tracing does not work, so D3D11 is the suggested
+value, but that choice is yours and nothing here sets it. DXVK 2.x builds shaders
+asynchronously (GPL), so light stutter in the first session is expected.
 
 ## Security posture
 
