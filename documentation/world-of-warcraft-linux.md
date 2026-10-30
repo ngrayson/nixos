@@ -110,14 +110,12 @@ lsmod | grep ntsync
 ls -l /dev/ntsync
 ```
 
-Both must succeed. If Proton cannot open the device as `wiz` — unverified; check
-the node's mode first — add to `hosts/Tawa/host.nix`:
-
-```nix
-services.udev.extraRules = ''KERNEL=="ntsync", MODE="0660", TAG+="uaccess"'';
-```
-
-and note here which was needed.
+Both must succeed. Measured on Tawa after the switch: the module loads and
+`/dev/ntsync` is `crw-rw-rw- root root 10,260`, world-accessible, so `wiz` can
+open it and no udev rule is needed. (If a future kernel tightens the mode, add
+`services.udev.extraRules = ''KERNEL=="ntsync", MODE="0660", TAG+="uaccess"'';`
+to `hosts/Tawa/host.nix`.) Whether Proton actually picks it up in a game has not
+been checked.
 
 ## Sources
 
