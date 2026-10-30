@@ -21,8 +21,13 @@ checked.
 
 NTSYNC is Linux's kernel-native NT synchronisation primitive set. The kernel is
 built with `CONFIG_NTSYNC=m` (measured), but the module is not autoloaded, so
-`/dev/ntsync` did not exist before this change (measured). Proton only uses it
-when `PROTON_USE_NTSYNC=1` is set *and* the device exists.
+`/dev/ntsync` did not exist before this change (measured). GE-Proton11-1's
+`proton` script sets `WINENTSYNC=1` by default (opt out with
+`PROTON_NO_NTSYNC=1`) and its `wineserver` carries the ntsync code (both
+measured by reading the shipped package), so no launch variable is needed once
+the device exists. `PROTON_USE_NTSYNC` from some community guides is not read by
+this build. Whether a running game actually holds `/dev/ntsync` open is checked
+under *Verifying NTSYNC*.
 
 ## Why Steam + GE-Proton
 
@@ -43,14 +48,23 @@ Nobody can script this; the Battle.net login is interactive.
 4. Set the launch options (below), then run the shortcut. **Do not log in during
    the first installer run**; finish the install, then launch Battle.net again
    and log in.
-5. Install WoW **outside the prefix**, e.g. `~/Games/WoW`. Then a broken prefix
-   can be deleted and rebuilt without re-downloading the client.
+5. Retarget the shortcut: it still launches the installer. Properties > Target
+   becomes `Battle.net.exe` inside the prefix:
+   `~/.local/share/Steam/steamapps/compatdata/<appid>/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net.exe`
+   (find `<appid>` with `ls -t ~/.local/share/Steam/steamapps/compatdata | head -3`;
+   on Tawa the Battle.net prefix is `3773699819`, measured). Re-running the
+   installer each time also works.
+6. Install WoW **outside the prefix**, e.g. `~/Games/WoW` (in Battle.net's
+   install dialog that is `Z:\home\wiz\Games\WoW`; Wine's `Z:` is `/`). Then a
+   broken prefix can be deleted and rebuilt without re-downloading the client.
 
 ## Launch options
 
 ```
-PROTON_USE_NTSYNC=1 gamemoderun %command%
+gamemoderun %command%
 ```
+
+NTSYNC needs no variable (see above).
 
 - `WINE_SIMULATE_WRITECOPY=1` — add **only** if Battle.net shows a blank login
   or the Agent keeps corrupting (community, also on the NixOS wiki).

@@ -27,7 +27,8 @@
   services.xserver.videoDrivers = ["amdgpu"];
   # NTSYNC gives Proton/Wine kernel-native NT sync primitives (lower overhead,
   # steadier frame pacing for WoW). Built as a module in the 7.x kernel but not
-  # autoloaded; Proton only uses it when PROTON_USE_NTSYNC=1 and /dev/ntsync exists.
+  # autoloaded; GE-Proton11 enables it by default (opt out: PROTON_NO_NTSYNC=1)
+  # once /dev/ntsync exists.
   boot.kernelModules = ["ntsync"];
   programs.gamemode.enable = true;
   # While a game holds gamemode, freeze the screen warmth instead of letting the
