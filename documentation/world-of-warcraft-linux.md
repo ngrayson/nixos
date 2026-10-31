@@ -73,6 +73,12 @@ NTSYNC needs no variable (see above).
 - `mangohud` is available inside the Steam FHS, but Blizzard's ToS does not
   explicitly permit overlays. Leave it off unless you want it.
 
+App-menu launcher: `desktop/applications/world-of-warcraft.desktop` runs
+`steam steam://rungameid/16207917307559673856`, which is the shortcut's 64-bit
+Steam id (`appid << 32 | 0x02000000`, appid `3773699819`). It opens Battle.net;
+pick the product and press Play there. Theseus also receives the file but has
+no such shortcut, so it does nothing there.
+
 ## Window management (Hyprland)
 
 The game only offers **Windowed** and **Windowed Fullscreen**. Measured on Tawa
@@ -109,9 +115,10 @@ SET maxFPS "60"
 SET maxFPSBk "30"
 ```
 
-Measured: Classic wrote `GxApi "D3D12"` by default. DX12 is reported as less
-stable under Proton and ray tracing does not work, so D3D11 is the suggested
-value, but that choice is yours and nothing here sets it. DXVK 2.x builds shaders
+Measured: every product (`_classic_`, `_classic_era_`, `_forever_`) wrote
+`GxApi "D3D12"` by default. DX12 is reported as less stable under Proton and ray
+tracing does not work, so Nick set `GxApi "D3D11"` by hand in all three
+`Config.wtf` files (game state, not Nix; the client may rewrite it). DXVK 2.x builds shaders
 asynchronously (GPL), so light stutter in the first session is expected.
 
 ## Security posture
