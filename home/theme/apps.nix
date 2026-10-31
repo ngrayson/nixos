@@ -315,6 +315,8 @@
     data["workbench.colorTheme"] = theme
     data["workbench.preferredDarkColorTheme"] = theme
     data["window.autoDetectColorScheme"] = False
+    # Enforcement is /etc/vscode/policy.json (common/vscode-policy.nix); this only stops the attempt.
+    data["extensions.autoUpdate"] = False
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent="\t", ensure_ascii=False)
         fh.write("\n")

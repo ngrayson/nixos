@@ -16,6 +16,7 @@
     ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
+    ../../common/vscode-policy.nix
     ./disk.nix
     ./jellyfin.nix
     ./remote-access.nix
