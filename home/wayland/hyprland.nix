@@ -60,6 +60,9 @@ in {
         # the sake of having any cursor feedback at all. `extend_border_grab_area`
         # (default 15) keeps the target generous despite border_size = 2.
         resize_on_border = true;
+        # Only PERMITS tearing; a window still vsyncs unless a rule gives it
+        # `immediate` (Slippi's Dolphin, below).
+        allow_tearing = true;
         # Active scheme (home/theme/hosts.nix): overrides Stylix Hyprland `col.*`
         "col.active_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.accent}ff)";
         "col.inactive_border" = lib.mkForce "rgba(${lib.toLower config.theme.tokens.surface}ff)";
@@ -273,6 +276,10 @@ in {
       # recovery path. The float rule below is what makes position matter at
       # all -- a tiled window would ignore it.
       windowrule = [
+        # Slippi's Dolphin (netplay AppImage, XWayland class "Apprun"): present immediately,
+        # skipping compositor vsync, to cut input lag. Title-scoped because every AppImage is
+        # "Apprun". Only tears when Dolphin is fullscreen.
+        "match:class ^Apprun$, match:title ^Faster Melee - Slippi.*, immediate on"
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
         # World of Warcraft (Battle.net shortcut, appid 3773699819): retail/classic only offer
