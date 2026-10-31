@@ -51,6 +51,8 @@
     # notes the LAN path to sshd times out). On a landlord-owned LAN that is
     # exposure with no purpose, so it is closed the same way Tawa does it.
     openFirewall = false;
+    # Root-owned /etc/ssh/authorized_keys.d only; see hosts/Tawa/remote-access.nix.
+    authorizedKeysInHomedir = false;
     settings = {
       KbdInteractiveAuthentication = false;
       PasswordAuthentication = false;

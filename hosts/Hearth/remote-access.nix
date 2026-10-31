@@ -35,6 +35,8 @@
     # --ssh note above), unlike Go3 where the LAN path times out. This is the
     # only source of 22 now; the redundant `allowedTCPPorts = [22]` is gone.
     openFirewall = true;
+    # Root-owned /etc/ssh/authorized_keys.d only; see hosts/Tawa/remote-access.nix.
+    authorizedKeysInHomedir = false;
     settings = {
       KbdInteractiveAuthentication = false;
       PasswordAuthentication = false;
