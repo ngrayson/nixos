@@ -22,9 +22,9 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
 | Project | Role | Why |
 |---|---|---|
 | **WizOs** | Host | Its cards are verified on the real machines (`os-rebuild switch`, `hearth-deploy`, `go3-deploy`, a bar reload, a replug), which a pod can't do. They stay with the local loop (`/convey-her-watch`) on Tawa. |
-| **Under the Stars** | First consumer | Private repo with no toolchain: a pod can take a card all the way to a PR, and a Small pod is plenty. |
+| **Stellarium** | Consumer | Nick's private monorepo (`ngrayson/Stellarium`), one Conveyor tag per project: Under the Stars (folded in 2026-10-25, previously the first consumer) and the Godot game cost-of-freedom. The pod image needs Godot 4 headless for the game. |
 | **foundation** | Consumer, once Logan agrees | The repo is Logan's and bakes on his self-hosted runner. An instance can serve up to 5 other accounts: if the image is in GHCR, activate the project on this instance; if it is a Bake-Locally image, Logan shares his instead. |
-| **Sunfall** | Later | There's no Conveyor project yet. |
+| **Sunfall** | Later | Too big for the monorepo; it gets its own Conveyor project on its `Arcane-Laboratory` repo. |
 
 **WizOs sub-projects in a pod, such as home.wizt.org.** The dashboard under `hosts/Hearth/intranet` is a plain npm app. A pod can build it and serve a preview for review; only `hearth-intranet-deploy` needs the host. Compute is set **per project only**: there's no sub-board or per-card routing (per the managed-personal-compute guide, 2026-10-05). Turning on Personal Compute for WizOs therefore only affects cards someone starts with Conveyor's **Build** button. The local loop never presses it. If that split is ever wanted, mark pod-safe cards with a tag, have the loop skip them, and press Build on those. Until then, WizOs stays on the local loop.
 
@@ -56,7 +56,7 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
    conveyor-k3 vm setup --instance=tawa --cpus=6 --memory=12 --disk=100
    conveyor-k3 vm link --instance=tawa
    ```
-   In the browser, name the machine `Tawa`, allow only the consumer projects (**Under the Stars** first; foundation once Logan agrees), and set **Max concurrent builds** to 1. Then install it as a service so it survives reboots:
+   In the browser, name the machine `Tawa`, allow only the consumer projects (**Stellarium**; foundation once Logan agrees), and set **Max concurrent builds** to 1. Then install it as a service so it survives reboots:
    ```sh
    conveyor-k3 vm stop --instance=tawa
    conveyor-k3 vm service install --instance=tawa
@@ -79,7 +79,7 @@ Every host in this flake is NixOS, including the planned Gcp, so the Host runtim
    It restarts the guest's k3s. Check with `… sudo conveyor-k3 registry list`, which should show `✓ ghcr.io`. When the PAT expires, the same 401 comes back; re-run this with a new token. The Bake Locally route (a self-hosted runner on Tawa) avoids GHCR entirely, if the PAT ever becomes a burden.
 5. **Prove it.** Build one doc-only card and check that its pod is placed on Tawa and reaches a PR. Read pod state from inside the guest with `LIMA_HOME=… limactl shell <instance> sudo k3s kubectl get pods -A`, which is read-only.
 
-**Status, 2026-10-06:** instance `tesseract` (default 4 CPU / 8 GiB / 64 GiB) serves Under the Stars, with the pod size set to Small. A Small pod (about 7 GiB) is the largest that fits; the default 14 GiB size is refused with `insufficient_capacity`. The first proof was the Stonetop GM-sheet card: its pod was placed on `linux-x64-tesseract` and opened under-the-stars PR #18.
+**Status, 2026-10-06:** instance `tesseract` (default 4 CPU / 8 GiB / 64 GiB) serves Under the Stars, with the pod size set to Small. A Small pod (about 7 GiB) is the largest that fits; the default 14 GiB size is refused with `insufficient_capacity`. The first proof was the Stonetop GM-sheet card: its pod was placed on `linux-x64-tesseract` and opened under-the-stars PR #18. **2026-10-25:** Under the Stars moved into the Stellarium monorepo and its repo was archived; Stellarium is now the consumer to allow on the instance.
 
 **NixOS gaps found in conveyor-k3 0.1.14** (handled by `common/conveyor-k3.nix`): it runs eight host tools by absolute Debian path (`/usr/bin/{which,ssh,nc,stat,systemctl,loginctl,journalctl}`, `/bin/ps`), and it locates `limactl`, `qemu-system-x86_64`, `qemu-img` and Lima's `ssh-keygen` over a fixed PATH. It also expects UEFI firmware at `<qemu dir>/../share/qemu/edk2-x86_64-code.fd`, and it records the paths it found in the instance's `state.json` and `lima.yaml`. Its wrappers and its user service also pin the setup-time Nix store `node` (tracked on its own card).
 

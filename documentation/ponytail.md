@@ -61,7 +61,7 @@ and point `statusLine` at it yourself. Agents never edit `statusLine`.
 ## Where it does not run
 
 - **Conveyor cloud sessions and pods.** They do not load plugins installed on
-  this machine, so Under the Stars builds in the Lima VM are unaffected.
+  this machine, so Stellarium builds in the Lima VM are unaffected.
 - **The band** (the cost and token strip) needs Claude Code 2.1.290 or later.
   The host CLI is the nixpkgs `claude-code` from the locked input (2.1.223 on
   2026-10-22), so skills and hooks work and the band is absent until that

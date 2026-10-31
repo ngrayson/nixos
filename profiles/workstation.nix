@@ -176,6 +176,29 @@ in {
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
+    # Webcam mic + desktop speakers echo on calls; WebRTC AEC uses the default sink's
+    # monitor as the reference. Pick "Echo-cancelled mic" as the input in Discord/games.
+    extraConfig.pipewire."60-echo-cancel" = {
+      "context.modules" = [
+        {
+          name = "libpipewire-module-echo-cancel";
+          args = {
+            "library.name" = "aec/libspa-aec-webrtc";
+            "monitor.mode" = true;
+            # Both default on and cut near-end speech during double-talk; Discord/Krisp
+            # already does noise suppression. AEC3's own suppressor is not tunable here.
+            "aec.args" = {
+              "webrtc.transient_suppression" = false;
+              "webrtc.noise_suppression" = false;
+            };
+            "source.props" = {
+              "node.name" = "echo-cancel-source";
+              "node.description" = "Echo-cancelled mic";
+            };
+          };
+        }
+      ];
+    };
   };
   services.libinput.enable = true;
 

@@ -275,6 +275,13 @@ in {
       windowrule = [
         # Armored Core VI (1888160): no Hyprland chrome; avoids rounding/border on fullscreen game.
         "match:class ^(steam_app_1888160)$, border_size 0, rounding 0, no_shadow on"
+        # World of Warcraft (Battle.net shortcut, appid 3773699819): retail/classic only offer
+        # Windowed and Windowed Fullscreen, and the latter maps tiled + maximized (fs=1), so
+        # Hyprland and the game fight over size and Wine never confines the cursor. Force real
+        # fullscreen at map. Title is a prefix match: the Classic client's title was not captured.
+        "match:class ^steam_app_3773699819$, match:title ^World of Warcraft.*, fullscreen on, border_size 0, rounding 0, no_shadow on"
+        # Same class as the game; the launcher would otherwise tile beside it.
+        "match:class ^steam_app_3773699819$, match:title ^Battle\\.net$, float on"
         "match:title ^Pixel Composer.*, float on"
         "match:class ^$, match:title ^Pixel Composer.*, monitor DP-1"
         "match:title ^Select files$, float on"

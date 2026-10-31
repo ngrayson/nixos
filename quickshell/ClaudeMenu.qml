@@ -138,6 +138,10 @@ Item {
 						{
 							label: "VS Code: ~/.config/nixos",
 							cmd: ["code", Quickshell.env("HOME") + "/.config/nixos"]
+						},
+						{
+							label: "VS Code: ~/Stellarium",
+							cmd: ["code", Quickshell.env("HOME") + "/Stellarium"]
 						}
 					]
 

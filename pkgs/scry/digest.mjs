@@ -107,7 +107,12 @@ if (notion.enabled) {
   const areaName = new Map(notion.areas.map((a) => [a.id, a.name]));
   let rows = [];
   try {
-    rows = await nq(NOTION_TASKS_DS, { filter: { property: "Status", status: { does_not_equal: "Done" } } });
+    // Dropped is terminal too. Exclude both rather than whitelisting live
+    // statuses, so a status Nick adds later still shows up.
+    rows = await nq(NOTION_TASKS_DS, { filter: { and: [
+      { property: "Status", status: { does_not_equal: "Done" } },
+      { property: "Status", status: { does_not_equal: "Dropped" } },
+    ] } });
   } catch (e) { fail("tasks", e); }
   notion.tasks = rows.map((r) => ({
     id: r.id, url: r.url,
@@ -122,7 +127,7 @@ if (notion.enabled) {
     children: (r.properties["Sub-item"]?.relation || []).map((x) => x.id),
     updatedAt: r.last_edited_time,
   }));
-  // Open sub-task count per parent (Done rows are already filtered out of `rows`).
+  // Open sub-task count per parent (Done/Dropped rows are already filtered out of `rows`).
   const open = new Set(notion.tasks.map((t) => t.id));
   for (const t of notion.tasks) t.subtasks = t.children.filter((id) => open.has(id)).length;
 }

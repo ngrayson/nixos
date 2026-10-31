@@ -25,6 +25,11 @@
 
   # Discrete AMD (RX 6700 class): explicit X / XWayland DDX; see NixOS Steam wiki / gaming guides.
   services.xserver.videoDrivers = ["amdgpu"];
+  # NTSYNC gives Proton/Wine kernel-native NT sync primitives (lower overhead,
+  # steadier frame pacing for WoW). Built as a module in the 7.x kernel but not
+  # autoloaded; GE-Proton11 enables it by default (opt out: PROTON_NO_NTSYNC=1)
+  # once /dev/ntsync exists.
+  boot.kernelModules = ["ntsync"];
   programs.gamemode.enable = true;
   # While a game holds gamemode, freeze the screen warmth instead of letting the
   # 30s scheduler push mid-match (each CTM push is a frame hitch; see

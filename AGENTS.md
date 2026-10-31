@@ -113,7 +113,7 @@ assembled by Home Manager (`home/programs/claude-skills.nix`).
   a CLI restart to load.
 - **Conveyor Personal Compute**: WizOs *hosts* a Lima VM on Tawa
   (`common/conveyor-k3.nix`, Tawa only) that runs Build pods for other
-  projects (Under the Stars first). WizOs cards are NOT built there: they
+  projects (Stellarium, the monorepo). WizOs cards are NOT built there: they
   change the host and are verified by a switch, a deploy or a bar reload, so
   they stay with `/convey-her-watch`. Decisions and setup:
   `documentation/conveyor-personal-compute.md`.
