@@ -14,6 +14,7 @@
     ../../common/sops.nix
     ./hardware-configuration.nix
     ./host.nix
+    ../../common/vscode-policy.nix
     ./hibernate.nix
     ./wifi-resume-diag.nix
     ./sober.nix
