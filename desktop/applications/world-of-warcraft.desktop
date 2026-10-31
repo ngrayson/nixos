@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=World of Warcraft
+Comment=Battle.net under Steam + GE-Proton (Tawa only; Steam shortcut appid 3773699819)
+Exec=steam steam://rungameid/16207917307559673856
+Icon=steam
+Terminal=false
+Type=Application
+Categories=Game;
