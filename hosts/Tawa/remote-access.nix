@@ -41,6 +41,11 @@
     # the default would expose sshd to the apartment LAN for nothing, and that
     # LAN is behind a landlord-controlled AP rather than being ours alone.
     openFirewall = false;
+    # Only the root-owned /etc/ssh/authorized_keys.d/%u (generated from the
+    # keys above) is read. A user-level process must not be able to add a
+    # login key by writing ~/.ssh/authorized_keys (the 2026-10-30 Claude Code
+    # VSX backdoor did exactly that).
+    authorizedKeysInHomedir = false;
     # 2222 is what actually makes key auth reachable, and without it the whole
     # module is inert over the tailnet.
     #
