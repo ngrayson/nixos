@@ -79,6 +79,8 @@ in {
 
   services.power-profiles-daemon.enable = true;
   services.fwupd.enable = true;
+  # udev rules so the user can flash QMK keyboard bootloaders (DFU/UF2/Caterina) without sudo.
+  hardware.keyboard.qmk.enable = true;
   powerManagement.enable = true;
 
   # Laptop-only: eDP backlight can return from s2idle dark. The user session
