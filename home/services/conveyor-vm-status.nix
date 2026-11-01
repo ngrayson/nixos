@@ -16,7 +16,8 @@
 #
 # Hosts with no instance (Theseus) never run the poller: the unit is
 # conditioned on the instances directory, and an absent state file hides the
-# pill. Test hooks: CONVEYOR_K3 (the CLI to call) and QS_CVM_OUT (state file).
+# pill. Test hooks: CONVEYOR_K3 (the CLI to call), QS_CVM_OUT (state file) and
+# QS_CVM_NOTIFY (the notifier; `true` silences it).
 {
   lib,
   pkgs,
@@ -79,6 +80,15 @@
               raise RuntimeError("exit %d" % r.returncode)
           text = r.stdout
           return json.loads(text[text.find("{"):])
+
+
+      def notify(instance, event, card):
+          body = ": ".join(x for x in (card.get("project"), card.get("title")) if x) or "(unassigned pod)"
+          try:
+              subprocess.run([os.environ.get("QS_CVM_NOTIFY") or "notify-send", "--app-name=conveyor-vm",
+                              "%s %s a card" % (instance, event), body], check=False, timeout=10)
+          except Exception:
+              pass
 
 
       def alive(pid):
@@ -146,8 +156,21 @@
               else:
                   try:
                       p = cli("vm", "pods", "--instance=" + name, timeout=25)
-                      running = sum(1 for x in p.get("pods", []) if x.get("phase") in ("Running", "Pending"))
-                      row["pods"] = {"running": running, "checkedAt": now}
+                      active = {}
+                      for x in p.get("pods", []):
+                          if x.get("phase") in ("Running", "Pending"):
+                              a = x.get("assignment") or {}
+                              active[x["uid"]] = {"project": a.get("projectName"), "title": a.get("taskTitle")}
+                      row["pods"] = {"running": len(active), "checkedAt": now, "active": active}
+                      # Only diff against a real previous fetch: a first run, a failed fetch
+                      # or a VM start has no baseline and must not burst.
+                      # shortcut: pods are seen every PODS_EVERY s, so a pod living under that is
+                      # never announced; lower podsEverySec if that ever matters.
+                      if isinstance(old, dict) and isinstance(old.get("active"), dict):
+                          for u in active.keys() - old["active"].keys():
+                              notify(name, "started", active[u])
+                          for u in old["active"].keys() - active.keys():
+                              notify(name, "finished", old["active"][u])
                   except Exception:
                       row["pods"] = None
 
