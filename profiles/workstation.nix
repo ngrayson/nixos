@@ -178,8 +178,10 @@ in {
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
-    # Webcam mic + desktop speakers echo on calls; WebRTC AEC uses the default sink's
-    # monitor as the reference. Pick "Echo-cancelled mic" as the input in Discord/games.
+    # Desktop speakers echo on calls with every mic, even the DJI clip-on lav (2026-11-01),
+    # and Discord's own echo cancellation either lets it through or cuts speech. WebRTC AEC
+    # here uses the default sink's monitor as the reference: pick "Echo-cancelled mic" as
+    # the input in Discord/games, with the app's own echo cancellation off.
     extraConfig.pipewire."60-echo-cancel" = {
       "context.modules" = [
         {
