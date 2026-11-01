@@ -209,6 +209,13 @@ in {
           ", XF86AudioLowerVolume, exec, sh -lc '${lib.getExe pkgs.pamixer} -d 5; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioMute, exec, sh -lc '${lib.getExe pkgs.pamixer} -t; ${lib.getExe hs.hyprQuickshellIpc} call audio notifyChange'"
           ", XF86AudioMicMute, exec, ${lib.getExe pkgs.pamixer} --default-source -t"
+          # MPRIS players under Wayland never grab media keys, so route them to playerctl.
+          # Pause toggles too: some keyboards send it in place of Play.
+          ", XF86AudioPlay, exec, ${lib.getExe pkgs.playerctl} play-pause"
+          ", XF86AudioPause, exec, ${lib.getExe pkgs.playerctl} play-pause"
+          ", XF86AudioNext, exec, ${lib.getExe pkgs.playerctl} next"
+          ", XF86AudioPrev, exec, ${lib.getExe pkgs.playerctl} previous"
+          ", XF86AudioStop, exec, ${lib.getExe pkgs.playerctl} stop"
         ]
         ++ lib.optionals (hostName == "Theseus") [
           ", XF86MonBrightnessUp, exec, ${lib.getExe pkgs.brightnessctl} -c backlight set +5%"
