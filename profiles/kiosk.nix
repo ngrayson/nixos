@@ -154,6 +154,12 @@ in {
   # login prompt. Only tty1 is off limits, and a getty there was invisible
   # anyway behind cage's output.
   systemd.services."getty@tty1".enable = false;
+  # The mask does not cover nixpkgs' own want: services/ttys/getty.nix adds
+  # getty.target wants = [ "autovt@tty1.service" ] whenever no display manager
+  # is enabled (cage runs without one), and autovt@tty1 loads from the
+  # getty@.service template, so switch-to-configuration started it and stopped
+  # cage on every deploy (go3-deploy's recovery hid it). Drop that want.
+  systemd.targets.getty.wants = lib.mkForce [];
 
   # cage runs exactly one Wayland client, fullscreen, on tty1 as `wiz`. That
   # is the entire session: no display manager, no compositor config, no bar,
