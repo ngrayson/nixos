@@ -11,7 +11,7 @@
   unstablePkgs,
   ...
 }: let
-  # conveyor-k3 0.1.14 runs these host tools by absolute Debian/Ubuntu path
+  # conveyor-k3 0.1.14 and 0.2.4 run these host tools by absolute Debian/Ubuntu path
   # (dist/cli.js, dist/vm-qemu.js), and NixOS has only /usr/bin/env and /bin/sh
   # there: `vm setup` died at once with `spawn /usr/bin/which ENOENT`. Link
   # exactly the paths it calls, not envfs (which fakes all of /usr/bin for every
