@@ -143,7 +143,13 @@ ShellRoot {
 	// needs the node bound, hence the tracker below. A corked (app-muted) stream
 	// still counts as in use.
 	readonly property var captureStreams: Pipewire.nodes.values.filter(n => n.type === PwNodeType.AudioInStream && !n.name.startsWith("echo-cancel"))
-	readonly property bool micActive: micPresent && captureStreams.some(n => n.ready && String(n.properties["stream.monitor"]) !== "true")
+	// Who is recording, for the tooltip. The binary beats application.name, which
+	// Electron/Chromium report as "WEBRTC VoiceEngine"; Nix wraps it as .Discord-wrapped.
+	readonly property var micUsers: [...new Set(captureStreams.filter(n => n.ready && String(n.properties["stream.monitor"]) !== "true").map(n => {
+			const bin = n.properties["application.process.binary"];
+			return bin ? String(bin).replace(/^\./, "").replace(/-wrapped$/, "") : (n.properties["application.name"] || n.name);
+		}))]
+	readonly property bool micActive: micPresent && micUsers.length > 0
 
 	PwObjectTracker {
 		// PwNode.audio properties are invalid until their parent node is bound.
@@ -754,7 +760,7 @@ ShellRoot {
 		if (micMuted)
 			lines.push("Microphone muted");
 		else if (micActive)
-			lines.push("Microphone in use");
+			lines.push("Microphone in use: " + micUsers.join(", "));
 		else
 			lines.push("Microphone ready");
 		lines.push("Left-click: mute/unmute");
