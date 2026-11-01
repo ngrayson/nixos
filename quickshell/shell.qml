@@ -135,17 +135,29 @@ ShellRoot {
 	readonly property var micSource: Pipewire.defaultAudioSource
 	readonly property bool micPresent: micSource !== null && micSource.ready && micSource.audio !== null
 	readonly property bool micMuted: micPresent && micSource.audio.muted
-	readonly property bool micActive: micPresent && micLinkTracker.linkGroups.length > 0
+	// A program capturing from ANY source, not links on the default one: the
+	// echo-cancel filter (profiles/workstation.nix) keeps echo-cancel-capture
+	// linked to the raw mic 24/7, and apps on "Echo-cancelled mic" capture from
+	// echo-cancel-source, which is not the default source. Level meters
+	// (pavucontrol) are capture streams too, flagged stream.monitor; reading that
+	// needs the node bound, hence the tracker below. A corked (app-muted) stream
+	// still counts as in use.
+	readonly property var captureStreams: Pipewire.nodes.values.filter(n => n.type === PwNodeType.AudioInStream && !n.name.startsWith("echo-cancel"))
+	// Who is recording, for the tooltip. The binary beats application.name, which
+	// Electron/Chromium report as "WEBRTC VoiceEngine"; Nix wraps it as .Discord-wrapped.
+	readonly property var micUsers: [...new Set(captureStreams.filter(n => n.ready && String(n.properties["stream.monitor"]) !== "true").map(n => {
+			const bin = n.properties["application.process.binary"];
+			return bin ? String(bin).replace(/^\./, "").replace(/-wrapped$/, "") : (n.properties["application.name"] || n.name);
+		}))]
+	readonly property bool micActive: micPresent && micUsers.length > 0
 
 	PwObjectTracker {
 		// PwNode.audio properties are invalid until their parent node is bound.
 		objects: shellRoot.micSource ? [shellRoot.micSource] : []
 	}
 
-	PwNodeLinkTracker {
-		id: micLinkTracker
-		// Tracks capture streams attached to the default input, excluding monitors.
-		node: shellRoot.micSource
+	PwObjectTracker {
+		objects: shellRoot.captureStreams
 	}
 
 	function micIcon(): string {
@@ -748,7 +760,7 @@ ShellRoot {
 		if (micMuted)
 			lines.push("Microphone muted");
 		else if (micActive)
-			lines.push("Microphone in use");
+			lines.push("Microphone in use: " + micUsers.join(", "));
 		else
 			lines.push("Microphone ready");
 		lines.push("Left-click: mute/unmute");
