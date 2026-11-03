@@ -13,7 +13,7 @@
 # leaks more days to compound. If it ever does prove disruptive, this is a
 # one-line OnCalendar change — deliberately not made configurable.
 #
-# 03:30 is local: common/base.nix sets time.timeZone to America/Vancouver.
+# 03:30 is local: common/base.nix sets time.timeZone to America/Los_Angeles.
 {pkgs, ...}: {
   systemd.services.go3-scheduled-reboot = {
     description = "Nightly kiosk reboot";
