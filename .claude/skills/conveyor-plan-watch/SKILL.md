@@ -83,7 +83,8 @@ the Skill tool until the CLI restarts. Restart, then start the loop.
    including `{"reason":"interrupted"}`, is a dead watch: it exits **0**, so
    branch on the JSON `reason`, never on `$?`, and back off before respawning.
    Leave stderr alone — no `2>&1`, no `2>/dev/null`. `conveyor-wait` prints
-   its `Waiting up to …` / `Watching N card(s)` preamble on stderr and the
+   its `Waiting up to …` / `Seeded N card(s) …` (older releases: `Watching N
+   card(s)`) preamble on stderr and the
    one JSON line on stdout, so an unredirected stderr lands in the Monitor's
    output file the moment the subscription is live, which is what the
    liveness check below reads; `2>&1` would trap it inside `$out` until exit.
@@ -98,7 +99,7 @@ the Skill tool until the CLI restarts. Restart, then start the loop.
    Sourcing `~/.config/conveyor/env` matters: an agent Bash shell never saw
    the MCP server's environment, and that file is where
    `scripts/conveyor-mcp.sh` reads credentials too. Why the `sleep |` pipe,
-   the env-file source and the `Watching` check are all mandatory is
+   the env-file source and the seed-line check are all mandatory is
    documented once, in `convey-her/SKILL.md` under *The board-event wake
    needs credentials this repo hides, and an open stdin*; when that section
    changes, this script changes with it. The event's card is advisory — run
@@ -116,7 +117,9 @@ the Skill tool until the CLI restarts. Restart, then start the loop.
    the package). Confirm both of:
    - `pgrep -af 'conveyor-wait' | grep -c '^[0-9]* node '` is ≥ 1 — count
      `node …/conveyor-wait` processes, not the `sleep`/wrapper lines.
-   - The Monitor's output file contains `Watching N card(s)`. A file that
+   - The Monitor's output file matches `grep -E '(Seeded|Watching) [0-9]+ card'`
+     (5.1.3 prints `Seeded N card(s) from P page(s) …`; older releases
+     `Watching N card(s)`). A file that
      contains only `{"reason":"interrupted"}` or `DIED` is a dead watch; fix
      and re-arm before reporting.
 

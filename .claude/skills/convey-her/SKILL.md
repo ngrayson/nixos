@@ -155,7 +155,7 @@ iteration, every loop PR green or parked on the user) therefore works like
 
 - **The wake is a `Monitor` watch**, not a timed sleep. Arm it with
   `timeout_ms: 1800000` around a loop that re-arms itself silently on timeout
-  and **ends at the first event** (credentials, stdin and the `Watching` check
+  and **ends at the first event** (credentials, stdin and the seed-line check
   are explained in the section after next):
 
   ```bash
@@ -301,7 +301,7 @@ projects, never under `~/.config/nixos`.
 **A second, independent way it dies: `conveyor-wait` treats EOF on stdin as an
 interrupt.** Background Bash hands it `/dev/null`, so it prints
 `{"reason":"interrupted"}` and exits 0 before it has even subscribed — no
-`Watching` line, no error, measured 2026-09-19 after every arm in a session
+`Seeded`/`Watching` line, no error, measured 2026-09-19 after every arm in a session
 had died this way. The package had not changed; the harness's stdin handling
 had. Isolated: `conveyor-wait --timeout 5 </dev/null` → `interrupted` at once;
 `sleep 20 | conveyor-wait --timeout 5` → subscribes and times out correctly.
@@ -328,7 +328,8 @@ orphaned `sleep` runs out on its own and is harmless. It is why `ps` may show
 a stray `sleep 1710` after a wake — count `node …/conveyor-wait` processes,
 not sleeps or wrappers, when checking for a live watch.
 
-Redirect nothing: the `Waiting up to …` / `Watching N card(s)` preamble is on
+Redirect nothing: the `Waiting up to …` / `Seeded N card(s) …` (older releases:
+`Watching N card(s)`) preamble is on
 stderr and the one JSON line on stdout, and the check below reads the
 preamble from the output file. `conveyor-plan-watch/SKILL.md` step 5 carries
 the same shape and cites this section; when this changes, that changes.
@@ -339,8 +340,11 @@ is ≥ 1 and read the Monitor's output file. Both failures are invisible from
 the outside: the loop still holds its heartbeat, so it keeps iterating and
 merely stops noticing new cards until the next one — up to an hour late now
 that idling is heartbeat-only. The check is not "an output file exists" — a watch that printed
-only `{"reason":"interrupted"}` has one too. **The output must contain
-`Watching N card(s)`.** A dead watch shows either a credentials line (exit 1)
+only `{"reason":"interrupted"}` has one too. **The output must match
+`grep -E '(Seeded|Watching) [0-9]+ card'`** (conveyor-mcp 5.1.3 prints `Seeded N
+card(s) from P page(s) — K already match; waiting for new work.`; older releases
+printed `Watching N card(s)`). A bare `Watching` is not enough: the CLI also
+prints `Watching the only accessible project: …`. A dead watch shows either a credentials line (exit 1)
 or a bare `interrupted` (exit 0). Read the output. **Never report the watch as
 running on the strength of having launched it** — that has now happened in
 two separate sessions, and each time the watch had been dead for hours.
