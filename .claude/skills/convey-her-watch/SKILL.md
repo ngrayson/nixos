@@ -57,8 +57,9 @@ Why the env source, the process-substitution stdin and the unredirected stderr
 are all mandatory is in convey-her, *The board-event wake needs credentials
 this repo hides, and an open stdin*. The same liveness check applies, about 25
 s after arming: a live `node …/conveyor-wait` with `--statuses Open` (the
-plan-watch agent's `--statuses Planning` watch does not count) AND `Watching N
-card(s)` in the Monitor's output file. Never report the watch as running on
+plan-watch agent's `--statuses Planning` watch does not count) AND a `Seeded N
+card(s)` (or older `Watching N card(s)`) line in the Monitor's output file:
+`grep -E '(Seeded|Watching) [0-9]+ card'`. Never report the watch as running on
 the strength of having launched it. Before arming, make sure no Open watch is
 already live — never two.
 
