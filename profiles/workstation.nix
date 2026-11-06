@@ -182,6 +182,18 @@ in {
     # and Discord's own echo cancellation either lets it through or cuts speech. WebRTC AEC
     # here uses the default sink's monitor as the reference: pick "Echo-cancelled mic" as
     # the input in Discord/games, with the app's own echo cancellation off.
+    # The DJI USB mic (priority.driver 2109) outranked the built-in output (1009), so it drove
+    # the graph and the output followed on a different clock: `front:0p ... resync` in the
+    # journal (scratchy game audio) and an AEC fed two free-running clocks (it emitted pure
+    # silence, 2026-11-05). Make the speakers the driver; the mic is resampled to them.
+    wireplumber.extraConfig."51-speakers-drive" = {
+      "monitor.alsa.rules" = [
+        {
+          matches = [{"node.name" = "alsa_output.pci-0000_00_1f.3.analog-stereo";}];
+          actions.update-props."priority.driver" = 3000;
+        }
+      ];
+    };
     extraConfig.pipewire."60-echo-cancel" = {
       "context.modules" = [
         {
